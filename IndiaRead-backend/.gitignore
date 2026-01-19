@@ -1,12 +1,15 @@
-# Dependencies
-node_modules/
-*/node_modules/
-
-# Environment variables
+# Create .gitignore with these contents
+cat > .gitignore << EOF
+# Environment files
 .env
 .env.local
 .env.production
 .env.development
+*.env
+
+# Dependencies
+node_modules/
+*/node_modules/
 
 # Build outputs
 dist/
@@ -20,3 +23,16 @@ build/
 # OS
 .DS_Store
 Thumbs.db
+
+# Backend specific
+backend/.env
+backend/node_modules/
+
+# Frontend specific
+frontend/node_modules/
+frontend/dist/
+
+# Temporary files
+*.tmp
+*.temp
+EOF
