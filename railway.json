@@ -5,6 +5,7 @@
     "buildCommand": "npm install"
   },
   "deploy": {
+    "startCommand": "node server.js",
     "numReplicas": 1,
     "restartPolicyType": "ON_FAILURE"
   }
