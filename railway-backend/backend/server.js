@@ -9,7 +9,7 @@ const app = express();
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://your-actual-netlify-url.netlify.app', // CHANGE THIS
+    'https://readcrew.netlify.app/ ', // CHANGE THIS
     'https://*.netlify.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -36,7 +36,7 @@ app.get('/', (req, res) => {
       otp: '/api/otp/*',
       health: '/api/health'
     },
-    frontend: 'https://your-netlify-url.netlify.app', // ADD YOUR URL
+    frontend: 'https://readcrew.netlify.app/ ', // ADD YOUR URL
     docs: 'https://github.com/Sakshi2466/ReadCrew'
   });
 });
