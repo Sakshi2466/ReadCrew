@@ -1,16 +1,20 @@
-// backend/routes/otp.js
 const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 
-// Configure Nodemailer
+// Configure Nodemailer for Render
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  host: 'smtp.gmail.com',
+  port: 465,
+  secure: true,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
+  },
+  tls: {
+    rejectUnauthorized: false
   }
 });
 
@@ -41,9 +45,17 @@ router.post('/send-otp', async (req, res) => {
       });
     }
 
+    // Validate phone if provided
+    if (phone && !/^[6-9]\d{9}$/.test(phone)) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Please provide a valid 10-digit Indian phone number starting with 6-9'
+      });
+    }
+
     // Generate OTP and Password
     const otp = generateOTP();
-    const tempPassword = generatePassword(); // Generate password
+    const tempPassword = generatePassword();
     const otpExpires = new Date(Date.now() + 10 * 60 * 1000);
 
     console.log('📱 Generated OTP:', otp);
@@ -60,7 +72,7 @@ router.post('/send-otp', async (req, res) => {
       // Create new user with hashed password
       user = new User({
         email,
-        phone,
+        phone: phone || undefined,
         name,
         password: hashedPassword,
         otp,
@@ -71,6 +83,8 @@ router.post('/send-otp', async (req, res) => {
       // Update existing user with new OTP
       user.otp = otp;
       user.otpExpires = otpExpires;
+      if (phone) user.phone = phone;
+      if (name) user.name = name;
     }
 
     await user.save();
@@ -156,20 +170,22 @@ router.post('/send-otp', async (req, res) => {
       res.json({ 
         success: true, 
         message: `OTP and password sent to ${email}`,
-        otp: otp, // For development/testing
+        otp: process.env.NODE_ENV === 'development' ? otp : undefined,
         passwordSent: true
       });
       
     } catch (emailError) {
       console.error('❌ Email sending failed:', emailError);
       
-      // Return OTP and password in response for development
-      res.json({ 
-        success: true, 
-        message: 'Development mode: Email not sent',
-        otp: otp,
-        password: tempPassword,
-        note: 'Check console for credentials'
+      // Return proper error response
+      res.status(500).json({ 
+        success: false, 
+        message: 'Failed to send email. Please try again.',
+        error: emailError.message,
+        debug: process.env.NODE_ENV === 'development' ? {
+          otp: otp,
+          password: tempPassword
+        } : undefined
       });
     }
 
@@ -194,7 +210,7 @@ router.post('/send-otp', async (req, res) => {
   }
 });
 
-// Verify OTP (unchanged)
+// Verify OTP
 router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
