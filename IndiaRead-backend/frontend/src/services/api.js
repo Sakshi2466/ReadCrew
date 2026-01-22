@@ -1,15 +1,26 @@
 // frontend/src/services/api.js
 
-const API_URL = 'https://readcrew.onrender.com/api'; // ✅ Your deployed backend
+const API_URL = 'https://readcrew.onrender.com/api';
 
-// Helper function for API calls
-const apiCall = async (endpoint, method = 'GET', data = null) => {
+/**
+ * Helper function for API calls
+ * Automatically handles JSON stringification and Authorization headers
+ */
+const apiCall = async (endpoint, method = 'GET', data = null ) => {
   try {
+    const headers = {
+      'Content-Type': 'application/json',
+    };
+
+    // ✅ Automatically add Authorization header if token exists in localStorage
+    const token = localStorage.getItem('token');
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
     const options = {
       method,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     };
 
     if (data) {
@@ -19,25 +30,40 @@ const apiCall = async (endpoint, method = 'GET', data = null) => {
     console.log(`🔄 API Call: ${method} ${API_URL}${endpoint}`);
     
     const response = await fetch(`${API_URL}${endpoint}`, options);
-    const result = await response.json();
+    
+    // Handle empty responses (like 204 No Content)
+    const contentType = response.headers.get("content-type");
+    let result = {};
+    if (contentType && contentType.indexOf("application/json") !== -1) {
+      result = await response.json();
+    }
 
     if (!response.ok) {
-      throw new Error(result.message || 'Something went wrong');
+      // If unauthorized (401), you might want to clear the token
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+      }
+      throw new Error(result.message || `Error ${response.status}: Something went wrong`);
     }
 
     console.log('✅ API Response:', result);
     return result;
   } catch (error) {
-    console.error('❌ API Error:', error);
+    console.error('❌ API Error:', error.message);
     throw error;
   }
 };
 
 // Auth API
 export const authAPI = {
-  login: (userData) => apiCall('/auth/login', 'POST', userData),
+  login: async (userData) => {
+    const res = await apiCall('/auth/login', 'POST', userData);
+    if (res.token) localStorage.setItem('token', res.token); // Save token on login
+    return res;
+  },
   register: (userData) => apiCall('/auth/register', 'POST', userData),
   getUsers: () => apiCall('/auth/users'),
+  logout: () => localStorage.removeItem('token'),
 };
 
 // OTP API
