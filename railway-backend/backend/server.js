@@ -5,11 +5,12 @@ require('dotenv').config();
 
 const app = express();
 
-// ✅ CORS for Netlify frontend - UPDATE YOUR URL!
+// ✅ CORS Configuration - REMOVE TRAILING SPACES!
 app.use(cors({
   origin: [
     'http://localhost:3000',
-    'https://readcrew.netlify.app/ ', // CHANGE THIS
+    'http://localhost:5173',
+    'https://readcrew.netlify.app', // ❌ NO TRAILING SPACE!
     'https://*.netlify.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -17,8 +18,8 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // ✅ Root endpoint
 app.get('/', (req, res) => {
@@ -36,13 +37,13 @@ app.get('/', (req, res) => {
       otp: '/api/otp/*',
       health: '/api/health'
     },
-    frontend: 'https://readcrew.netlify.app/ ', // ADD YOUR URL
+    frontend: 'https://readcrew.netlify.app',
     docs: 'https://github.com/Sakshi2466/ReadCrew'
   });
 });
 
-// ✅ MongoDB connection (updated - no deprecation warnings)
-mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/readera')
+// ✅ MongoDB connection
+mongoose.connect(process.env.MONGO_URI)
 .then(() => {
   console.log('✅ MongoDB Connected');
 })
@@ -71,7 +72,8 @@ app.get('/api/health', (req, res) => {
     message: 'Server is running',
     timestamp: new Date().toISOString(),
     database: mongoose.connection.readyState === 1 ? 'Connected' : 'Disconnected',
-    environment: process.env.NODE_ENV || 'development'
+    environment: process.env.NODE_ENV || 'development',
+    emailConfigured: !!process.env.EMAIL_USER
   });
 });
 

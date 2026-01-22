@@ -1,57 +1,49 @@
-const API_BASE_URL = 'https://readcrew.onrender.com/api';
+// frontend/src/services/api.js
+
+const API_URL = 'https://readcrew.onrender.com/api'; // ✅ Your deployed backend
 
 // Helper function for API calls
 const apiCall = async (endpoint, method = 'GET', data = null) => {
   try {
-    const token = localStorage.getItem('token');
     const options = {
       method,
       headers: {
         'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
       },
-      mode: 'cors', // Add this for CORS
     };
 
     if (data) {
       options.body = JSON.stringify(data);
     }
 
-    console.log(`📤 API Call: ${method} ${API_URL}${endpoint}`, data);
+    console.log(`🔄 API Call: ${method} ${API_URL}${endpoint}`);
     
     const response = await fetch(`${API_URL}${endpoint}`, options);
-    
-    // Log response status
-    console.log(`📥 API Response: ${response.status} ${response.statusText}`);
-    
+    const result = await response.json();
+
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ API Error ${response.status}:`, errorText);
-      throw new Error(`API Error ${response.status}: ${errorText}`);
+      throw new Error(result.message || 'Something went wrong');
     }
 
-    const result = await response.json();
-    console.log('✅ API Success:', result);
+    console.log('✅ API Response:', result);
     return result;
-    
   } catch (error) {
-    console.error('🔥 API Call Failed:', error);
+    console.error('❌ API Error:', error);
     throw error;
   }
-};
-
-// ✅ FIXED: OTP API with correct paths
-export const otpAPI = {
-  sendOTP: (data) => apiCall('/otp/send-otp', 'POST', data),
-  verifyOTP: (data) => apiCall('/otp/verify-otp', 'POST', data),
-  healthCheck: () => apiCall('/health'),
 };
 
 // Auth API
 export const authAPI = {
   login: (userData) => apiCall('/auth/login', 'POST', userData),
   register: (userData) => apiCall('/auth/register', 'POST', userData),
-  getMe: () => apiCall('/auth/me'),
+  getUsers: () => apiCall('/auth/users'),
+};
+
+// OTP API
+export const otpAPI = {
+  sendOTP: (data) => apiCall('/otp/send', 'POST', data),
+  verifyOTP: (data) => apiCall('/otp/verify', 'POST', data),
 };
 
 // Donation API
@@ -66,7 +58,7 @@ export const donationAPI = {
 export const reviewAPI = {
   create: (reviewData) => apiCall('/reviews', 'POST', reviewData),
   getAll: () => apiCall('/reviews'),
-  search: (query) => apiCall(`/reviews/search?query=${query}`),
+  search: (query) => apiCall(`/reviews/search?query=${encodeURIComponent(query)}`),
 };
 
 // Recommendation API
@@ -74,7 +66,6 @@ export const recommendationAPI = {
   getRecommendations: (keywords) => apiCall('/recommend', 'POST', { keywords }),
 };
 
-// Combined export
 export default {
   auth: authAPI,
   otp: otpAPI,
