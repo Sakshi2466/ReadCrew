@@ -1,6 +1,6 @@
 // frontend/src/services/api.js
 
-const API_URL = 'https://readcrew.onrender.com/api';
+const API_URL = 'https://readcrew-1.onrender.com/api';
 
 /**
  * Helper function for API calls
