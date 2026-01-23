@@ -270,7 +270,7 @@ const BOOK_RECOMMENDATIONS = [
 ];
 
 // API base URL
-const API_BASE_URL = 'http://localhost:5000/api';
+const API_URL = 'https://readcrew.onrender.com/api'; 
 
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
