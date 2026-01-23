@@ -1,29 +1,32 @@
-// At the top with other requires
+// server.js (or index.js)
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');  // <-- Add this line
+const cors = require('cors');
+require('dotenv').config(); // Load .env variables
 
 const app = express();
+const PORT = process.env.PORT || 5000;
 
-// Add CORS middleware here
+// CORS middleware
 app.use(cors({
   origin: [
-    'https://readcrew.netlify.app',
-    'http://localhost:3000',
-    'http://localhost:5173'
+    'https://readcrew.netlify.app', // Your deployed frontend
+    'http://localhost:3000',        // React dev server (CRA)
+    'http://localhost:5173'         // Vite dev server
   ],
   credentials: true
 }));
 
-// Rest of your middleware
+// JSON middleware
 app.use(express.json());
-// ... rest of your code
-const mongoose = require('mongoose');
-require('dotenv').config();
 
+// MongoDB connection
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGO_URI);
+    await mongoose.connect(process.env.MONGO_URI, {
+      useNewUrlParser: true,
+      useUnifiedTopology: true
+    });
     console.log('✅ MongoDB Connected Successfully');
   } catch (error) {
     console.error('❌ MongoDB Connection Error:', error.message);
@@ -31,4 +34,15 @@ const connectDB = async () => {
   }
 };
 
-module.exports = connectDB;
+// Connect DB
+connectDB();
+
+// Example route
+app.get('/', (req, res) => {
+  res.send('ReadCrew Backend Running');
+});
+
+// Start server
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});

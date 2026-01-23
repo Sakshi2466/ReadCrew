@@ -1,6 +1,6 @@
 // frontend/src/services/api.js - CORRECTED VERSION
-
-const API_URL = 'https://readcrew.onrender.com/api'; // ✅ FIXED!
+const API_URL = import.meta.env.VITE_API_URL;
+// ✅ FIXED!
 
 /**
  * Helper function for API calls

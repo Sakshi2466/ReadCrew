@@ -268,9 +268,7 @@ const BOOK_RECOMMENDATIONS = [
     ]
   }
 ];
-
-// API base URL
-const API_URL = 'https://readcrew.onrender.com/api'; 
+const API_URL = import.meta.env.VITE_API_URL;
 
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
