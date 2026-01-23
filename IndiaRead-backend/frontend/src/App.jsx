@@ -363,59 +363,55 @@ const App = () => {
   }, [isLoggedIn, currentUser]);
 
   // Send OTP API call
-  const handleSendOTP = async () => {
-    if (!validateName(loginForm.name) || !validateEmail(loginForm.email) || !validatePhone(loginForm.phone)) {
-      alert('Please fill all fields correctly');
-      return;
-    }
+ 
     
-   setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/otp/send`, { // ✅ Correct endpoint
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(loginForm),
-      });
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      
-      if (data.success) {
-        setVerificationData(loginForm);
-        setShowOTP(true);
-        alert('OTP sent to your email! Check your inbox.');
-        // Show OTP in console for testing
-        console.log('✅ OTP Sent Successfully!');
-        if (data.otp) {
-          console.log(`🔐 DEVELOPMENT OTP: ${data.otp}`);
-          console.log(`📧 For development, use OTP: ${data.otp}`);
-        }
-      } else {
-        alert(data.message || 'Failed to send OTP');
-      }
-    } catch (error) {
-      console.error('Error sending OTP:', error);
-      
-      // Fallback to mock OTP if backend fails
-      console.log('Using mock OTP as fallback...');
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      localStorage.setItem('devOTP', otp);
-      localStorage.setItem('devUser', JSON.stringify(loginForm));
-      
+   const handleSendOTP = async () => {
+  // Validate form
+  if (!validateName(loginForm.name) || !validateEmail(loginForm.email) || !validatePhone(loginForm.phone)) {
+    alert('Please fill all fields correctly');
+    return;
+  }
+
+  setLoading(true);
+
+  try {
+    // ✅ Use otpAPI from api.js
+    const data = await otpAPI.sendOTP(loginForm);
+
+    if (data.success) {
       setVerificationData(loginForm);
       setShowOTP(true);
-      alert(`Development mode OTP: ${otp}`);
-      console.log(`🔐 MOCK OTP: ${otp}`);
-    } finally {
-      setLoading(false);
+      alert('OTP sent to your email! Check your inbox.');
+
+      // Show OTP in console for development/testing
+      if (data.otp) {
+        console.log(`🔐 DEVELOPMENT OTP: ${data.otp}`);
+        console.log(`📧 For development, use OTP: ${data.otp}`);
+      }
+
+      console.log('✅ OTP Sent Successfully!');
+    } else {
+      alert(data.message || 'Failed to send OTP');
     }
-  };
+
+  } catch (error) {
+    console.error('❌ Error sending OTP:', error.message);
+
+    // Fallback to mock OTP if backend fails
+    console.log('Using mock OTP as fallback...');
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    localStorage.setItem('devOTP', otp);
+    localStorage.setItem('devUser', JSON.stringify(loginForm));
+
+    setVerificationData(loginForm);
+    setShowOTP(true);
+    alert(`Development mode OTP: ${otp}`);
+    console.log(`🔐 MOCK OTP: ${otp}`);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   // Verify OTP API call
   const handleVerifyOTP = async () => {
