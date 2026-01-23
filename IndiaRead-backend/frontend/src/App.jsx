@@ -268,7 +268,7 @@ const BOOK_RECOMMENDATIONS = [
     ]
   }
 ];
-const API_URL = import.meta.env.VITE_API_URL;
+const API_URL = import.meta.env.VITE_API_URL; 
 
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -369,15 +369,15 @@ const App = () => {
       return;
     }
     
-    setLoading(true);
+   setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/otp/send-otp`, {
+      const response = await fetch(`${API_URL}/otp/send`, { // ✅ Correct endpoint
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
         },
-        body: JSON.stringify(loginForm)
+        body: JSON.stringify(loginForm),
       });
       
       if (!response.ok) {
@@ -426,13 +426,13 @@ const App = () => {
     
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/otp/verify-otp`, {
+      const response = await fetch(`${API_URL}/otp/verify`, { // ✅ Correct endpoint
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
         },
-        body: JSON.stringify({ email: verificationData.email, otp: otpInput })
+        body: JSON.stringify({ email: verificationData.email, otp: otpInput }),
       });
       
       let data;
