@@ -50,7 +50,7 @@ router.post('/send-otp', async (req, res) => {
     }
     await user.save();
 
-    // ====== Send Email ======
+    // Send Email
     const mailOptions = {
       from: `"ReadCrew" <${process.env.EMAIL_USER}>`,
       to: email,
