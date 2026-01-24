@@ -362,121 +362,76 @@ const App = () => {
     }
   }, [isLoggedIn, currentUser]);
 
-  // Send OTP API call
- 
-    
-   const handleSendOTP = async () => {
-  // Validate form
-  if (!validateName(loginForm.name) || !validateEmail(loginForm.email) || !validatePhone(loginForm.phone)) {
-    alert('Please fill all fields correctly');
+ const handleVerifyOTP = async () => {
+  if (otpInput.length !== 6) {
+    alert("Enter 6-digit OTP");
     return;
   }
 
   setLoading(true);
 
   try {
-    // ✅ Use otpAPI from api.js
-    const data = await otpAPI.sendOTP(loginForm);
+    const response = await fetch(`${API_URL}/otp/verify`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        email: verificationData.email,
+        otp: otpInput,
+      }),
+    });
+
+    let data;
+
+    if (response.ok) {
+      data = await response.json();
+    } else {
+      // ✅ DEV FALLBACK
+      const devOTP = localStorage.getItem("devOTP");
+      const devUser = JSON.parse(localStorage.getItem("devUser") || "{}");
+
+      if (otpInput === devOTP && devUser.email === verificationData.email) {
+        data = {
+          success: true,
+          user: {
+            id: Date.now().toString(),
+            name: devUser.name,
+            email: devUser.email,
+            phone: devUser.phone,
+            isVerified: true,
+            createdAt: new Date().toISOString(),
+            readingGoal: { monthly: 0, books: [] },
+          },
+        };
+
+        localStorage.removeItem("devOTP");
+        localStorage.removeItem("devUser");
+      } else {
+        data = { success: false, message: "Invalid OTP" };
+      }
+    }
 
     if (data.success) {
-      setVerificationData(loginForm);
-      setShowOTP(true);
-      alert('OTP sent to your email! Check your inbox.');
-
-      // Show OTP in console for development/testing
-      if (data.otp) {
-        console.log(`🔐 DEVELOPMENT OTP: ${data.otp}`);
-        console.log(`📧 For development, use OTP: ${data.otp}`);
-      }
-
-      console.log('✅ OTP Sent Successfully!');
+      localStorage.setItem("currentUser", JSON.stringify(data.user));
+      setCurrentUser(data.user);
+      setIsLoggedIn(true);
+      setShowOTP(false);
+      setLoginForm({ name: "", email: "", phone: "" });
+      setOtpInput("");
+      alert("✅ Account verified! Welcome to ReadCrew!");
     } else {
-      alert(data.message || 'Failed to send OTP');
+      alert(`❌ ${data.message}`);
     }
 
   } catch (error) {
-    console.error('❌ Error sending OTP:', error.message);
-
-    // Fallback to mock OTP if backend fails
-    console.log('Using mock OTP as fallback...');
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    localStorage.setItem('devOTP', otp);
-    localStorage.setItem('devUser', JSON.stringify(loginForm));
-
-    setVerificationData(loginForm);
-    setShowOTP(true);
-    alert(`Development mode OTP: ${otp}`);
-    console.log(`🔐 MOCK OTP: ${otp}`);
+    console.error("❌ Error verifying OTP:", error);
+    alert("Network error. Please try again.");
   } finally {
     setLoading(false);
   }
 };
 
-
-  // Verify OTP API call
-  const handleVerifyOTP = async () => {
-    if (otpInput.length !== 6) {
-      alert('Enter 6-digit OTP');
-      return;
-    }
-    
-    setLoading(true);
-    try {
-      const response = await fetch(`${API_URL}/otp/verify`, { // ✅ Correct endpoint
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify({ email: verificationData.email, otp: otpInput }),
-      });
-      
-      let data;
-      if (response.ok) {
-        data = await response.json();
-      } else {
-        // Fallback to mock verification
-        const devOTP = localStorage.getItem('devOTP');
-        const devUser = JSON.parse(localStorage.getItem('devUser') || '{}');
-        
-        if (devOTP && otpInput === devOTP && devUser.email === verificationData.email) {
-          data = {
-            success: true,
-            user: {
-              id: Date.now().toString(),
-              name: devUser.name,
-              email: devUser.email,
-              phone: devUser.phone,
-              isVerified: true,
-              createdAt: new Date().toISOString(),
-              readingGoal: { monthly: 0, books: [] }
-            }
-          };
-          localStorage.removeItem('devOTP');
-          localStorage.removeItem('devUser');
-        } else {
-          data = { success: false, message: 'Invalid OTP' };
-        }
-      }
-      
-      if (data.success) {
-        localStorage.setItem('currentUser', JSON.stringify(data.user));
-        setCurrentUser(data.user);
-        setIsLoggedIn(true);
-        setShowOTP(false);
-        setLoginForm({ name: '', email: '', phone: '' });
-        setOtpInput('');
-        alert('✅ Account verified! Welcome to ReadCrew!');
-      } else {
-        alert(`❌ ${data.message}`);
-      }
-    } catch (error) {
-      console.error('Error verifying OTP:', error);
-      alert('Network error. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   // Search reviews with regex
   const handleSearchReviews = (query) => {
