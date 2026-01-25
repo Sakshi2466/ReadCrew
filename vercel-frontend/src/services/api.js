@@ -1,5 +1,5 @@
 // frontend/src/services/api.js
-const API_URL = import.meta.env.VITE_API_URL || 'https://readcrew.onrender.com/api';
+const API_URL = import.meta.env.VITE_API_URL || 'https://versal-book-app.onrender.com';
 
 /**
  * Generic API call helper

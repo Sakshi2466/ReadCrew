@@ -269,8 +269,8 @@ const BOOK_RECOMMENDATIONS = [
   }
 ];
 
-// API base URL
-const API_BASE_URL = 'http://localhost:5000/api';
+// API base URL - FIXED: Use /api prefix for consistency
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -364,7 +364,9 @@ const App = () => {
     }
   }, [isLoggedIn, currentUser]);
 
-  // Send OTP API call
+  // ========== AUTHENTICATION FUNCTIONS ==========
+  
+  // Send OTP - FIXED ENDPOINT
   const handleSendOTP = async () => {
     if (!validateName(loginForm.name) || !validateEmail(loginForm.email) || !validatePhone(loginForm.phone)) {
       alert('Please fill all fields correctly');
@@ -373,7 +375,11 @@ const App = () => {
     
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/otp/send-otp`, {
+      console.log('📤 Sending OTP to:', loginForm.email);
+      console.log('📡 API URL:', `${API_BASE_URL}/otp/send`);
+      
+      // ✅ CORRECTED: Using /otp/send (not /otp/send-otp)
+      const response = await fetch(`${API_BASE_URL}/otp/send`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -382,17 +388,19 @@ const App = () => {
         body: JSON.stringify(loginForm)
       });
       
+      console.log('📋 Response status:', response.status);
+      
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       
       const data = await response.json();
+      console.log('📋 Response data:', data);
       
       if (data.success) {
         setVerificationData(loginForm);
         setShowOTP(true);
         alert('OTP sent to your email! Check your inbox.');
-        // Show OTP in console for testing
         console.log('✅ OTP Sent Successfully!');
         if (data.otp) {
           console.log(`🔐 DEVELOPMENT OTP: ${data.otp}`);
@@ -402,10 +410,10 @@ const App = () => {
         alert(data.message || 'Failed to send OTP');
       }
     } catch (error) {
-      console.error('Error sending OTP:', error);
+      console.error('❌ Error sending OTP:', error);
       
       // Fallback to mock OTP if backend fails
-      console.log('Using mock OTP as fallback...');
+      console.log('🔄 Using mock OTP as fallback...');
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       localStorage.setItem('devOTP', otp);
       localStorage.setItem('devUser', JSON.stringify(loginForm));
@@ -419,7 +427,7 @@ const App = () => {
     }
   };
 
-  // Verify OTP API call
+  // Verify OTP - FIXED ENDPOINT
   const handleVerifyOTP = async () => {
     if (otpInput.length !== 6) {
       alert('Enter 6-digit OTP');
@@ -428,7 +436,11 @@ const App = () => {
     
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/otp/verify-otp`, {
+      console.log('🔐 Verifying OTP:', otpInput);
+      console.log('📡 API URL:', `${API_BASE_URL}/otp/verify`);
+      
+      // ✅ CORRECTED: Using /otp/verify (not /otp/verify-otp)
+      const response = await fetch(`${API_BASE_URL}/otp/verify`, {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -437,11 +449,15 @@ const App = () => {
         body: JSON.stringify({ email: verificationData.email, otp: otpInput })
       });
       
+      console.log('📋 Verify response status:', response.status);
+      
       let data;
       if (response.ok) {
         data = await response.json();
+        console.log('📋 Verify response data:', data);
       } else {
         // Fallback to mock verification
+        console.log('🔄 Using mock verification...');
         const devOTP = localStorage.getItem('devOTP');
         const devUser = JSON.parse(localStorage.getItem('devUser') || '{}');
         
@@ -477,12 +493,14 @@ const App = () => {
         alert(`❌ ${data.message}`);
       }
     } catch (error) {
-      console.error('Error verifying OTP:', error);
+      console.error('❌ Error verifying OTP:', error);
       alert('Network error. Please try again.');
     } finally {
       setLoading(false);
     }
   };
+
+  // ========== REVIEW FUNCTIONS ==========
 
   // Search reviews with regex
   const handleSearchReviews = (query) => {
@@ -528,6 +546,8 @@ const App = () => {
       setFilteredReviews(filtered);
     }
   };
+
+  // ========== DONATION FUNCTIONS ==========
 
   // Open post detail
   const handleOpenPostDetail = (post) => {
@@ -670,7 +690,9 @@ const App = () => {
     alert('✅ Review posted successfully!');
   };
 
-  // Handle recommendation - IMPROVED VERSION WITH CATEGORIES
+  // ========== RECOMMENDATION FUNCTIONS ==========
+
+  // Handle recommendation
   const handleRecommendation = () => {
     if (!recommendKeywords.trim()) {
       alert('Please enter what you want to read about');
@@ -752,11 +774,13 @@ const App = () => {
         category: category.category,
         emoji: category.emoji,
         description: category.description,
-        books: category.books.slice(0, 3) // Show first 3 books per category
+        books: category.books.slice(0, 3)
       }))
     );
   };
 
+  // ========== READING GOAL FUNCTIONS ==========
+  
   // Update reading goal
   const handleUpdateGoal = () => {
     if (!currentUser) return;
@@ -798,7 +822,7 @@ const App = () => {
     alert('Logged out successfully');
   };
 
-  // Login Page
+  // ========== RENDER: LOGIN PAGE ==========
   if (!isLoggedIn) {
     return (
       <div className="min-h-screen relative overflow-hidden">
@@ -937,7 +961,7 @@ const App = () => {
     );
   }
 
-  // Main App (after login)
+  // ========== RENDER: MAIN APP (after login) ==========
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
@@ -1423,7 +1447,7 @@ const App = () => {
         </div>
       )}
 
-      {/* Recommendations Page - IMPROVED VERSION */}
+      {/* Recommendations Page */}
       {currentPage === 'recommend' && (
         <div className="max-w-7xl mx-auto px-6 py-8">
           <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">

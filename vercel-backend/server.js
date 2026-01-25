@@ -9,7 +9,7 @@ const PORT = process.env.PORT || 5000;
 
 // ======= CORS =======
 app.use(cors({
-  origin: ['https://readcrew.netlify.app', 'http://localhost:3000', 'http://localhost:5173'],
+  origin: ['versal-book-app.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
   credentials: true
 }));
 
@@ -43,5 +43,5 @@ app.get('/', (req, res) => {
 
 // ======= Start Server =======
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running at https://readcrew.onrender.com on port ${PORT}`);
+  console.log(`🚀 Backend running at https://versal-book-app.onrender.com on port ${PORT}`);
 });
