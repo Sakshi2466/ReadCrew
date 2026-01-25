@@ -1,4 +1,5 @@
 // server.js
+
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -7,11 +8,20 @@ require('dotenv').config();
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// ======= CORS =======
+// ======= CORS ======= (FIXED HERE!)
 app.use(cors({
-  origin: ['versal-book-app.vercel.app', 'http://localhost:3000', 'http://localhost:5173'],
-  credentials: true
+  origin: [
+    'https://versal-book-app.vercel.app',  // ✅ ADDED https://
+    'http://localhost:3000',
+    'http://localhost:5173'
+  ],
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],  // ✅ Added OPTIONS
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept']  // ✅ Added headers
 }));
+
+// Handle preflight requests
+app.options('*', cors());  // ✅ This fixes the preflight error
 
 // ======= JSON Parser =======
 app.use(express.json());
