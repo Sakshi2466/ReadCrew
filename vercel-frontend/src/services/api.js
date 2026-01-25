@@ -1,84 +1,139 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+// frontend/src/services/api.js
+const API_URL = import.meta.env.VITE_API_URL || 'https://readcrew.onrender.com/api';
 
-// Helper function for API calls
+/**
+ * Generic API call helper
+ */
 const apiCall = async (endpoint, method = 'GET', data = null) => {
   try {
-    const token = localStorage.getItem('token');
-    const options = {
-      method,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(token && { 'Authorization': `Bearer ${token}` }),
-      },
-      mode: 'cors', // Add this for CORS
+    const headers = { 
+      'Content-Type': 'application/json', 
+      'Accept': 'application/json' 
     };
 
-    if (data) {
-      options.body = JSON.stringify(data);
-    }
+    const token = localStorage.getItem('token');
+    if (token) headers['Authorization'] = `Bearer ${token}`;
 
-    console.log(`📤 API Call: ${method} ${API_URL}${endpoint}`, data);
-    
+    const options = { 
+      method, 
+      headers, 
+      mode: 'cors',
+      credentials: 'omit' // Changed from 'include' to 'omit' for Render
+    };
+
+    if (data) options.body = JSON.stringify(data);
+
+    console.log(`🔄 API Call: ${method} ${API_URL}${endpoint}`);
+    if (data) console.log('📦 Request data:', data);
+
     const response = await fetch(`${API_URL}${endpoint}`, options);
-    
-    // Log response status
-    console.log(`📥 API Response: ${response.status} ${response.statusText}`);
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`❌ API Error ${response.status}:`, errorText);
-      throw new Error(`API Error ${response.status}: ${errorText}`);
+
+    console.log(`📡 Response Status: ${response.status} ${response.statusText}`);
+
+    let result = {};
+    const contentType = response.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      try {
+        result = await response.json();
+      } catch (jsonError) {
+        console.error('❌ JSON Parse Error:', jsonError);
+        throw new Error('Invalid JSON response from server');
+      }
     }
 
-    const result = await response.json();
-    console.log('✅ API Success:', result);
+    if (!response.ok) {
+      console.error('❌ API Error Response:', result);
+      if (response.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('currentUser');
+      }
+      throw new Error(result.message || `Error ${response.status}: ${response.statusText}`);
+    }
+
+    console.log('✅ API Response:', result);
     return result;
-    
   } catch (error) {
-    console.error('🔥 API Call Failed:', error);
+    console.error('❌ API Error:', error.message);
+    
+    // Enhanced error messages
+    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
+      throw new Error('Network error: Cannot connect to server. Check if backend is running.');
+    }
+    
     throw error;
   }
 };
 
-// ✅ FIXED: OTP API with correct paths
+// OTP API - CORRECTED ENDPOINTS
 export const otpAPI = {
-  sendOTP: (data) => apiCall('/otp/send-otp', 'POST', data),
-  verifyOTP: (data) => apiCall('/otp/verify-otp', 'POST', data),
-  healthCheck: () => apiCall('/health'),
+  sendOTP: (data) => {
+    console.log('📤 Sending OTP to:', data.email);
+    return apiCall('/otp/send', 'POST', data);
+  },
+  verifyOTP: (data) => {
+    console.log('🔐 Verifying OTP for:', data.email);
+    return apiCall('/otp/verify', 'POST', data);
+  },
+  
+  // Alternative endpoints if needed
+  sendOTPAlt: (data) => apiCall('/send-otp', 'POST', data),
+  verifyOTPAlt: (data) => apiCall('/verify-otp', 'POST', data),
+  
+  // Direct endpoints without /api prefix
+  sendOTPDirect: (data) => apiCall('/send', 'POST', data, true),
+  verifyOTPDirect: (data) => apiCall('/verify', 'POST', data, true)
 };
 
 // Auth API
 export const authAPI = {
-  login: (userData) => apiCall('/auth/login', 'POST', userData),
-  register: (userData) => apiCall('/auth/register', 'POST', userData),
-  getMe: () => apiCall('/auth/me'),
+  login: (data) => apiCall('/auth/login', 'POST', data),
+  register: (data) => apiCall('/auth/register', 'POST', data),
+  getUsers: () => apiCall('/auth/users'),
+  logout: () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('currentUser');
+  },
 };
 
-// Donation API
-export const donationAPI = {
-  create: (donationData) => apiCall('/donations', 'POST', donationData),
-  getAll: () => apiCall('/donations'),
-  like: (id) => apiCall(`/donations/${id}/like`, 'PUT'),
-  save: (id) => apiCall(`/donations/${id}/save`, 'PUT'),
+// Test connection
+export const testAPI = {
+  health: () => apiCall('/health', 'GET'),
+  test: () => apiCall('/test', 'GET'),
+  testEndpoint: (endpoint) => apiCall(endpoint, 'GET')
 };
 
-// Review API
-export const reviewAPI = {
-  create: (reviewData) => apiCall('/reviews', 'POST', reviewData),
-  getAll: () => apiCall('/reviews'),
-  search: (query) => apiCall(`/reviews/search?query=${query}`),
+// Helper to test all endpoints
+export const testAllEndpoints = async () => {
+  const endpoints = [
+    '/health',
+    '/test',
+    '/otp/send',
+    '/otp/verify',
+    '/send-otp',
+    '/verify-otp',
+    '/api/otp/send',
+    '/api/otp/verify'
+  ];
+  
+  console.log('🧪 Testing all endpoints...');
+  
+  for (const endpoint of endpoints) {
+    try {
+      console.log(`\n🔍 Testing: ${endpoint}`);
+      const response = await fetch(`${API_URL}${endpoint}`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' }
+      });
+      console.log(`   Status: ${response.status} ${response.statusText}`);
+    } catch (error) {
+      console.log(`   ❌ Error: ${error.message}`);
+    }
+  }
 };
 
-// Recommendation API
-export const recommendationAPI = {
-  getRecommendations: (keywords) => apiCall('/recommend', 'POST', { keywords }),
-};
-
-// Combined export
-export default {
-  auth: authAPI,
-  otp: otpAPI,
-  donation: donationAPI,
-  review: reviewAPI,
-  recommend: recommendationAPI,
+export default { 
+  otp: otpAPI, 
+  auth: authAPI, 
+  test: testAPI,
+  testAll: testAllEndpoints 
 };
