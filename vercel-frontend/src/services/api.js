@@ -1,138 +1,173 @@
 // frontend/src/services/api.js
 
-// CHANGE THIS LINE:
-const API_URL = import.meta.env.VITE_API_URL || 'https://versal-book-app.onrender.com/api';
-
-// Make sure it matches your backend!
+// ✅ Backend base URL
+const API_URL =
+  import.meta.env.VITE_API_URL ||
+  "https://versal-book-app.onrender.com/api";
 
 /**
- * Generic API call helper
+ * ✅ Safe API call helper
+ * - Never crashes UI
+ * - Always returns predictable output
  */
-const apiCall = async (endpoint, method = 'GET', data = null) => {
+const apiCall = async (endpoint, method = "GET", data = null) => {
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  const token = localStorage.getItem("token");
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  const options = {
+    method,
+    headers,
+    mode: "cors",
+  };
+
+  if (data) {
+    options.body = JSON.stringify(data);
+  }
+
   try {
-    const headers = { 
-      'Content-Type': 'application/json', 
-      'Accept': 'application/json' 
-    };
-
-    const token = localStorage.getItem('token');
-    if (token) headers['Authorization'] = `Bearer ${token}`;
-
-    const options = { 
-      method, 
-      headers, 
-      mode: 'cors',
-      credentials: 'omit'
-    };
-
-    if (data) options.body = JSON.stringify(data);
-
-    console.log(`🔄 API Call: ${method} ${API_URL}${endpoint}`);
-    if (data) console.log('📦 Request data:', data);
+    console.log(`🔄 ${method} ${API_URL}${endpoint}`);
+    if (data) console.log("📦 Payload:", data);
 
     const response = await fetch(`${API_URL}${endpoint}`, options);
 
-    console.log(`📡 Response Status: ${response.status} ${response.statusText}`);
-
-    let result = {};
+    let result = null;
     const contentType = response.headers.get("content-type");
+
     if (contentType && contentType.includes("application/json")) {
-      try {
-        result = await response.json();
-      } catch (jsonError) {
-        console.error('❌ JSON Parse Error:', jsonError);
-        throw new Error('Invalid JSON response from server');
-      }
+      result = await response.json();
     } else {
       const text = await response.text();
-      console.log('📝 Non-JSON response:', text);
-      throw new Error('Server returned non-JSON response');
+      console.error("❌ Non-JSON response:", text);
+      return {
+        success: false,
+        message: "Server returned invalid response",
+        status: response.status,
+      };
     }
 
     if (!response.ok) {
-      console.error('❌ API Error Response:', result);
+      console.warn("⚠️ API error:", result);
+
       if (response.status === 401) {
-        localStorage.removeItem('token');
-        localStorage.removeItem('currentUser');
+        localStorage.removeItem("token");
+        localStorage.removeItem("currentUser");
       }
-      throw new Error(result.message || `Error ${response.status}: ${response.statusText}`);
+
+      return {
+        success: false,
+        message: result?.message || "Request failed",
+        status: response.status,
+      };
     }
 
-    console.log('✅ API Response:', result);
-    return result;
+    console.log("✅ API success:", result);
+    return { success: true, data: result };
+
   } catch (error) {
-    console.error('❌ API Error:', error.message);
-    
-    if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
-      throw new Error('Network error: Cannot connect to server. Check if backend is running.');
-    }
-    
-    throw error;
+    console.error("❌ Network/API error:", error);
+
+    return {
+      success: false,
+      message:
+        error.message === "Failed to fetch"
+          ? "Cannot connect to server"
+          : error.message,
+    };
   }
 };
 
-// Donation API
+
+// =======================
+// 📚 DONATION API
+// =======================
 export const donationAPI = {
-  create: (donationData) => apiCall('/donations', 'POST', donationData),
-  getAll: () => apiCall('/donations'),
-  like: (id) => apiCall(`/donations/${id}/like`, 'PUT'),
-  save: (id) => apiCall(`/donations/${id}/save`, 'PUT'),
+  create: (data) => apiCall("/donations", "POST", data),
+  getAll: () => apiCall("/donations"),
   getById: (id) => apiCall(`/donations/${id}`),
-  delete: (id) => apiCall(`/donations/${id}`, 'DELETE'),
+  like: (id) => apiCall(`/donations/${id}/like`, "PUT"),
+  save: (id) => apiCall(`/donations/${id}/save`, "PUT"),
+  delete: (id) => apiCall(`/donations/${id}`, "DELETE"),
 };
 
-// Review API
+
+// =======================
+// 📝 REVIEW / STORY API
+// =======================
 export const reviewAPI = {
-  create: (reviewData) => apiCall('/reviews', 'POST', reviewData),
-  getAll: () => apiCall('/reviews'),
-  search: (query) => apiCall(`/reviews/search?query=${encodeURIComponent(query)}`),
+  create: (data) => apiCall("/reviews", "POST", data),
+  getAll: () => apiCall("/reviews"),          // ✅ PUBLIC
   getById: (id) => apiCall(`/reviews/${id}`),
-  delete: (id) => apiCall(`/reviews/${id}`, 'DELETE'),
+  search: (query) =>
+    apiCall(`/reviews/search?query=${encodeURIComponent(query)}`),
+  delete: (id) => apiCall(`/reviews/${id}`, "DELETE"),
 };
 
-// User/Auth API
+
+// =======================
+// 👤 AUTH / USER API
+// =======================
 export const authAPI = {
-  login: (data) => apiCall('/auth/login', 'POST', data),
-  register: (data) => apiCall('/auth/register', 'POST', data),
-  getUsers: () => apiCall('/auth/users'),
-  getCurrentUser: () => apiCall('/auth/me'),
+  login: (data) => apiCall("/auth/login", "POST", data),
+  register: (data) => apiCall("/auth/register", "POST", data),
+  getCurrentUser: () => apiCall("/auth/me"),
+  getUsers: () => apiCall("/auth/users"),
   logout: () => {
-    localStorage.removeItem('token');
-    localStorage.removeItem('currentUser');
+    localStorage.removeItem("token");
+    localStorage.removeItem("currentUser");
     return Promise.resolve({ success: true });
   },
 };
 
-// OTP API
+
+// =======================
+// 🔐 OTP API
+// =======================
 export const otpAPI = {
-  sendOTP: (data) => apiCall('/otp/send', 'POST', data),
-  verifyOTP: (data) => apiCall('/otp/verify', 'POST', data),
+  sendOTP: (data) => apiCall("/otp/send", "POST", data),
+  verifyOTP: (data) => apiCall("/otp/verify", "POST", data),
 };
 
-// Test API
+
+// =======================
+// 🧪 HEALTH / TEST API
+// =======================
 export const testAPI = {
-  health: () => apiCall('/health', 'GET'),
-  test: () => apiCall('/test', 'GET'),
+  health: () => apiCall("/health"),
+  test: () => apiCall("/test"),
 };
 
-// Check backend connection
+
+// =======================
+// 🌐 BACKEND CHECK
+// =======================
 export const checkBackendConnection = async () => {
   try {
-    const response = await fetch(`${API_URL}/health`);
-    const data = await response.json();
-    console.log('🌐 Backend connection status:', data);
-    return { connected: true, data };
-  } catch (error) {
-    console.error('🌐 Backend connection failed:', error);
-    return { connected: false, error: error.message };
+    const res = await fetch(`${API_URL}/health`);
+    const data = await res.json();
+    console.log("🌐 Backend OK:", data);
+    return { connected: true };
+  } catch (err) {
+    console.error("🌐 Backend unreachable:", err);
+    return { connected: false };
   }
 };
 
-export default { 
-  donation: donationAPI, 
+
+// =======================
+// 🚀 EXPORT
+// =======================
+export default {
+  donation: donationAPI,
   review: reviewAPI,
   auth: authAPI,
   otp: otpAPI,
   test: testAPI,
-  checkConnection: checkBackendConnection
+  checkConnection: checkBackendConnection,
 };
