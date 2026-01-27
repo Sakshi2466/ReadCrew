@@ -1,5 +1,5 @@
 // frontend/src/services/api.js
-const API_URL = import.meta.env.VITE_API_URL || 'https://versal-book-app.onrender.com';
+const API_URL = import.meta.env.VITE_API_URL || 'https://readcrew.onrender.com/api';
 
 /**
  * Generic API call helper
@@ -18,7 +18,7 @@ const apiCall = async (endpoint, method = 'GET', data = null) => {
       method, 
       headers, 
       mode: 'cors',
-      credentials: 'omit' // Changed from 'include' to 'omit' for Render
+      credentials: 'omit'
     };
 
     if (data) options.body = JSON.stringify(data);
@@ -39,6 +39,10 @@ const apiCall = async (endpoint, method = 'GET', data = null) => {
         console.error('❌ JSON Parse Error:', jsonError);
         throw new Error('Invalid JSON response from server');
       }
+    } else {
+      const text = await response.text();
+      console.log('📝 Non-JSON response:', text);
+      throw new Error('Server returned non-JSON response');
     }
 
     if (!response.ok) {
@@ -55,7 +59,6 @@ const apiCall = async (endpoint, method = 'GET', data = null) => {
   } catch (error) {
     console.error('❌ API Error:', error.message);
     
-    // Enhanced error messages
     if (error.name === 'TypeError' && error.message.includes('Failed to fetch')) {
       throw new Error('Network error: Cannot connect to server. Check if backend is running.');
     }
@@ -64,76 +67,68 @@ const apiCall = async (endpoint, method = 'GET', data = null) => {
   }
 };
 
-// OTP API - CORRECTED ENDPOINTS
-export const otpAPI = {
-  sendOTP: (data) => {
-    console.log('📤 Sending OTP to:', data.email);
-    return apiCall('/otp/send', 'POST', data);
-  },
-  verifyOTP: (data) => {
-    console.log('🔐 Verifying OTP for:', data.email);
-    return apiCall('/otp/verify', 'POST', data);
-  },
-  
-  // Alternative endpoints if needed
-  sendOTPAlt: (data) => apiCall('/send-otp', 'POST', data),
-  verifyOTPAlt: (data) => apiCall('/verify-otp', 'POST', data),
-  
-  // Direct endpoints without /api prefix
-  sendOTPDirect: (data) => apiCall('/send', 'POST', data, true),
-  verifyOTPDirect: (data) => apiCall('/verify', 'POST', data, true)
+// Donation API
+export const donationAPI = {
+  create: (donationData) => apiCall('/donations', 'POST', donationData),
+  getAll: () => apiCall('/donations'),
+  like: (id) => apiCall(`/donations/${id}/like`, 'PUT'),
+  save: (id) => apiCall(`/donations/${id}/save`, 'PUT'),
+  getById: (id) => apiCall(`/donations/${id}`),
+  delete: (id) => apiCall(`/donations/${id}`, 'DELETE'),
 };
 
-// Auth API
+// Review API
+export const reviewAPI = {
+  create: (reviewData) => apiCall('/reviews', 'POST', reviewData),
+  getAll: () => apiCall('/reviews'),
+  search: (query) => apiCall(`/reviews/search?query=${encodeURIComponent(query)}`),
+  getById: (id) => apiCall(`/reviews/${id}`),
+  delete: (id) => apiCall(`/reviews/${id}`, 'DELETE'),
+};
+
+// User/Auth API
 export const authAPI = {
   login: (data) => apiCall('/auth/login', 'POST', data),
   register: (data) => apiCall('/auth/register', 'POST', data),
   getUsers: () => apiCall('/auth/users'),
+  getCurrentUser: () => apiCall('/auth/me'),
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('currentUser');
+    return Promise.resolve({ success: true });
   },
 };
 
-// Test connection
+// OTP API
+export const otpAPI = {
+  sendOTP: (data) => apiCall('/otp/send', 'POST', data),
+  verifyOTP: (data) => apiCall('/otp/verify', 'POST', data),
+};
+
+// Test API
 export const testAPI = {
   health: () => apiCall('/health', 'GET'),
   test: () => apiCall('/test', 'GET'),
-  testEndpoint: (endpoint) => apiCall(endpoint, 'GET')
 };
 
-// Helper to test all endpoints
-export const testAllEndpoints = async () => {
-  const endpoints = [
-    '/health',
-    '/test',
-    '/otp/send',
-    '/otp/verify',
-    '/send-otp',
-    '/verify-otp',
-    '/api/otp/send',
-    '/api/otp/verify'
-  ];
-  
-  console.log('🧪 Testing all endpoints...');
-  
-  for (const endpoint of endpoints) {
-    try {
-      console.log(`\n🔍 Testing: ${endpoint}`);
-      const response = await fetch(`${API_URL}${endpoint}`, {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
-      });
-      console.log(`   Status: ${response.status} ${response.statusText}`);
-    } catch (error) {
-      console.log(`   ❌ Error: ${error.message}`);
-    }
+// Check backend connection
+export const checkBackendConnection = async () => {
+  try {
+    const response = await fetch(`${API_URL}/health`);
+    const data = await response.json();
+    console.log('🌐 Backend connection status:', data);
+    return { connected: true, data };
+  } catch (error) {
+    console.error('🌐 Backend connection failed:', error);
+    return { connected: false, error: error.message };
   }
 };
 
 export default { 
-  otp: otpAPI, 
-  auth: authAPI, 
+  donation: donationAPI, 
+  review: reviewAPI,
+  auth: authAPI,
+  otp: otpAPI,
   test: testAPI,
-  testAll: testAllEndpoints 
+  checkConnection: checkBackendConnection
 };

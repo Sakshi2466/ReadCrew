@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
 
+// Import API services
+import { donationAPI, reviewAPI, authAPI, otpAPI, checkBackendConnection } from './services/api';
+
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
   {
@@ -269,9 +272,6 @@ const BOOK_RECOMMENDATIONS = [
   }
 ];
 
-// API base URL - FIXED: Use /api prefix for consistency
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
-
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
@@ -296,6 +296,10 @@ const App = () => {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showPostDetail, setShowPostDetail] = useState(false);
   
+  // Backend connection states
+  const [backendConnected, setBackendConnected] = useState(false);
+  const [backendChecking, setBackendChecking] = useState(true);
+  
   // Data states
   const [donations, setDonations] = useState([]);
   const [reviews, setReviews] = useState([]);
@@ -318,7 +322,25 @@ const App = () => {
   // Selected post for detail view
   const [selectedPost, setSelectedPost] = useState(null);
 
-  // Initialize data from localStorage
+  // Check backend connection on startup
+  useEffect(() => {
+    const checkConnection = async () => {
+      console.log('🔌 Checking backend connection...');
+      const status = await checkBackendConnection();
+      setBackendConnected(status.connected);
+      setBackendChecking(false);
+      
+      if (status.connected) {
+        console.log('✅ Backend connected successfully');
+      } else {
+        console.warn('⚠️ Backend connection failed, using localStorage fallback');
+      }
+    };
+    
+    checkConnection();
+  }, []);
+
+  // Initialize data from localStorage on mount
   useEffect(() => {
     const user = localStorage.getItem('currentUser');
     if (user) {
@@ -327,12 +349,24 @@ const App = () => {
         setCurrentUser(parsed);
         setIsLoggedIn(true);
         setReadingGoal(parsed.readingGoal || { monthly: 0, books: [] });
+        
+        // Load user activity
+        if (parsed?.email) {
+          try {
+            const saved = localStorage.getItem(`user_${parsed.email}_activity`);
+            if (saved) {
+              setUserActivity(JSON.parse(saved));
+            }
+          } catch (error) {
+            console.error('Error loading user activity:', error);
+          }
+        }
       } catch (error) {
         console.error('Error parsing user data:', error);
       }
     }
 
-    // Load donations and reviews
+    // Load donations and reviews from localStorage as fallback
     try {
       const savedDonations = localStorage.getItem('donations');
       const savedReviews = localStorage.getItem('reviews');
@@ -350,23 +384,55 @@ const App = () => {
     }
   }, []);
 
-  // Load user activity when logged in
+  // Load data from backend when logged in
   useEffect(() => {
-    if (isLoggedIn && currentUser?.email) {
-      try {
-        const saved = localStorage.getItem(`user_${currentUser.email}_activity`);
-        if (saved) {
-          setUserActivity(JSON.parse(saved));
-        }
-      } catch (error) {
-        console.error('Error loading user activity:', error);
-      }
+    if (isLoggedIn && backendConnected) {
+      loadDonationsFromBackend();
+      loadReviewsFromBackend();
     }
-  }, [isLoggedIn, currentUser]);
+  }, [isLoggedIn, backendConnected]);
+
+  // Load donations from backend
+  const loadDonationsFromBackend = async () => {
+    try {
+      console.log('📥 Loading donations from backend...');
+      const result = await donationAPI.getAll();
+      
+      if (result.success && result.donations) {
+        setDonations(result.donations);
+        console.log('✅ Loaded donations from backend:', result.donations.length);
+      } else {
+        console.log('⚠️ No donations found in backend');
+        // Keep localStorage data
+      }
+    } catch (error) {
+      console.error('❌ Error loading donations from backend:', error);
+      // Keep localStorage data
+    }
+  };
+
+  // Load reviews from backend
+  const loadReviewsFromBackend = async () => {
+    try {
+      console.log('📥 Loading reviews from backend...');
+      const result = await reviewAPI.getAll();
+      
+      if (result.success && result.reviews) {
+        setReviews(result.reviews);
+        setFilteredReviews(result.reviews);
+        console.log('✅ Loaded reviews from backend:', result.reviews.length);
+      } else {
+        console.log('⚠️ No reviews found in backend');
+        // Keep localStorage data
+      }
+    } catch (error) {
+      console.error('❌ Error loading reviews from backend:', error);
+      // Keep localStorage data
+    }
+  };
 
   // ========== AUTHENTICATION FUNCTIONS ==========
   
-  // Send OTP - FIXED ENDPOINT
   const handleSendOTP = async () => {
     if (!validateName(loginForm.name) || !validateEmail(loginForm.email) || !validatePhone(loginForm.phone)) {
       alert('Please fill all fields correctly');
@@ -376,43 +442,24 @@ const App = () => {
     setLoading(true);
     try {
       console.log('📤 Sending OTP to:', loginForm.email);
-      console.log('📡 API URL:', `${API_BASE_URL}/otp/send`);
       
-      // ✅ CORRECTED: Using /otp/send (not /otp/send-otp)
-      const response = await fetch(`${API_BASE_URL}/otp/send`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(loginForm)
-      });
+      const result = await otpAPI.sendOTP(loginForm);
       
-      console.log('📋 Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const data = await response.json();
-      console.log('📋 Response data:', data);
-      
-      if (data.success) {
+      if (result.success) {
         setVerificationData(loginForm);
         setShowOTP(true);
         alert('OTP sent to your email! Check your inbox.');
         console.log('✅ OTP Sent Successfully!');
-        if (data.otp) {
-          console.log(`🔐 DEVELOPMENT OTP: ${data.otp}`);
-          console.log(`📧 For development, use OTP: ${data.otp}`);
+        if (result.otp) {
+          console.log(`🔐 DEVELOPMENT OTP: ${result.otp}`);
         }
       } else {
-        alert(data.message || 'Failed to send OTP');
+        alert(result.message || 'Failed to send OTP');
       }
     } catch (error) {
-      console.error('❌ Error sending OTP:', error);
+      console.error('❌ Error sending OTP via API:', error);
       
-      // Fallback to mock OTP if backend fails
+      // Fallback to mock OTP
       console.log('🔄 Using mock OTP as fallback...');
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       localStorage.setItem('devOTP', otp);
@@ -427,7 +474,6 @@ const App = () => {
     }
   };
 
-  // Verify OTP - FIXED ENDPOINT
   const handleVerifyOTP = async () => {
     if (otpInput.length !== 6) {
       alert('Enter 6-digit OTP');
@@ -437,64 +483,67 @@ const App = () => {
     setLoading(true);
     try {
       console.log('🔐 Verifying OTP:', otpInput);
-      console.log('📡 API URL:', `${API_BASE_URL}/otp/verify`);
       
-      // ✅ CORRECTED: Using /otp/verify (not /otp/verify-otp)
-      const response = await fetch(`${API_BASE_URL}/otp/verify`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ email: verificationData.email, otp: otpInput })
-      });
+      const result = await otpAPI.verifyOTP({ email: verificationData.email, otp: otpInput });
       
-      console.log('📋 Verify response status:', response.status);
-      
-      let data;
-      if (response.ok) {
-        data = await response.json();
-        console.log('📋 Verify response data:', data);
-      } else {
-        // Fallback to mock verification
-        console.log('🔄 Using mock verification...');
-        const devOTP = localStorage.getItem('devOTP');
-        const devUser = JSON.parse(localStorage.getItem('devUser') || '{}');
+      if (result.success) {
+        const userData = {
+          id: Date.now().toString(),
+          name: verificationData.name,
+          email: verificationData.email,
+          phone: verificationData.phone,
+          isVerified: true,
+          createdAt: new Date().toISOString(),
+          readingGoal: { monthly: 0, books: [] }
+        };
         
-        if (devOTP && otpInput === devOTP && devUser.email === verificationData.email) {
-          data = {
-            success: true,
-            user: {
-              id: Date.now().toString(),
-              name: devUser.name,
-              email: devUser.email,
-              phone: devUser.phone,
-              isVerified: true,
-              createdAt: new Date().toISOString(),
-              readingGoal: { monthly: 0, books: [] }
-            }
-          };
-          localStorage.removeItem('devOTP');
-          localStorage.removeItem('devUser');
-        } else {
-          data = { success: false, message: 'Invalid OTP' };
-        }
-      }
-      
-      if (data.success) {
-        localStorage.setItem('currentUser', JSON.stringify(data.user));
-        setCurrentUser(data.user);
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        setCurrentUser(userData);
         setIsLoggedIn(true);
         setShowOTP(false);
         setLoginForm({ name: '', email: '', phone: '' });
         setOtpInput('');
         alert('✅ Account verified! Welcome to ReadCrew!');
+        
+        // Load data from backend
+        if (backendConnected) {
+          await loadDonationsFromBackend();
+          await loadReviewsFromBackend();
+        }
       } else {
-        alert(`❌ ${data.message}`);
+        alert(`❌ ${result.message}`);
       }
     } catch (error) {
-      console.error('❌ Error verifying OTP:', error);
-      alert('Network error. Please try again.');
+      console.error('❌ Error verifying OTP via API:', error);
+      
+      // Fallback to mock verification
+      const devOTP = localStorage.getItem('devOTP');
+      const devUser = JSON.parse(localStorage.getItem('devUser') || '{}');
+      
+      if (devOTP && otpInput === devOTP && devUser.email === verificationData.email) {
+        const userData = {
+          id: Date.now().toString(),
+          name: devUser.name,
+          email: devUser.email,
+          phone: devUser.phone,
+          isVerified: true,
+          createdAt: new Date().toISOString(),
+          readingGoal: { monthly: 0, books: [] }
+        };
+        
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        setCurrentUser(userData);
+        setIsLoggedIn(true);
+        setShowOTP(false);
+        setLoginForm({ name: '', email: '', phone: '' });
+        setOtpInput('');
+        
+        localStorage.removeItem('devOTP');
+        localStorage.removeItem('devUser');
+        alert('✅ Account verified! Welcome to ReadCrew!');
+      } else {
+        alert('❌ Invalid OTP');
+      }
     } finally {
       setLoading(false);
     }
@@ -502,7 +551,6 @@ const App = () => {
 
   // ========== REVIEW FUNCTIONS ==========
 
-  // Search reviews with regex
   const handleSearchReviews = (query) => {
     setSearchQuery(query);
     if (!query.trim()) {
@@ -519,7 +567,6 @@ const App = () => {
         regex.test(review.userName)
       );
       
-      // Sort by relevance
       const sorted = filtered.sort((a, b) => {
         const aBookExact = a.bookName.toLowerCase() === query.toLowerCase();
         const bBookExact = b.bookName.toLowerCase() === query.toLowerCase();
@@ -536,7 +583,6 @@ const App = () => {
       
       setFilteredReviews(sorted);
     } catch (error) {
-      // Simple search if regex fails
       const filtered = reviews.filter(review => 
         review.bookName.toLowerCase().includes(query.toLowerCase()) ||
         review.author.toLowerCase().includes(query.toLowerCase()) ||
@@ -549,13 +595,11 @@ const App = () => {
 
   // ========== DONATION FUNCTIONS ==========
 
-  // Open post detail
   const handleOpenPostDetail = (post) => {
     setSelectedPost(post);
     setShowPostDetail(true);
   };
 
-  // Handle image upload
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -571,13 +615,50 @@ const App = () => {
     }
   };
 
-  // Handle donation submission
-  const handleDonationSubmit = () => {
+  const handleDonationSubmit = async () => {
     if (!donationForm.bookName || !donationForm.story || !donationForm.image) {
       alert('Please fill all fields');
       return;
     }
     
+    if (!isLoggedIn) {
+      alert('Please login to share a story');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      if (backendConnected) {
+        console.log('📤 Submitting donation to backend...');
+        
+        const donationData = {
+          userName: currentUser.name,
+          userEmail: currentUser.email,
+          bookName: donationForm.bookName,
+          story: donationForm.story,
+          image: donationForm.image,
+        };
+        
+        const result = await donationAPI.create(donationData);
+        
+        if (result.success) {
+          console.log('✅ Donation created on backend:', result.donation);
+          await loadDonationsFromBackend();
+          setDonationForm({ bookName: '', story: '', image: null, imagePreview: null });
+          alert('✅ Story shared successfully! Everyone can now see it!');
+          setLoading(false);
+          return;
+        } else {
+          throw new Error(result.message || 'Failed to create donation');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error submitting donation to backend:', error);
+    }
+    
+    // Fallback to localStorage
+    console.log('🔄 Saving donation locally...');
     const newDonation = {
       _id: Date.now().toString(),
       userId: currentUser.id,
@@ -595,22 +676,39 @@ const App = () => {
     localStorage.setItem('donations', JSON.stringify(updatedDonations));
     
     setDonationForm({ bookName: '', story: '', image: null, imagePreview: null });
-    alert('✅ Story shared successfully!');
+    alert(backendConnected ? '⚠️ Saved locally (backend error)' : '✅ Story saved locally!');
+    setLoading(false);
   };
 
-  // Handle delete donation
-  const handleDeleteDonation = (id) => {
-    if (confirm('Are you sure you want to delete this story?')) {
-      const updated = donations.filter(d => d._id !== id);
-      setDonations(updated);
-      localStorage.setItem('donations', JSON.stringify(updated));
-      alert('Story deleted successfully');
-      setShowPostDetail(false);
+  const handleDeleteDonation = async (id) => {
+    if (!confirm('Are you sure you want to delete this story?')) return;
+    
+    try {
+      if (backendConnected) {
+        await donationAPI.delete(id);
+        console.log('✅ Deleted donation from backend:', id);
+      }
+    } catch (error) {
+      console.error('❌ Error deleting donation from backend:', error);
     }
+    
+    const updated = donations.filter(d => d._id !== id);
+    setDonations(updated);
+    localStorage.setItem('donations', JSON.stringify(updated));
+    
+    alert('Story deleted successfully');
+    if (showPostDetail) setShowPostDetail(false);
   };
 
-  // Handle like donation
-  const handleLikeDonation = (id) => {
+  const handleLikeDonation = async (id) => {
+    try {
+      if (backendConnected) {
+        await donationAPI.like(id);
+      }
+    } catch (error) {
+      console.error('❌ Error liking donation on backend:', error);
+    }
+    
     const updated = donations.map(d => 
       d._id === id ? { ...d, likes: (d.likes || 0) + 1 } : d
     );
@@ -629,8 +727,15 @@ const App = () => {
     }
   };
 
-  // Handle save donation
-  const handleSaveDonation = (id) => {
+  const handleSaveDonation = async (id) => {
+    try {
+      if (backendConnected) {
+        await donationAPI.save(id);
+      }
+    } catch (error) {
+      console.error('❌ Error saving donation on backend:', error);
+    }
+    
     const updated = donations.map(d => 
       d._id === id ? { ...d, saves: (d.saves || 0) + 1 } : d
     );
@@ -650,28 +755,51 @@ const App = () => {
     }
   };
 
-  // Handle share donation
-  const handleShareDonation = (id) => {
-    if (currentUser?.email) {
-      const activityKey = `user_${currentUser.email}_activity`;
-      const saved = JSON.parse(localStorage.getItem(activityKey) || '{}');
-      if (!saved.sharedPosts) saved.sharedPosts = [];
-      if (!saved.sharedPosts.includes(id)) {
-        saved.sharedPosts.push(id);
-        setUserActivity(prev => ({ ...prev, sharedPosts: saved.sharedPosts }));
-        localStorage.setItem(activityKey, JSON.stringify(saved));
-        alert('✅ Post marked as shared!');
-      }
-    }
-  };
-
-  // Handle review submission
-  const handleReviewSubmit = () => {
+  const handleReviewSubmit = async () => {
     if (!reviewForm.bookName || !reviewForm.author || !reviewForm.review) {
       alert('Please fill all fields');
       return;
     }
     
+    if (!isLoggedIn) {
+      alert('Please login to post a review');
+      return;
+    }
+    
+    setLoading(true);
+    
+    try {
+      if (backendConnected) {
+        console.log('📤 Submitting review to backend...');
+        
+        const reviewData = {
+          userName: currentUser.name,
+          userEmail: currentUser.email,
+          bookName: reviewForm.bookName,
+          author: reviewForm.author,
+          review: reviewForm.review,
+          sentiment: reviewForm.sentiment,
+        };
+        
+        const result = await reviewAPI.create(reviewData);
+        
+        if (result.success) {
+          console.log('✅ Review created on backend:', result.review);
+          await loadReviewsFromBackend();
+          setReviewForm({ bookName: '', author: '', review: '', sentiment: 'positive' });
+          alert('✅ Review posted successfully! Everyone can now see it!');
+          setLoading(false);
+          return;
+        } else {
+          throw new Error(result.message || 'Failed to create review');
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error submitting review to backend:', error);
+    }
+    
+    // Fallback to localStorage
+    console.log('🔄 Saving review locally...');
     const newReview = {
       _id: Date.now().toString(),
       userId: currentUser.id,
@@ -687,12 +815,12 @@ const App = () => {
     localStorage.setItem('reviews', JSON.stringify(updatedReviews));
     
     setReviewForm({ bookName: '', author: '', review: '', sentiment: 'positive' });
-    alert('✅ Review posted successfully!');
+    alert(backendConnected ? '⚠️ Saved locally (backend error)' : '✅ Review saved locally!');
+    setLoading(false);
   };
 
   // ========== RECOMMENDATION FUNCTIONS ==========
 
-  // Handle recommendation
   const handleRecommendation = () => {
     if (!recommendKeywords.trim()) {
       alert('Please enter what you want to read about');
@@ -701,7 +829,6 @@ const App = () => {
 
     const keywords = recommendKeywords.toLowerCase().trim();
     
-    // Find matching categories
     const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
       const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
       return categoryText.includes(keywords) || 
@@ -711,7 +838,6 @@ const App = () => {
              );
     });
 
-    // If specific category found
     if (matchingCategories.length > 0) {
       const results = [];
       matchingCategories.forEach(category => {
@@ -725,7 +851,6 @@ const App = () => {
       });
       setRecommendations(results);
     } else {
-      // If no specific category, show general recommendations based on keywords
       const allBooks = BOOK_RECOMMENDATIONS.flatMap(category => 
         category.books.map(book => ({
           ...book,
@@ -748,7 +873,6 @@ const App = () => {
           }
         ]);
       } else {
-        // Default recommendations
         setRecommendations([
           {
             type: 'popular',
@@ -766,7 +890,6 @@ const App = () => {
     }
   };
 
-  // Show all categories for browsing
   const handleBrowseCategories = () => {
     setRecommendations(
       BOOK_RECOMMENDATIONS.map(category => ({
@@ -781,7 +904,6 @@ const App = () => {
 
   // ========== READING GOAL FUNCTIONS ==========
   
-  // Update reading goal
   const handleUpdateGoal = () => {
     if (!currentUser) return;
     
@@ -792,7 +914,6 @@ const App = () => {
     alert('✅ Reading goal updated!');
   };
 
-  // Add book to reading goal
   const handleAddBook = () => {
     if (newBook.trim()) {
       setReadingGoal(prev => ({
@@ -803,7 +924,6 @@ const App = () => {
     }
   };
 
-  // Toggle book completion
   const handleToggleBook = (idx) => {
     setReadingGoal(prev => ({
       ...prev,
@@ -813,7 +933,20 @@ const App = () => {
     }));
   };
 
-  // Logout
+  const handleShareDonation = (id) => {
+    if (currentUser?.email) {
+      const activityKey = `user_${currentUser.email}_activity`;
+      const saved = JSON.parse(localStorage.getItem(activityKey) || '{}');
+      if (!saved.sharedPosts) saved.sharedPosts = [];
+      if (!saved.sharedPosts.includes(id)) {
+        saved.sharedPosts.push(id);
+        setUserActivity(prev => ({ ...prev, sharedPosts: saved.sharedPosts }));
+        localStorage.setItem(activityKey, JSON.stringify(saved));
+        alert('✅ Post marked as shared!');
+      }
+    }
+  };
+
   const handleLogout = () => {
     localStorage.removeItem('currentUser');
     setCurrentUser(null);
@@ -961,9 +1094,16 @@ const App = () => {
     );
   }
 
-  // ========== RENDER: MAIN APP (after login) ==========
+  // ========== RENDER: MAIN APP ==========
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Backend Status Indicator */}
+      {!backendChecking && (
+        <div className={`px-4 py-2 text-center text-sm font-medium ${backendConnected ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
+          {backendConnected ? '✅ Connected to backend - Data saved globally' : '⚠️ Backend offline - Data saved locally only'}
+        </div>
+      )}
+
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
         <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
@@ -1116,6 +1256,13 @@ const App = () => {
           {/* Upload Form */}
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-gray-100">
             <h2 className="text-2xl font-bold mb-6 text-gray-900">Share Your Reading Journey</h2>
+            {!backendConnected && (
+              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-700">
+                  ⚠️ Backend offline - stories will be saved locally only
+                </p>
+              </div>
+            )}
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
@@ -1168,10 +1315,10 @@ const App = () => {
               <div className="md:col-span-2">
                 <button
                   onClick={handleDonationSubmit}
-                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image}
+                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading}
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
-                  Share My Story
+                  {loading ? 'Sharing...' : 'Share My Story'}
                 </button>
               </div>
             </div>
@@ -1277,6 +1424,13 @@ const App = () => {
           <div className="grid md:grid-cols-2 gap-8">
             <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
               <h2 className="text-2xl font-bold mb-6 text-gray-900">Write a Review</h2>
+              {!backendConnected && (
+                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-sm text-yellow-700">
+                    ⚠️ Backend offline - reviews will be saved locally only
+                  </p>
+                </div>
+              )}
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
@@ -1335,10 +1489,10 @@ const App = () => {
                 </div>
                 <button
                   onClick={handleReviewSubmit}
-                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review}
+                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || loading}
                   className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
-                  Post Review
+                  {loading ? 'Posting...' : 'Post Review'}
                 </button>
               </div>
             </div>
