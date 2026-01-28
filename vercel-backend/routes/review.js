@@ -5,25 +5,21 @@ const User = require('../models/User');
 
 const router = express.Router();
 
-// Create review (Protected)
-router.post('/', authMiddleware, async (req, res) => {
+// Create review (PUBLIC - No auth required)
+router.post('/', async (req, res) => {
   try {
-    const { bookName, author, review, sentiment, rating } = req.body;
-    const userId = req.userId;
+    const { userName, bookName, author, review, sentiment, rating } = req.body;
 
     // Validation
-    if (!bookName || !author || !review) {
+    if (!userName || !bookName || !author || !review) {
       return res.status(400).json({
         success: false,
         message: 'Please fill all required fields'
       });
     }
 
-    const user = await User.findById(userId);
-
     const newReview = new Review({
-      userId,
-      userName: user.name,
+      userName,
       bookName,
       author,
       review,
@@ -46,12 +42,11 @@ router.post('/', authMiddleware, async (req, res) => {
   }
 });
 
-// Get all reviews
+// Get all reviews (PUBLIC)
 router.get('/', async (req, res) => {
   try {
     const reviews = await Review.find()
-      .sort({ createdAt: -1 })
-      .populate('userId', 'name email');
+      .sort({ createdAt: -1 });
     
     res.status(200).json({
       success: true,
@@ -65,7 +60,7 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Search reviews
+// Search reviews (PUBLIC)
 router.get('/search', async (req, res) => {
   try {
     const { query } = req.query;
@@ -90,8 +85,8 @@ router.get('/search', async (req, res) => {
   }
 });
 
-// Mark review as helpful (Protected)
-router.post('/:id/helpful', authMiddleware, async (req, res) => {
+// Mark review as helpful (PUBLIC)
+router.post('/:id/helpful', async (req, res) => {
   try {
     const review = await Review.findById(req.params.id);
     
