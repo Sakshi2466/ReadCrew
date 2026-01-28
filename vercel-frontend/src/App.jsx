@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
-// At the top of App.jsx
-import { donationAPI, reviewAPI, otpAPI, healthCheck } from './services/api';
 
+// ✅ CORRECTED IMPORT: Import checkBackendConnection
+import { donationAPI, reviewAPI, otpAPI, checkBackendConnection } from './services/api';
 
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
@@ -322,18 +322,25 @@ const App = () => {
   // Selected post for detail view
   const [selectedPost, setSelectedPost] = useState(null);
 
-  // Check backend connection on startup
+  // ✅ CORRECTED: Check backend connection on startup
   useEffect(() => {
     const checkConnection = async () => {
       console.log('🔌 Checking backend connection...');
-      const status = await checkBackendConnection();
-      setBackendConnected(status.connected);
-      setBackendChecking(false);
-      
-      if (status.connected) {
-        console.log('✅ Backend connected successfully');
-      } else {
-        console.warn('⚠️ Backend connection failed, using localStorage fallback');
+      try {
+        const status = await checkBackendConnection();
+        setBackendConnected(status.connected);
+        setBackendChecking(false);
+        
+        if (status.connected) {
+          console.log('✅ Backend connected successfully');
+          console.log('Backend status:', status.data);
+        } else {
+          console.warn('⚠️ Backend connection failed, using localStorage fallback');
+        }
+      } catch (error) {
+        console.error('Error checking backend connection:', error);
+        setBackendConnected(false);
+        setBackendChecking(false);
       }
     };
     
@@ -603,8 +610,8 @@ const App = () => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Image size should be less than 5MB');
+      if (file.size > 2 * 1024 * 1024) { // Reduced to 2MB
+        alert('Image size should be less than 2MB');
         return;
       }
       const reader = new FileReader();
@@ -955,6 +962,28 @@ const App = () => {
     alert('Logged out successfully');
   };
 
+  // ========== DEBUG FUNCTION ==========
+  
+  const testBackendManually = async () => {
+    console.log('🧪 Testing backend manually...');
+    
+    const endpoints = [
+      'https://versal-book-app.onrender.com/api/health',
+      'https://versal-book-app.onrender.com/api/donations',
+      'https://versal-book-app.onrender.com/api/reviews'
+    ];
+    
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+        console.log(`✅ ${url}:`, data);
+      } catch (error) {
+        console.error(`❌ ${url}:`, error.message);
+      }
+    }
+  };
+
   // ========== RENDER: LOGIN PAGE ==========
   if (!isLoggedIn) {
     return (
@@ -1103,6 +1132,14 @@ const App = () => {
           {backendConnected ? '✅ Connected to backend - Data saved globally' : '⚠️ Backend offline - Data saved locally only'}
         </div>
       )}
+
+      {/* Debug Button */}
+      <button
+        onClick={testBackendManually}
+        className="fixed bottom-4 right-4 bg-purple-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg hover:bg-purple-600"
+      >
+        Test Backend
+      </button>
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
@@ -1288,7 +1325,7 @@ const App = () => {
                   className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 cursor-pointer transition bg-gray-50 hover:bg-blue-50"
                 >
                   <Upload className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-600">Choose Image (max 5MB)</span>
+                  <span className="text-gray-600">Choose Image (max 2MB)</span>
                 </label>
               </div>
               <div className="md:col-span-2">
