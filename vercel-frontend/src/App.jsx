@@ -1,8 +1,43 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
+// At the top of App.jsx
+import { donationAPI, reviewAPI, otpAPI, healthCheck } from './services/api';
+import { useEffect, useState } from 'react';
+import { healthCheck } from './services/api'; // Adjust path to your API service file
 
-// Import API services
-import { donationAPI, reviewAPI, authAPI, otpAPI, checkBackendConnection } from './services/api';
+function App() {
+  // Your existing state and other hooks...
+
+  // Add this useEffect to test backend connection on mount
+  useEffect(() => {
+    const testBackend = async () => {
+      console.log('🔌 Checking backend connection...');
+      try {
+        const health = await healthCheck();
+        console.log('🌐 Backend OK:', health);
+        
+        if (health.status === 'healthy') {
+          console.log('✅ Backend connected successfully');
+        } else {
+          console.warn('⚠️ Backend health check returned:', health);
+        }
+      } catch (error) {
+        console.error('🌐 Backend connection failed:', error);
+        alert('⚠️ Backend connection failed, using localStorage fallback');
+      }
+    };
+    
+    testBackend();
+  }, []);
+
+  return (
+    <div className="App">
+      {/* Your app components */}
+    </div>
+  );
+}
+
+
 
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
