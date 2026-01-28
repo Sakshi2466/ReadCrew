@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
 
-// ✅ CORRECTED IMPORT: Import checkBackendConnection
-import { donationAPI, reviewAPI, otpAPI, checkBackendConnection } from './services/api';
+/// ✅ CORRECT
+import { donationAPI, reviewAPI, otpAPI, healthCheck } from './services/api';
 
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
