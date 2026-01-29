@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
 
-/// ✅ CORRECT
-import { donationAPI, reviewAPI, otpAPI, healthCheck } from './services/api';
+// ✅ CORRECT IMPORT
+import { donationAPI, reviewAPI, otpAPI, checkBackendConnection } from './services/api';
 
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
@@ -335,7 +335,7 @@ const App = () => {
           console.log('✅ Backend connected successfully');
           console.log('Backend status:', status.data);
         } else {
-          console.warn('⚠️ Backend connection failed, using localStorage fallback');
+          console.warn('⚠️ Backend connection failed');
         }
       } catch (error) {
         console.error('Error checking backend connection:', error);
@@ -373,68 +373,58 @@ const App = () => {
       }
     }
 
-    // Load donations and reviews from localStorage as fallback
-    try {
-      const savedDonations = localStorage.getItem('donations');
-      const savedReviews = localStorage.getItem('reviews');
-      
-      if (savedDonations) {
-        setDonations(JSON.parse(savedDonations));
-      }
-      if (savedReviews) {
-        const parsedReviews = JSON.parse(savedReviews);
-        setReviews(parsedReviews);
-        setFilteredReviews(parsedReviews);
-      }
-    } catch (error) {
-      console.error('Error loading data from localStorage:', error);
-    }
+    // ✅ CHANGED: Load from backend immediately instead of localStorage
+    loadDonationsFromBackend();
+    loadReviewsFromBackend();
   }, []);
 
-  // Load data from backend when logged in
-  useEffect(() => {
-    if (isLoggedIn && backendConnected) {
-      loadDonationsFromBackend();
-      loadReviewsFromBackend();
-    }
-  }, [isLoggedIn, backendConnected]);
+  // ✅ CHANGED: REMOVED conditional loading - always try to load from backend
+  // OLD CODE (REMOVED):
+  // useEffect(() => {
+  //   if (isLoggedIn && backendConnected) {
+  //     loadDonationsFromBackend();
+  //     loadReviewsFromBackend();
+  //   }
+  // }, [isLoggedIn, backendConnected]);
 
-  // Load donations from backend
+  // ✅ CHANGED: Simplify loadDonationsFromBackend
   const loadDonationsFromBackend = async () => {
     try {
       console.log('📥 Loading donations from backend...');
       const result = await donationAPI.getAll();
       
-      if (result.success && result.donations) {
+      if (result.success && Array.isArray(result.donations)) {
+        console.log('✅ Loaded', result.donations.length, 'donations from backend');
         setDonations(result.donations);
-        console.log('✅ Loaded donations from backend:', result.donations.length);
       } else {
-        console.log('⚠️ No donations found in backend');
-        // Keep localStorage data
+        console.log('⚠️ Backend returned no donations');
+        setDonations([]);
       }
     } catch (error) {
-      console.error('❌ Error loading donations from backend:', error);
-      // Keep localStorage data
+      console.error('❌ Backend connection failed:', error.message);
+      setDonations([]);
     }
   };
 
-  // Load reviews from backend
+  // ✅ CHANGED: Simplify loadReviewsFromBackend
   const loadReviewsFromBackend = async () => {
     try {
       console.log('📥 Loading reviews from backend...');
       const result = await reviewAPI.getAll();
       
-      if (result.success && result.reviews) {
+      if (result.success && Array.isArray(result.reviews)) {
+        console.log('✅ Loaded', result.reviews.length, 'reviews from backend');
         setReviews(result.reviews);
         setFilteredReviews(result.reviews);
-        console.log('✅ Loaded reviews from backend:', result.reviews.length);
       } else {
-        console.log('⚠️ No reviews found in backend');
-        // Keep localStorage data
+        console.log('⚠️ Backend returned no reviews');
+        setReviews([]);
+        setFilteredReviews([]);
       }
     } catch (error) {
-      console.error('❌ Error loading reviews from backend:', error);
-      // Keep localStorage data
+      console.error('❌ Backend connection failed:', error.message);
+      setReviews([]);
+      setFilteredReviews([]);
     }
   };
 
@@ -513,10 +503,8 @@ const App = () => {
         alert('✅ Account verified! Welcome to ReadCrew!');
         
         // Load data from backend
-        if (backendConnected) {
-          await loadDonationsFromBackend();
-          await loadReviewsFromBackend();
-        }
+        await loadDonationsFromBackend();
+        await loadReviewsFromBackend();
       } else {
         alert(`❌ ${result.message}`);
       }
@@ -548,6 +536,10 @@ const App = () => {
         localStorage.removeItem('devOTP');
         localStorage.removeItem('devUser');
         alert('✅ Account verified! Welcome to ReadCrew!');
+        
+        // Load data from backend
+        await loadDonationsFromBackend();
+        await loadReviewsFromBackend();
       } else {
         alert('❌ Invalid OTP');
       }
@@ -636,54 +628,34 @@ const App = () => {
     setLoading(true);
     
     try {
-      if (backendConnected) {
-        console.log('📤 Submitting donation to backend...');
-        
-        const donationData = {
-          userName: currentUser.name,
-          userEmail: currentUser.email,
-          bookName: donationForm.bookName,
-          story: donationForm.story,
-          image: donationForm.image,
-        };
-        
-        const result = await donationAPI.create(donationData);
-        
-        if (result.success) {
-          console.log('✅ Donation created on backend:', result.donation);
-          await loadDonationsFromBackend();
-          setDonationForm({ bookName: '', story: '', image: null, imagePreview: null });
-          alert('✅ Story shared successfully! Everyone can now see it!');
-          setLoading(false);
-          return;
-        } else {
-          throw new Error(result.message || 'Failed to create donation');
-        }
+      console.log('📤 Submitting donation to backend...');
+      
+      const donationData = {
+        userName: currentUser.name,
+        userEmail: currentUser.email,
+        bookName: donationForm.bookName,
+        story: donationForm.story,
+        image: donationForm.image,
+      };
+      
+      const result = await donationAPI.create(donationData);
+      
+      if (result.success) {
+        console.log('✅ Donation created on backend:', result.donation);
+        await loadDonationsFromBackend();
+        setDonationForm({ bookName: '', story: '', image: null, imagePreview: null });
+        alert('✅ Story shared successfully! Everyone can now see it!');
+        setLoading(false);
+        return;
+      } else {
+        throw new Error(result.message || 'Failed to create donation');
       }
     } catch (error) {
       console.error('❌ Error submitting donation to backend:', error);
     }
     
-    // Fallback to localStorage
-    console.log('🔄 Saving donation locally...');
-    const newDonation = {
-      _id: Date.now().toString(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userEmail: currentUser.email,
-      ...donationForm,
-      likes: 0,
-      saves: 0,
-      shares: 0,
-      createdAt: new Date().toISOString()
-    };
-    
-    const updatedDonations = [newDonation, ...donations];
-    setDonations(updatedDonations);
-    localStorage.setItem('donations', JSON.stringify(updatedDonations));
-    
-    setDonationForm({ bookName: '', story: '', image: null, imagePreview: null });
-    alert(backendConnected ? '⚠️ Saved locally (backend error)' : '✅ Story saved locally!');
+    // ✅ CHANGED: REMOVED localStorage fallback - just show error
+    alert('❌ Failed to share story. Please try again.');
     setLoading(false);
   };
 
@@ -691,17 +663,14 @@ const App = () => {
     if (!confirm('Are you sure you want to delete this story?')) return;
     
     try {
-      if (backendConnected) {
-        await donationAPI.delete(id);
-        console.log('✅ Deleted donation from backend:', id);
-      }
+      await donationAPI.delete(id);
+      console.log('✅ Deleted donation from backend:', id);
     } catch (error) {
       console.error('❌ Error deleting donation from backend:', error);
     }
     
-    const updated = donations.filter(d => d._id !== id);
-    setDonations(updated);
-    localStorage.setItem('donations', JSON.stringify(updated));
+    // Update state after backend delete
+    await loadDonationsFromBackend();
     
     alert('Story deleted successfully');
     if (showPostDetail) setShowPostDetail(false);
@@ -709,18 +678,13 @@ const App = () => {
 
   const handleLikeDonation = async (id) => {
     try {
-      if (backendConnected) {
-        await donationAPI.like(id);
-      }
+      await donationAPI.like(id);
     } catch (error) {
       console.error('❌ Error liking donation on backend:', error);
     }
     
-    const updated = donations.map(d => 
-      d._id === id ? { ...d, likes: (d.likes || 0) + 1 } : d
-    );
-    setDonations(updated);
-    localStorage.setItem('donations', JSON.stringify(updated));
+    // Update state after backend like
+    await loadDonationsFromBackend();
     
     if (currentUser?.email) {
       const activityKey = `user_${currentUser.email}_activity`;
@@ -736,18 +700,13 @@ const App = () => {
 
   const handleSaveDonation = async (id) => {
     try {
-      if (backendConnected) {
-        await donationAPI.save(id);
-      }
+      await donationAPI.save(id);
     } catch (error) {
       console.error('❌ Error saving donation on backend:', error);
     }
     
-    const updated = donations.map(d => 
-      d._id === id ? { ...d, saves: (d.saves || 0) + 1 } : d
-    );
-    setDonations(updated);
-    localStorage.setItem('donations', JSON.stringify(updated));
+    // Update state after backend save
+    await loadDonationsFromBackend();
     
     if (currentUser?.email) {
       const activityKey = `user_${currentUser.email}_activity`;
@@ -776,53 +735,35 @@ const App = () => {
     setLoading(true);
     
     try {
-      if (backendConnected) {
-        console.log('📤 Submitting review to backend...');
-        
-        const reviewData = {
-          userName: currentUser.name,
-          userEmail: currentUser.email,
-          bookName: reviewForm.bookName,
-          author: reviewForm.author,
-          review: reviewForm.review,
-          sentiment: reviewForm.sentiment,
-        };
-        
-        const result = await reviewAPI.create(reviewData);
-        
-        if (result.success) {
-          console.log('✅ Review created on backend:', result.review);
-          await loadReviewsFromBackend();
-          setReviewForm({ bookName: '', author: '', review: '', sentiment: 'positive' });
-          alert('✅ Review posted successfully! Everyone can now see it!');
-          setLoading(false);
-          return;
-        } else {
-          throw new Error(result.message || 'Failed to create review');
-        }
+      console.log('📤 Submitting review to backend...');
+      
+      const reviewData = {
+        userName: currentUser.name,
+        userEmail: currentUser.email,
+        bookName: reviewForm.bookName,
+        author: reviewForm.author,
+        review: reviewForm.review,
+        sentiment: reviewForm.sentiment,
+      };
+      
+      const result = await reviewAPI.create(reviewData);
+      
+      if (result.success) {
+        console.log('✅ Review created on backend:', result.review);
+        await loadReviewsFromBackend();
+        setReviewForm({ bookName: '', author: '', review: '', sentiment: 'positive' });
+        alert('✅ Review posted successfully! Everyone can now see it!');
+        setLoading(false);
+        return;
+      } else {
+        throw new Error(result.message || 'Failed to create review');
       }
     } catch (error) {
       console.error('❌ Error submitting review to backend:', error);
     }
     
-    // Fallback to localStorage
-    console.log('🔄 Saving review locally...');
-    const newReview = {
-      _id: Date.now().toString(),
-      userId: currentUser.id,
-      userName: currentUser.name,
-      userEmail: currentUser.email,
-      ...reviewForm,
-      createdAt: new Date().toISOString()
-    };
-    
-    const updatedReviews = [newReview, ...reviews];
-    setReviews(updatedReviews);
-    setFilteredReviews(updatedReviews);
-    localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-    
-    setReviewForm({ bookName: '', author: '', review: '', sentiment: 'positive' });
-    alert(backendConnected ? '⚠️ Saved locally (backend error)' : '✅ Review saved locally!');
+    // ✅ CHANGED: REMOVED localStorage fallback - just show error
+    alert('❌ Failed to post review. Please try again.');
     setLoading(false);
   };
 
@@ -984,6 +925,44 @@ const App = () => {
     }
   };
 
+  // ========== DIAGNOSTIC TEST ==========
+  
+  const runDiagnostics = async () => {
+    console.log('=== DIAGNOSTIC TEST START ===');
+    
+    // Test 1: Basic fetch
+    console.log('Test 1: Basic fetch to backend...');
+    try {
+      const start = Date.now();
+      const res = await fetch('https://versal-book-app.onrender.com/api/health');
+      const end = Date.now();
+      const data = await res.json();
+      console.log(`✅ Success in ${end - start}ms:`, data);
+    } catch (err) {
+      console.error('❌ Failed:', err);
+    }
+    
+    // Test 2: Via checkBackendConnection
+    console.log('Test 2: Via checkBackendConnection...');
+    try {
+      const status = await checkBackendConnection();
+      console.log('Result:', status);
+    } catch (err) {
+      console.error('Error:', err);
+    }
+    
+    // Test 3: Check current state
+    console.log('Current states:', {
+      backendConnected,
+      backendChecking,
+      isLoggedIn,
+      donationsCount: donations.length,
+      reviewsCount: reviews.length
+    });
+    
+    console.log('=== DIAGNOSTIC TEST END ===');
+  };
+
   // ========== RENDER: LOGIN PAGE ==========
   if (!isLoggedIn) {
     return (
@@ -1129,16 +1108,23 @@ const App = () => {
       {/* Backend Status Indicator */}
       {!backendChecking && (
         <div className={`px-4 py-2 text-center text-sm font-medium ${backendConnected ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-          {backendConnected ? '✅ Connected to backend - Data saved globally' : '⚠️ Backend offline - Data saved locally only'}
+          {backendConnected ? '✅ Connected to backend - Data saved globally' : '⚠️ Backend offline - App may not work properly'}
         </div>
       )}
 
-      {/* Debug Button */}
+      {/* Debug Buttons */}
       <button
         onClick={testBackendManually}
         className="fixed bottom-4 right-4 bg-purple-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg hover:bg-purple-600"
       >
         Test Backend
+      </button>
+
+      <button
+        onClick={runDiagnostics}
+        className="fixed bottom-20 right-4 bg-green-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg hover:bg-green-600"
+      >
+        Run Diagnostics
       </button>
 
       {/* Header */}
@@ -1294,9 +1280,9 @@ const App = () => {
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-gray-100">
             <h2 className="text-2xl font-bold mb-6 text-gray-900">Share Your Reading Journey</h2>
             {!backendConnected && (
-              <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-700">
-                  ⚠️ Backend offline - stories will be saved locally only
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                <p className="text-sm text-red-700">
+                  ⚠️ Backend offline - stories cannot be shared. Please try again later.
                 </p>
               </div>
             )}
@@ -1352,7 +1338,7 @@ const App = () => {
               <div className="md:col-span-2">
                 <button
                   onClick={handleDonationSubmit}
-                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading}
+                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading || !backendConnected}
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   {loading ? 'Sharing...' : 'Share My Story'}
@@ -1462,9 +1448,9 @@ const App = () => {
             <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
               <h2 className="text-2xl font-bold mb-6 text-gray-900">Write a Review</h2>
               {!backendConnected && (
-                <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-                  <p className="text-sm text-yellow-700">
-                    ⚠️ Backend offline - reviews will be saved locally only
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-700">
+                    ⚠️ Backend offline - reviews cannot be posted. Please try again later.
                   </p>
                 </div>
               )}
@@ -1526,7 +1512,7 @@ const App = () => {
                 </div>
                 <button
                   onClick={handleReviewSubmit}
-                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || loading}
+                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || loading || !backendConnected}
                   className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   {loading ? 'Posting...' : 'Post Review'}
