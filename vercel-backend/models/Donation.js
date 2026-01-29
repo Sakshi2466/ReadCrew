@@ -1,12 +1,11 @@
 const mongoose = require('mongoose');
 
 const DonationSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  userName: {
+    type: String,
     required: true
   },
-  userName: {
+  userEmail: {
     type: String,
     required: true
   },
@@ -16,8 +15,7 @@ const DonationSchema = new mongoose.Schema({
   },
   story: {
     type: String,
-    required: [true, 'Please share your story'],
-    minlength: 10
+    required: [true, 'Please share your story']
   },
   image: {
     type: String,
@@ -31,14 +29,10 @@ const DonationSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  likedBy: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
-  savedBy: [{
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User'
-  }],
+  shares: {
+    type: Number,
+    default: 0
+  },
   createdAt: {
     type: Date,
     default: Date.now
