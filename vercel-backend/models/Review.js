@@ -4,11 +4,15 @@ const ReviewSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
-    required: false  // Changed to optional
+    required: false
   },
   userName: {
     type: String,
     required: true
+  },
+  userEmail: {
+    type: String,
+    required: false
   },
   bookName: {
     type: String,
@@ -20,8 +24,8 @@ const ReviewSchema = new mongoose.Schema({
   },
   review: {
     type: String,
-    required: [true, 'Please write a review'],
-    minlength: 20
+    required: [true, 'Please write a review']
+    // ✅ CRITICAL: NO minlength here - validation is done in routes
   },
   sentiment: {
     type: String,
