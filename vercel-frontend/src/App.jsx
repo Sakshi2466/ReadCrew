@@ -378,15 +378,6 @@ const App = () => {
     loadReviewsFromBackend();
   }, []);
 
-  // ✅ CHANGED: REMOVED conditional loading - always try to load from backend
-  // OLD CODE (REMOVED):
-  // useEffect(() => {
-  //   if (isLoggedIn && backendConnected) {
-  //     loadDonationsFromBackend();
-  //     loadReviewsFromBackend();
-  //   }
-  // }, [isLoggedIn, backendConnected]);
-
   // ✅ CHANGED: Simplify loadDonationsFromBackend
   const loadDonationsFromBackend = async () => {
     try {
@@ -721,9 +712,16 @@ const App = () => {
     }
   };
 
+  // ========== UPDATED REVIEW SUBMIT FUNCTION ==========
   const handleReviewSubmit = async () => {
     if (!reviewForm.bookName || !reviewForm.author || !reviewForm.review) {
       alert('Please fill all fields');
+      return;
+    }
+    
+    // ✅ ADDED VALIDATION: Review must be at least 20 characters long
+    if (reviewForm.review.trim().length < 20) {
+      alert('Review must be at least 20 characters long');
       return;
     }
     
@@ -744,9 +742,14 @@ const App = () => {
         author: reviewForm.author,
         review: reviewForm.review,
         sentiment: reviewForm.sentiment,
+        rating: 5  // ✅ ADDED rating field with default value of 5
       };
       
+      console.log('Review data being sent:', reviewData); // ✅ ADDED THIS LOG
+      
       const result = await reviewAPI.create(reviewData);
+      
+      console.log('Backend response:', result); // ✅ ADDED THIS LOG
       
       if (result.success) {
         console.log('✅ Review created on backend:', result.review);
@@ -759,11 +762,10 @@ const App = () => {
         throw new Error(result.message || 'Failed to create review');
       }
     } catch (error) {
-      console.error('❌ Error submitting review to backend:', error);
+      console.error('❌ Error submitting review:', error);
+      alert(`❌ Failed to post review: ${error.message}`); // ✅ SHOW ACTUAL ERROR
     }
     
-    // ✅ CHANGED: REMOVED localStorage fallback - just show error
-    alert('❌ Failed to post review. Please try again.');
     setLoading(false);
   };
 
@@ -1512,7 +1514,7 @@ const App = () => {
                 </div>
                 <button
                   onClick={handleReviewSubmit}
-                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || loading || !backendConnected}
+                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || reviewForm.review.trim().length < 20 || loading || !backendConnected}
                   className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   {loading ? 'Posting...' : 'Post Review'}
