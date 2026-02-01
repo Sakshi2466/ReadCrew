@@ -2,10 +2,10 @@ const express = require('express');
 const router = express.Router();
 const nodemailer = require('nodemailer');
 
-// Store OTPs in memory (in production, use Redis)
+// Store OTPs in memory
 const otpStore = new Map();
 
-// Email transporter
+// Email transporter with better configuration
 let transporter = null;
 
 console.log('🔧 Initializing OTP routes...');
@@ -16,25 +16,36 @@ if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
   try {
     transporter = nodemailer.createTransport({
       service: 'gmail',
+      host: 'smtp.gmail.com', // Explicit host
+      port: 587, // Explicit port (TLS)
+      secure: false, // Use TLS (not SSL)
       auth: {
         user: process.env.EMAIL_USER,
         pass: process.env.EMAIL_PASS
-      }
+      },
+      tls: {
+        rejectUnauthorized: false // Allow self-signed certificates
+      },
+      connectionTimeout: 10000, // 10 seconds
+      greetingTimeout: 10000
     });
     
-    // Verify connection
+    console.log('✅ Email transporter created');
+    
+    // Verify connection (but don't block if it fails)
     transporter.verify((error, success) => {
       if (error) {
-        console.error('❌ Email transporter verification failed:', error.message);
+        console.error('❌ Email verification failed:', error.message);
+        console.log('⚠️ Will continue with OTP fallback');
       } else {
-        console.log('✅ Email transporter is ready');
+        console.log('✅ Email transporter verified and ready');
       }
     });
   } catch (error) {
-    console.error('❌ Failed to create email transporter:', error.message);
+    console.error('❌ Failed to create transporter:', error.message);
   }
 } else {
-  console.warn('⚠️ Email credentials not configured - OTP will be returned in response');
+  console.warn('⚠️ Email credentials not configured');
 }
 
 // Send OTP
@@ -45,19 +56,17 @@ router.post('/send-otp', async (req, res) => {
     console.log('📨 OTP request received:', { name, email, phone });
 
     if (!email) {
-      console.log('❌ Email missing');
       return res.status(400).json({
         success: false,
         message: 'Email is required'
       });
     }
 
-    // Generate 6-digit OTP
+    // Generate OTP
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    
     console.log(`🔐 Generated OTP for ${email}: ${otp}`);
     
-    // Store OTP with 10-minute expiry
+    // Store OTP
     otpStore.set(email, {
       otp,
       expiresAt: Date.now() + 10 * 60 * 1000,
@@ -66,10 +75,12 @@ router.post('/send-otp', async (req, res) => {
 
     let emailSent = false;
     
-    // Try to send email
+    // Try to send email (but don't wait forever)
     if (transporter) {
       try {
-        await transporter.sendMail({
+        console.log('📧 Attempting to send email...');
+        
+        const mailOptions = {
           from: `"ReadCrew" <${process.env.EMAIL_USER}>`,
           to: email,
           subject: 'ReadCrew - Your Verification Code',
@@ -88,43 +99,39 @@ router.post('/send-otp', async (req, res) => {
                 </div>
                 
                 <p style="color: #6b7280; font-size: 14px;">This code will expire in 10 minutes.</p>
-                <p style="color: #6b7280; font-size: 14px;">If you didn't request this code, please ignore this email.</p>
-              </div>
-              
-              <div style="text-align: center; margin-top: 20px; color: #9ca3af; font-size: 12px;">
-                <p>Happy Reading! 📖</p>
-                <p><strong>The ReadCrew Team</strong></p>
               </div>
             </div>
           `
-        });
+        };
+
+        // Send with timeout
+        await Promise.race([
+          transporter.sendMail(mailOptions),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Email timeout')), 8000)
+          )
+        ]);
         
         emailSent = true;
         console.log(`✅ Email sent successfully to ${email}`);
         
       } catch (emailError) {
         console.error('❌ Email send failed:', emailError.message);
-        console.error('Full error:', emailError);
+        emailSent = false;
       }
-    } else {
-      console.log('⚠️ No email transporter available');
     }
 
-    // ALWAYS return success with OTP (for development)
+    // ALWAYS return success with OTP
     const response = {
       success: true,
       message: emailSent 
         ? 'OTP sent to your email! Check your inbox.' 
-        : '⚠️ Email service unavailable. Your OTP is shown below.',
-      emailSent: emailSent
+        : '⚠️ Email service temporarily unavailable. Your OTP is shown below.',
+      emailSent: emailSent,
+      otp: otp // ALWAYS include OTP for now
     };
 
-    // Include OTP in response if email failed OR if in development
-    if (!emailSent || process.env.NODE_ENV === 'development') {
-      response.otp = otp;
-    }
-
-    console.log('📤 Sending response:', response);
+    console.log('📤 Sending response:', { ...response, otp: '***' + otp.slice(-3) });
     res.json(response);
     
   } catch (error) {
@@ -141,10 +148,9 @@ router.post('/verify-otp', async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    console.log(`🔍 Verifying OTP for ${email}: ${otp}`);
+    console.log(`🔍 Verifying OTP for ${email}`);
 
     if (!email || !otp) {
-      console.log('❌ Missing email or OTP');
       return res.status(400).json({
         success: false,
         message: 'Email and OTP are required'
@@ -171,7 +177,7 @@ router.post('/verify-otp', async (req, res) => {
     }
 
     if (storedData.otp !== otp) {
-      console.log(`❌ Invalid OTP for ${email}. Expected: ${storedData.otp}, Got: ${otp}`);
+      console.log(`❌ Invalid OTP for ${email}`);
       return res.status(400).json({
         success: false,
         message: 'Invalid OTP. Please try again.'
