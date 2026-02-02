@@ -1,78 +1,40 @@
 ﻿const express = require("express");
 const router = express.Router();
-const brevo = require('@getbrevo/brevo');
 
 // Store OTPs in memory (in production, use Redis)
 const otpStore = new Map();
 
-// Initialize Brevo API with new SDK
-let brevoConfigured = false;
-let apiInstance = null;
-
-console.log('🔧 Initializing OTP routes with Brevo...');
+console.log('🔧 Initializing OTP routes with Brevo REST API...');
 console.log('📧 BREVO_API_KEY:', process.env.BREVO_API_KEY ? 'SET ✓' : 'NOT SET ✗');
-
-if (process.env.BREVO_API_KEY) {
-  try {
-    const defaultClient = brevo.ApiClient.instance;
-    const apiKey = defaultClient.authentications['api-key'];
-    apiKey.apiKey = process.env.BREVO_API_KEY;
-    
-    apiInstance = new brevo.TransactionalEmailsApi();
-    brevoConfigured = true;
-    console.log('✅ Brevo email service configured successfully');
-  } catch (error) {
-    console.error('❌ Failed to configure Brevo:', error.message);
-  }
-} else {
-  console.warn('⚠️ BREVO_API_KEY not found - OTP will be returned in response only');
-}
 
 // Generate 6-digit OTP
 function generateOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// Send OTP
-router.post("/send-otp", async (req, res) => {
+// Send email via Brevo REST API
+async function sendBrevoEmail(to, name, otp) {
   try {
-    const { email, name, phone } = req.body;
-    console.log("📨 OTP request received for:", email);
-
-    if (!email) {
-      return res.status(400).json({
-        success: false,
-        message: "Email is required"
-      });
-    }
-
-    // Generate OTP
-    const otp = generateOTP();
-    console.log("🔐 Generated OTP:", otp, "for:", email);
-    
-    // Store OTP with 10-minute expiry
-    otpStore.set(email, { 
-      otp, 
-      expiresAt: Date.now() + 10 * 60 * 1000,
-      userData: { name, email, phone }
-    });
-    
-    let emailSent = false;
-    
-    // Try to send email via Brevo
-    if (brevoConfigured && apiInstance) {
-      try {
-        console.log('📧 Attempting to send email via Brevo...');
-        
-        const sendSmtpEmail = new brevo.SendSmtpEmail();
-        
-        sendSmtpEmail.subject = "ReadCrew - Your Verification Code";
-        sendSmtpEmail.sender = { 
-          name: "ReadCrew", 
-          email: process.env.BREVO_SENDER_EMAIL || "noreply@readcrew.com"
-        };
-        sendSmtpEmail.to = [{ email: email, name: name || "User" }];
-        sendSmtpEmail.htmlContent = `
+    const response = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'api-key': process.env.BREVO_API_KEY
+      },
+      body: JSON.stringify({
+        sender: {
+          name: "ReadCrew",
+          email: "noreply@readcrew.com"
+        },
+        to: [
+          {
+            email: to,
+            name: name || "User"
+          }
+        ],
+        subject: "ReadCrew - Your Verification Code",
+        htmlContent: `
           <!DOCTYPE html>
           <html>
           <head>
@@ -138,19 +100,69 @@ router.post("/send-otp", async (req, res) => {
             </table>
           </body>
           </html>
-        `;
+        `
+      })
+    });
 
-        // Send email
-        const data = await apiInstance.sendTransacEmail(sendSmtpEmail);
-        emailSent = true;
-        console.log('✅ Email sent successfully via Brevo. Message ID:', data.messageId);
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`Brevo API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json();
+    return { success: true, messageId: data.messageId };
+    
+  } catch (error) {
+    console.error('❌ Brevo API error:', error.message);
+    return { success: false, error: error.message };
+  }
+}
+
+// Send OTP
+router.post("/send-otp", async (req, res) => {
+  try {
+    const { email, name, phone } = req.body;
+    console.log("📨 OTP request received for:", email);
+
+    if (!email) {
+      return res.status(400).json({
+        success: false,
+        message: "Email is required"
+      });
+    }
+
+    // Generate OTP
+    const otp = generateOTP();
+    console.log("🔐 Generated OTP:", otp, "for:", email);
+    
+    // Store OTP with 10-minute expiry
+    otpStore.set(email, { 
+      otp, 
+      expiresAt: Date.now() + 10 * 60 * 1000,
+      userData: { name, email, phone }
+    });
+    
+    let emailSent = false;
+    
+    // Try to send email via Brevo
+    if (process.env.BREVO_API_KEY) {
+      try {
+        console.log('📧 Sending email via Brevo REST API...');
+        
+        const result = await sendBrevoEmail(email, name, otp);
+        
+        if (result.success) {
+          emailSent = true;
+          console.log('✅ Email sent successfully! Message ID:', result.messageId);
+        } else {
+          console.error('❌ Failed to send email:', result.error);
+        }
         
       } catch (emailError) {
-        console.error('❌ Failed to send email via Brevo:', emailError.message);
-        if (emailError.response) {
-          console.error('   Response:', emailError.response.text);
-        }
+        console.error('❌ Email send error:', emailError.message);
       }
+    } else {
+      console.log('⚠️ BREVO_API_KEY not configured');
     }
     
     // Respond with success
