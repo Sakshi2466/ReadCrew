@@ -1,55 +1,18 @@
 const mongoose = require('mongoose');
 
-const ReviewSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: false
-  },
-  userName: {
-    type: String,
-    required: true
-  },
-  userEmail: {
-    type: String,
-    required: false
-  },
-  bookName: {
-    type: String,
-    required: [true, 'Please provide book name']
-  },
-  author: {
-    type: String,
-    required: [true, 'Please provide author name']
-  },
-  review: {
-    type: String,
-    required: [true, 'Please write a review']
-    // ✅ CRITICAL: NO minlength here - validation is done in routes
-  },
-  sentiment: {
-    type: String,
-    enum: ['positive', 'negative'],
-    default: 'positive'
-  },
-  rating: {
-    type: Number,
-    min: 1,
-    max: 5,
-    default: 5
-  },
-  helpful: {
-    type: Number,
-    default: 0
-  },
-  notHelpful: {
-    type: Number,
-    default: 0
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
+const reviewSchema = new mongoose.Schema({
+  userName: { type: String, required: true },
+  userEmail: { type: String, required: true },
+  bookName: { type: String, required: true },
+  author: { type: String, required: true },
+  review: { type: String, required: true },
+  sentiment: { type: String, enum: ['positive', 'neutral', 'negative'], default: 'positive' },
+  rating: { type: Number, min: 1, max: 5, default: 5 },
+  likes: { type: Number, default: 0 },
+  helpful: { type: Number, default: 0 },
+  likedBy: [{ type: String }] // Store user emails who liked
+}, {
+  timestamps: true
 });
 
-module.exports = mongoose.model('Review', ReviewSchema);
+module.exports = mongoose.model('Review', reviewSchema);
