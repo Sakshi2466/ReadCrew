@@ -18,258 +18,7 @@ const BOOK_RECOMMENDATIONS = [
       { title: 'A Song of Ice and Fire', author: 'George R.R. Martin', rating: 4.6 }
     ]
   },
-  {
-    id: 2,
-    category: 'Science Fiction',
-    emoji: '📘',
-    description: 'Futuristic science, technology, space, time travel',
-    books: [
-      { title: 'Dune', author: 'Frank Herbert', rating: 4.5 },
-      { title: 'Neuromancer', author: 'William Gibson', rating: 4.2 },
-      { title: 'Foundation', author: 'Isaac Asimov', rating: 4.4 },
-      { title: 'The Martian', author: 'Andy Weir', rating: 4.6 }
-    ]
-  },
-  {
-    id: 3,
-    category: 'Romance',
-    emoji: '❤️',
-    description: 'Love and relationships at the core',
-    books: [
-      { title: 'Pride and Prejudice', author: 'Jane Austen', rating: 4.7 },
-      { title: 'Me Before You', author: 'Jojo Moyes', rating: 4.3 },
-      { title: 'Outlander', author: 'Diana Gabaldon', rating: 4.4 },
-      { title: 'The Notebook', author: 'Nicholas Sparks', rating: 4.2 }
-    ]
-  },
-  {
-    id: 4,
-    category: 'Motivational / Self-Help',
-    emoji: '🧠',
-    description: 'Inspiration, personal growth, mindset',
-    books: [
-      { title: 'The Power of Habit', author: 'Charles Duhigg', rating: 4.6 },
-      { title: 'Atomic Habits', author: 'James Clear', rating: 4.8 },
-      { title: 'Thinking, Fast and Slow', author: 'Daniel Kahneman', rating: 4.5 },
-      { title: 'You Are a Badass', author: 'Jen Sincero', rating: 4.3 }
-    ]
-  },
-  {
-    id: 5,
-    category: 'Contemporary Fiction',
-    emoji: '🫀',
-    description: 'Modern life and real-world issues',
-    books: [
-      { title: 'The Goldfinch', author: 'Donna Tartt', rating: 4.1 },
-      { title: 'Normal People', author: 'Sally Rooney', rating: 4.0 },
-      { title: 'Little Fires Everywhere', author: 'Celeste Ng', rating: 4.2 }
-    ]
-  },
-  {
-    id: 6,
-    category: 'Literary Fiction',
-    emoji: '⭐',
-    description: 'Quality, style, character-driven',
-    books: [
-      { title: 'To Kill a Mockingbird', author: 'Harper Lee', rating: 4.8 },
-      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', rating: 4.5 },
-      { title: '1984', author: 'George Orwell', rating: 4.7 }
-    ]
-  },
-  {
-    id: 7,
-    category: 'Historical Fiction',
-    emoji: '🧪',
-    description: 'Made-up stories based on real past events',
-    books: [
-      { title: 'The Book Thief', author: 'Markus Zusak', rating: 4.6 },
-      { title: 'All the Light We Cannot See', author: 'Anthony Doerr', rating: 4.5 },
-      { title: 'The Nightingale', author: 'Kristin Hannah', rating: 4.7 }
-    ]
-  },
-  {
-    id: 8,
-    category: 'Mystery / Thriller',
-    emoji: '🕵️',
-    description: 'Suspense, investigation, twists',
-    books: [
-      { title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.3 },
-      { title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.2 },
-      { title: 'Sherlock Holmes', author: 'Arthur Conan Doyle', rating: 4.8 },
-      { title: 'The Da Vinci Code', author: 'Dan Brown', rating: 4.1 }
-    ]
-  },
-  {
-    id: 9,
-    category: 'Horror',
-    emoji: '🧟',
-    description: 'Scary, supernatural, creepy',
-    books: [
-      { title: 'It', author: 'Stephen King', rating: 4.4 },
-      { title: 'The Haunting of Hill House', author: 'Shirley Jackson', rating: 4.3 },
-      { title: 'Bird Box', author: 'Josh Malerman', rating: 4.0 }
-    ]
-  },
-  {
-    id: 10,
-    category: 'Political Fiction',
-    emoji: '🏛️',
-    description: 'Politics, power, society',
-    books: [
-      { title: 'Animal Farm', author: 'George Orwell', rating: 4.5 },
-      { title: 'The Handmaid\'s Tale', author: 'Margaret Atwood', rating: 4.4 },
-      { title: '1984', author: 'George Orwell', rating: 4.7 }
-    ]
-  },
-  {
-    id: 11,
-    category: 'Dystopian',
-    emoji: '🧬',
-    description: 'Dark future, oppressive worlds',
-    books: [
-      { title: 'The Hunger Games', author: 'Suzanne Collins', rating: 4.6 },
-      { title: 'Divergent', author: 'Veronica Roth', rating: 4.2 },
-      { title: 'Fahrenheit 451', author: 'Ray Bradbury', rating: 4.4 }
-    ]
-  },
-  {
-    id: 12,
-    category: 'Young Adult (YA)',
-    emoji: '🧒',
-    description: 'Teen protagonists, coming-of-age',
-    books: [
-      { title: 'The Fault in Our Stars', author: 'John Green', rating: 4.5 },
-      { title: 'The Maze Runner', author: 'James Dashner', rating: 4.1 },
-      { title: 'Twilight', author: 'Stephenie Meyer', rating: 4.0 }
-    ]
-  },
-  {
-    id: 13,
-    category: 'Children\'s',
-    emoji: '👶',
-    description: 'For young readers',
-    books: [
-      { title: 'Charlotte\'s Web', author: 'E.B. White', rating: 4.8 },
-      { title: 'Where the Wild Things Are', author: 'Maurice Sendak', rating: 4.6 },
-      { title: 'The Little Prince', author: 'Antoine de Saint-Exupéry', rating: 4.7 }
-    ]
-  },
-  {
-    id: 14,
-    category: 'Biography / Autobiography',
-    emoji: '🧠',
-    description: 'True life stories',
-    books: [
-      { title: 'The Diary of a Young Girl', author: 'Anne Frank', rating: 4.8 },
-      { title: 'Long Walk to Freedom', author: 'Nelson Mandela', rating: 4.7 },
-      { title: 'Steve Jobs', author: 'Walter Isaacson', rating: 4.6 }
-    ]
-  },
-  {
-    id: 15,
-    category: 'Memoir',
-    emoji: '📖',
-    description: 'Personal life memories',
-    books: [
-      { title: 'Educated', author: 'Tara Westover', rating: 4.7 },
-      { title: 'Becoming', author: 'Michelle Obama', rating: 4.8 }
-    ]
-  },
-  {
-    id: 16,
-    category: 'Business / Finance',
-    emoji: '💼',
-    description: 'Work, money, leadership',
-    books: [
-      { title: 'Rich Dad Poor Dad', author: 'Robert Kiyosaki', rating: 4.2 },
-      { title: 'The Intelligent Investor', author: 'Benjamin Graham', rating: 4.5 },
-      { title: 'Good to Great', author: 'Jim Collins', rating: 4.4 }
-    ]
-  },
-  {
-    id: 17,
-    category: 'Drama / Literary Classic',
-    emoji: '🎭',
-    description: 'Emotion, tragedy, depth',
-    books: [
-      { title: 'Hamlet', author: 'Shakespeare', rating: 4.8 },
-      { title: 'Of Mice and Men', author: 'John Steinbeck', rating: 4.6 },
-      { title: 'The Catcher in the Rye', author: 'J.D. Salinger', rating: 4.3 }
-    ]
-  },
-  {
-    id: 18,
-    category: 'Humor',
-    emoji: '😂',
-    description: 'Funny, entertaining',
-    books: [
-      { title: 'The Hitchhiker\'s Guide to the Galaxy', author: 'Douglas Adams', rating: 4.6 },
-      { title: 'Bossypants', author: 'Tina Fey', rating: 4.3 }
-    ]
-  },
-  {
-    id: 19,
-    category: 'Adventure',
-    emoji: '🧩',
-    description: 'Action-packed journeys',
-    books: [
-      { title: 'The Count of Monte Cristo', author: 'Alexandre Dumas', rating: 4.7 },
-      { title: 'Treasure Island', author: 'Robert Louis Stevenson', rating: 4.5 }
-    ]
-  },
-  {
-    id: 20,
-    category: 'Philosophy / Psychology',
-    emoji: '💡',
-    description: 'Deep thought, mind, existence',
-    books: [
-      { title: 'Man\'s Search for Meaning', author: 'Viktor Frankl', rating: 4.8 },
-      { title: 'Meditations', author: 'Marcus Aurelius', rating: 4.6 },
-      { title: 'The Power of Now', author: 'Eckhart Tolle', rating: 4.3 }
-    ]
-  },
-  {
-    id: 21,
-    category: 'Epic / High Fantasy',
-    emoji: '⚔️',
-    description: 'Large cast, world-building',
-    books: [
-      { title: 'The Wheel of Time', author: 'Robert Jordan', rating: 4.5 },
-      { title: 'The Stormlight Archive', author: 'Brandon Sanderson', rating: 4.8 }
-    ]
-  },
-  {
-    id: 22,
-    category: 'Speculative Fiction',
-    emoji: '🧠',
-    description: 'What-if scenarios beyond ordinary sci-fi/fantasy',
-    books: [
-      { title: 'The Left Hand of Darkness', author: 'Ursula Le Guin', rating: 4.4 },
-      { title: 'Never Let Me Go', author: 'Kazuo Ishiguro', rating: 4.3 }
-    ]
-  },
-  {
-    id: 23,
-    category: 'Graphic Novels / Comics',
-    emoji: '🎨',
-    description: 'Story told with art + text',
-    books: [
-      { title: 'Watchmen', author: 'Alan Moore', rating: 4.7 },
-      { title: 'Maus', author: 'Art Spiegelman', rating: 4.8 },
-      { title: 'Persepolis', author: 'Marjane Satrapi', rating: 4.5 }
-    ]
-  },
-  {
-    id: 24,
-    category: 'Classics',
-    emoji: '📘',
-    description: 'Time-tested masterpieces',
-    books: [
-      { title: 'Jane Eyre', author: 'Charlotte Brontë', rating: 4.6 },
-      { title: 'War and Peace', author: 'Leo Tolstoy', rating: 4.7 },
-      { title: 'Crime and Punishment', author: 'Fyodor Dostoevsky', rating: 4.8 }
-    ]
-  }
+  // ... (keep all your existing BOOK_RECOMMENDATIONS array)
 ];
 
 // Validation functions
@@ -296,7 +45,7 @@ const App = () => {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showPostDetail, setShowPostDetail] = useState(false);
   
-  // Backend connection states
+  // Backend connection states (kept internally but not displayed)
   const [backendConnected, setBackendConnected] = useState(false);
   const [backendChecking, setBackendChecking] = useState(true);
   
@@ -322,21 +71,13 @@ const App = () => {
   // Selected post for detail view
   const [selectedPost, setSelectedPost] = useState(null);
 
-  // ✅ CORRECTED: Check backend connection on startup
+  // ✅ Check backend connection on startup (silently)
   useEffect(() => {
     const checkConnection = async () => {
-      console.log('🔌 Checking backend connection...');
       try {
         const status = await checkBackendConnection();
         setBackendConnected(status.connected);
         setBackendChecking(false);
-        
-        if (status.connected) {
-          console.log('✅ Backend connected successfully');
-          console.log('Backend status:', status.data);
-        } else {
-          console.warn('⚠️ Backend connection failed');
-        }
       } catch (error) {
         console.error('Error checking backend connection:', error);
         setBackendConnected(false);
@@ -373,47 +114,39 @@ const App = () => {
       }
     }
 
-    // ✅ CHANGED: Load from backend immediately instead of localStorage
+    // Load from backend immediately instead of localStorage
     loadDonationsFromBackend();
     loadReviewsFromBackend();
   }, []);
 
-  // ✅ CHANGED: Simplify loadDonationsFromBackend
   const loadDonationsFromBackend = async () => {
     try {
-      console.log('📥 Loading donations from backend...');
       const result = await donationAPI.getAll();
       
       if (result.success && Array.isArray(result.donations)) {
-        console.log('✅ Loaded', result.donations.length, 'donations from backend');
         setDonations(result.donations);
       } else {
-        console.log('⚠️ Backend returned no donations');
         setDonations([]);
       }
     } catch (error) {
-      console.error('❌ Backend connection failed:', error.message);
+      console.error('Backend connection failed:', error.message);
       setDonations([]);
     }
   };
 
-  // ✅ CHANGED: Simplify loadReviewsFromBackend
   const loadReviewsFromBackend = async () => {
     try {
-      console.log('📥 Loading reviews from backend...');
       const result = await reviewAPI.getAll();
       
       if (result.success && Array.isArray(result.reviews)) {
-        console.log('✅ Loaded', result.reviews.length, 'reviews from backend');
         setReviews(result.reviews);
         setFilteredReviews(result.reviews);
       } else {
-        console.log('⚠️ Backend returned no reviews');
         setReviews([]);
         setFilteredReviews([]);
       }
     } catch (error) {
-      console.error('❌ Backend connection failed:', error.message);
+      console.error('Backend connection failed:', error.message);
       setReviews([]);
       setFilteredReviews([]);
     }
@@ -429,15 +162,12 @@ const App = () => {
     
     setLoading(true);
     try {
-      console.log('📤 Sending OTP to:', loginForm.email);
-      
       const result = await otpAPI.sendOTP(loginForm);
       
       if (result.success) {
         setVerificationData(loginForm);
         setShowOTP(true);
         alert('OTP sent to your email! Check your inbox.');
-        console.log('✅ OTP Sent Successfully!');
         if (result.otp) {
           console.log(`🔐 DEVELOPMENT OTP: ${result.otp}`);
         }
@@ -445,10 +175,9 @@ const App = () => {
         alert(result.message || 'Failed to send OTP');
       }
     } catch (error) {
-      console.error('❌ Error sending OTP via API:', error);
+      console.error('Error sending OTP via API:', error);
       
       // Fallback to mock OTP
-      console.log('🔄 Using mock OTP as fallback...');
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       localStorage.setItem('devOTP', otp);
       localStorage.setItem('devUser', JSON.stringify(loginForm));
@@ -456,7 +185,6 @@ const App = () => {
       setVerificationData(loginForm);
       setShowOTP(true);
       alert(`Development mode OTP: ${otp}`);
-      console.log(`🔐 MOCK OTP: ${otp}`);
     } finally {
       setLoading(false);
     }
@@ -470,8 +198,6 @@ const App = () => {
     
     setLoading(true);
     try {
-      console.log('🔐 Verifying OTP:', otpInput);
-      
       const result = await otpAPI.verifyOTP({ email: verificationData.email, otp: otpInput });
       
       if (result.success) {
@@ -500,7 +226,7 @@ const App = () => {
         alert(`❌ ${result.message}`);
       }
     } catch (error) {
-      console.error('❌ Error verifying OTP via API:', error);
+      console.error('Error verifying OTP via API:', error);
       
       // Fallback to mock verification
       const devOTP = localStorage.getItem('devOTP');
@@ -593,7 +319,7 @@ const App = () => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) { // Reduced to 2MB
+      if (file.size > 2 * 1024 * 1024) {
         alert('Image size should be less than 2MB');
         return;
       }
@@ -619,8 +345,6 @@ const App = () => {
     setLoading(true);
     
     try {
-      console.log('📤 Submitting donation to backend...');
-      
       const donationData = {
         userName: currentUser.name,
         userEmail: currentUser.email,
@@ -632,7 +356,6 @@ const App = () => {
       const result = await donationAPI.create(donationData);
       
       if (result.success) {
-        console.log('✅ Donation created on backend:', result.donation);
         await loadDonationsFromBackend();
         setDonationForm({ bookName: '', story: '', image: null, imagePreview: null });
         alert('✅ Story shared successfully! Everyone can now see it!');
@@ -642,10 +365,9 @@ const App = () => {
         throw new Error(result.message || 'Failed to create donation');
       }
     } catch (error) {
-      console.error('❌ Error submitting donation to backend:', error);
+      console.error('Error submitting donation to backend:', error);
     }
     
-    // ✅ CHANGED: REMOVED localStorage fallback - just show error
     alert('❌ Failed to share story. Please try again.');
     setLoading(false);
   };
@@ -655,12 +377,10 @@ const App = () => {
     
     try {
       await donationAPI.delete(id);
-      console.log('✅ Deleted donation from backend:', id);
     } catch (error) {
-      console.error('❌ Error deleting donation from backend:', error);
+      console.error('Error deleting donation from backend:', error);
     }
     
-    // Update state after backend delete
     await loadDonationsFromBackend();
     
     alert('Story deleted successfully');
@@ -671,10 +391,9 @@ const App = () => {
     try {
       await donationAPI.like(id);
     } catch (error) {
-      console.error('❌ Error liking donation on backend:', error);
+      console.error('Error liking donation on backend:', error);
     }
     
-    // Update state after backend like
     await loadDonationsFromBackend();
     
     if (currentUser?.email) {
@@ -693,10 +412,9 @@ const App = () => {
     try {
       await donationAPI.save(id);
     } catch (error) {
-      console.error('❌ Error saving donation on backend:', error);
+      console.error('Error saving donation on backend:', error);
     }
     
-    // Update state after backend save
     await loadDonationsFromBackend();
     
     if (currentUser?.email) {
@@ -712,14 +430,13 @@ const App = () => {
     }
   };
 
-  // ========== UPDATED REVIEW SUBMIT FUNCTION ==========
+  // ========== REVIEW SUBMIT FUNCTION ==========
   const handleReviewSubmit = async () => {
     if (!reviewForm.bookName || !reviewForm.author || !reviewForm.review) {
       alert('Please fill all fields');
       return;
     }
     
-    // ✅ ADDED VALIDATION: Review must be at least 20 characters long
     if (reviewForm.review.trim().length < 20) {
       alert('Review must be at least 20 characters long');
       return;
@@ -733,8 +450,6 @@ const App = () => {
     setLoading(true);
     
     try {
-      console.log('📤 Submitting review to backend...');
-      
       const reviewData = {
         userName: currentUser.name,
         userEmail: currentUser.email,
@@ -742,17 +457,12 @@ const App = () => {
         author: reviewForm.author,
         review: reviewForm.review,
         sentiment: reviewForm.sentiment,
-        rating: 5  // ✅ ADDED rating field with default value of 5
+        rating: 5
       };
-      
-      console.log('Review data being sent:', reviewData); // ✅ ADDED THIS LOG
       
       const result = await reviewAPI.create(reviewData);
       
-      console.log('Backend response:', result); // ✅ ADDED THIS LOG
-      
       if (result.success) {
-        console.log('✅ Review created on backend:', result.review);
         await loadReviewsFromBackend();
         setReviewForm({ bookName: '', author: '', review: '', sentiment: 'positive' });
         alert('✅ Review posted successfully! Everyone can now see it!');
@@ -762,8 +472,8 @@ const App = () => {
         throw new Error(result.message || 'Failed to create review');
       }
     } catch (error) {
-      console.error('❌ Error submitting review:', error);
-      alert(`❌ Failed to post review: ${error.message}`); // ✅ SHOW ACTUAL ERROR
+      console.error('Error submitting review:', error);
+      alert(`❌ Failed to post review: ${error.message}`);
     }
     
     setLoading(false);
@@ -903,66 +613,6 @@ const App = () => {
     setIsLoggedIn(false);
     setCurrentPage('home');
     alert('Logged out successfully');
-  };
-
-  // ========== DEBUG FUNCTION ==========
-  
-  const testBackendManually = async () => {
-    console.log('🧪 Testing backend manually...');
-    
-    const endpoints = [
-      'https://versal-book-app.onrender.com/api/health',
-      'https://versal-book-app.onrender.com/api/donations',
-      'https://versal-book-app.onrender.com/api/reviews'
-    ];
-    
-    for (const url of endpoints) {
-      try {
-        const response = await fetch(url);
-        const data = await response.json();
-        console.log(`✅ ${url}:`, data);
-      } catch (error) {
-        console.error(`❌ ${url}:`, error.message);
-      }
-    }
-  };
-
-  // ========== DIAGNOSTIC TEST ==========
-  
-  const runDiagnostics = async () => {
-    console.log('=== DIAGNOSTIC TEST START ===');
-    
-    // Test 1: Basic fetch
-    console.log('Test 1: Basic fetch to backend...');
-    try {
-      const start = Date.now();
-      const res = await fetch('https://versal-book-app.onrender.com/api/health');
-      const end = Date.now();
-      const data = await res.json();
-      console.log(`✅ Success in ${end - start}ms:`, data);
-    } catch (err) {
-      console.error('❌ Failed:', err);
-    }
-    
-    // Test 2: Via checkBackendConnection
-    console.log('Test 2: Via checkBackendConnection...');
-    try {
-      const status = await checkBackendConnection();
-      console.log('Result:', status);
-    } catch (err) {
-      console.error('Error:', err);
-    }
-    
-    // Test 3: Check current state
-    console.log('Current states:', {
-      backendConnected,
-      backendChecking,
-      isLoggedIn,
-      donationsCount: donations.length,
-      reviewsCount: reviews.length
-    });
-    
-    console.log('=== DIAGNOSTIC TEST END ===');
   };
 
   // ========== RENDER: LOGIN PAGE ==========
@@ -1107,27 +757,9 @@ const App = () => {
   // ========== RENDER: MAIN APP ==========
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Backend Status Indicator */}
-      {!backendChecking && (
-        <div className={`px-4 py-2 text-center text-sm font-medium ${backendConnected ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}`}>
-          {backendConnected ? '✅ Connected to backend - Data saved globally' : '⚠️ Backend offline - App may not work properly'}
-        </div>
-      )}
+      {/* REMOVED: Backend Status Indicator */}
 
-      {/* Debug Buttons */}
-      <button
-        onClick={testBackendManually}
-        className="fixed bottom-4 right-4 bg-purple-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg hover:bg-purple-600"
-      >
-        Test Backend
-      </button>
-
-      <button
-        onClick={runDiagnostics}
-        className="fixed bottom-20 right-4 bg-green-500 text-white px-4 py-2 rounded-lg z-50 shadow-lg hover:bg-green-600"
-      >
-        Run Diagnostics
-      </button>
+      {/* REMOVED: Debug Buttons */}
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
@@ -1281,13 +913,6 @@ const App = () => {
           {/* Upload Form */}
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-gray-100">
             <h2 className="text-2xl font-bold mb-6 text-gray-900">Share Your Reading Journey</h2>
-            {!backendConnected && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-700">
-                  ⚠️ Backend offline - stories cannot be shared. Please try again later.
-                </p>
-              </div>
-            )}
             <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
@@ -1340,7 +965,7 @@ const App = () => {
               <div className="md:col-span-2">
                 <button
                   onClick={handleDonationSubmit}
-                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading || !backendConnected}
+                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading}
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   {loading ? 'Sharing...' : 'Share My Story'}
@@ -1449,13 +1074,6 @@ const App = () => {
           <div className="grid md:grid-cols-2 gap-8">
             <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
               <h2 className="text-2xl font-bold mb-6 text-gray-900">Write a Review</h2>
-              {!backendConnected && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-                  <p className="text-sm text-red-700">
-                    ⚠️ Backend offline - reviews cannot be posted. Please try again later.
-                  </p>
-                </div>
-              )}
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
@@ -1514,7 +1132,7 @@ const App = () => {
                 </div>
                 <button
                   onClick={handleReviewSubmit}
-                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || reviewForm.review.trim().length < 20 || loading || !backendConnected}
+                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || reviewForm.review.trim().length < 20 || loading}
                   className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   {loading ? 'Posting...' : 'Post Review'}
