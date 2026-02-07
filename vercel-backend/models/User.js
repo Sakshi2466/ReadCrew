@@ -24,7 +24,7 @@ const UserSchema = new mongoose.Schema({
       validator: function(v) {
         return /^[6-9]\d{9}$/.test(v);
       },
-      message: 'Please provide a valid 10-digit Indian phone number'
+      message: 'Please provide a valid 10-digit phone number'
     }
   },
   password: {
