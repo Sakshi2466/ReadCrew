@@ -18,13 +18,438 @@ const BOOK_RECOMMENDATIONS = [
       { title: 'A Song of Ice and Fire', author: 'George R.R. Martin', rating: 4.6 }
     ]
   },
-  // ... (keep all your existing BOOK_RECOMMENDATIONS array)
+  {
+    id: 2,
+    category: 'Science Fiction',
+    emoji: '🚀',
+    description: 'Future tech, space exploration, aliens',
+    books: [
+      { title: 'Dune', author: 'Frank Herbert', rating: 4.5 },
+      { title: '1984', author: 'George Orwell', rating: 4.4 },
+      { title: 'The Martian', author: 'Andy Weir', rating: 4.7 },
+      { title: 'Foundation', author: 'Isaac Asimov', rating: 4.3 }
+    ]
+  },
+  {
+    id: 3,
+    category: 'Mystery/Thriller',
+    emoji: '🔍',
+    description: 'Suspense, crime solving, plot twists',
+    books: [
+      { title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.2 },
+      { title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.1 },
+      { title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5 },
+      { title: 'The Da Vinci Code', author: 'Dan Brown', rating: 4.0 }
+    ]
+  },
+  {
+    id: 4,
+    category: 'Romance',
+    emoji: '❤️',
+    description: 'Love stories, relationships, emotional journeys',
+    books: [
+      { title: 'Pride and Prejudice', author: 'Jane Austen', rating: 4.8 },
+      { title: 'The Notebook', author: 'Nicholas Sparks', rating: 4.3 },
+      { title: 'Normal People', author: 'Sally Rooney', rating: 4.0 },
+      { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', rating: 4.6 }
+    ]
+  },
+  {
+    id: 5,
+    category: 'Biography/Autobiography',
+    emoji: '📖',
+    description: 'Real-life stories, memoirs, historical figures',
+    books: [
+      { title: 'The Diary of a Young Girl', author: 'Anne Frank', rating: 4.8 },
+      { title: 'Becoming', author: 'Michelle Obama', rating: 4.8 },
+      { title: 'Educated', author: 'Tara Westover', rating: 4.7 },
+      { title: 'Steve Jobs', author: 'Walter Isaacson', rating: 4.6 }
+    ]
+  },
+  {
+    id: 6,
+    category: 'Self-Help/Motivational',
+    emoji: '💪',
+    description: 'Personal growth, productivity, mindset',
+    books: [
+      { title: 'Atomic Habits', author: 'James Clear', rating: 4.8 },
+      { title: 'The 7 Habits of Highly Effective People', author: 'Stephen R. Covey', rating: 4.7 },
+      { title: 'The Power of Now', author: 'Eckhart Tolle', rating: 4.3 },
+      { title: 'Think and Grow Rich', author: 'Napoleon Hill', rating: 4.2 }
+    ]
+  },
+  {
+    id: 7,
+    category: 'Historical Fiction',
+    emoji: '🏛️',
+    description: 'Historical events, period settings',
+    books: [
+      { title: 'The Book Thief', author: 'Markus Zusak', rating: 4.7 },
+      { title: 'All the Light We Cannot See', author: 'Anthony Doerr', rating: 4.6 },
+      { title: 'The Nightingale', author: 'Kristin Hannah', rating: 4.8 },
+      { title: 'Wolf Hall', author: 'Hilary Mantel', rating: 4.5 }
+    ]
+  },
+  {
+    id: 8,
+    category: 'Horror',
+    emoji: '👻',
+    description: 'Fear, supernatural, psychological terror',
+    books: [
+      { title: 'It', author: 'Stephen King', rating: 4.6 },
+      { title: 'Dracula', author: 'Bram Stoker', rating: 4.2 },
+      { title: 'The Shining', author: 'Stephen King', rating: 4.7 },
+      { title: 'Frankenstein', author: 'Mary Shelley', rating: 4.1 }
+    ]
+  },
+  {
+    id: 9,
+    category: 'Literary Fiction',
+    emoji: '✍️',
+    description: 'Character-driven, artistic prose, social commentary',
+    books: [
+      { title: 'To Kill a Mockingbird', author: 'Harper Lee', rating: 4.8 },
+      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', rating: 4.3 },
+      { title: 'Beloved', author: 'Toni Morrison', rating: 4.4 },
+      { title: 'The Catcher in the Rye', author: 'J.D. Salinger', rating: 4.1 }
+    ]
+  },
+  {
+    id: 10,
+    category: 'Young Adult',
+    emoji: '🌟',
+    description: 'Teen protagonists, coming-of-age',
+    books: [
+      { title: 'The Fault in Our Stars', author: 'John Green', rating: 4.7 },
+      { title: 'The Hunger Games', author: 'Suzanne Collins', rating: 4.7 },
+      { title: 'Divergent', author: 'Veronica Roth', rating: 4.2 },
+      { title: 'Twilight', author: 'Stephenie Meyer', rating: 3.8 }
+    ]
+  },
+  {
+    id: 11,
+    category: 'Adventure',
+    emoji: '🗺️',
+    description: 'Exploration, survival, action',
+    books: [
+      { title: 'The Lord of the Rings', author: 'J.R.R. Tolkien', rating: 4.9 },
+      { title: 'Treasure Island', author: 'Robert Louis Stevenson', rating: 4.0 },
+      { title: 'Life of Pi', author: 'Yann Martel', rating: 4.2 },
+      { title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.3 }
+    ]
+  },
+  {
+    id: 12,
+    category: 'Philosophy',
+    emoji: '🤔',
+    description: 'Existential questions, ethics, consciousness',
+    books: [
+      { title: 'Meditations', author: 'Marcus Aurelius', rating: 4.5 },
+      { title: 'Thus Spoke Zarathustra', author: 'Friedrich Nietzsche', rating: 4.0 },
+      { title: 'The Republic', author: 'Plato', rating: 4.2 },
+      { title: 'Sophie\'s World', author: 'Jostein Gaarder', rating: 4.3 }
+    ]
+  }
 ];
 
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
 const validateName = (name) => name && name.trim().length >= 2;
+
+// ReviewCard Component
+const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({
+    bookName: review.bookName,
+    author: review.author,
+    review: review.review,
+    sentiment: review.sentiment
+  });
+  const [loading, setLoading] = useState(false);
+
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+  const handleDelete = async () => {
+    if (!window.confirm('Are you sure you want to delete this review?')) return;
+    
+    try {
+      setLoading(true);
+      await axios.delete(`${API_URL}/reviews/${review._id}`);
+      onDelete(review._id);
+    } catch (error) {
+      console.error('Error deleting review:', error);
+      alert('Failed to delete review');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdate = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.put(`${API_URL}/reviews/${review._id}`, editForm);
+      if (response.data.success) {
+        onUpdate();
+        setIsEditing(false);
+      }
+    } catch (error) {
+      console.error('Error updating review:', error);
+      alert('Failed to update review');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6 hover:shadow-xl transition">
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1">
+            {isEditing ? (
+              <input
+                type="text"
+                value={editForm.bookName}
+                onChange={(e) => setEditForm({...editForm, bookName: e.target.value})}
+                className="text-xl font-bold mb-1 w-full px-3 py-2 border rounded-lg"
+                placeholder="Book Name"
+              />
+            ) : (
+              <h3 className="text-xl font-bold text-gray-900">{review.bookName}</h3>
+            )}
+            {isEditing ? (
+              <input
+                type="text"
+                value={editForm.author}
+                onChange={(e) => setEditForm({...editForm, author: e.target.value})}
+                className="text-gray-600 mb-2 w-full px-3 py-2 border rounded-lg"
+                placeholder="Author"
+              />
+            ) : (
+              <p className="text-gray-600 mb-2">by {review.author}</p>
+            )}
+          </div>
+          {review.userEmail === currentUserEmail && (
+            <div className="flex gap-2">
+              {isEditing ? (
+                <>
+                  <button 
+                    onClick={handleUpdate}
+                    disabled={loading}
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
+                  >
+                    {loading ? 'Saving...' : 'Save'}
+                  </button>
+                  <button 
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button 
+                    onClick={() => setIsEditing(true)}
+                    className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
+                  >
+                    Edit
+                  </button>
+                  <button 
+                    onClick={handleDelete}
+                    disabled={loading}
+                    className="px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50"
+                  >
+                    {loading ? 'Deleting...' : 'Delete'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {isEditing ? (
+          <textarea
+            value={editForm.review}
+            onChange={(e) => setEditForm({...editForm, review: e.target.value})}
+            className="w-full px-3 py-2 border rounded-lg mb-3"
+            rows="3"
+            placeholder="Your review"
+          />
+        ) : (
+          <p className="text-gray-700 mb-4">{review.review}</p>
+        )}
+
+        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+          <div className="flex items-center gap-2">
+            {isEditing ? (
+              <select
+                value={editForm.sentiment}
+                onChange={(e) => setEditForm({...editForm, sentiment: e.target.value})}
+                className="px-3 py-1 border rounded-lg"
+              >
+                <option value="positive">Positive</option>
+                <option value="negative">Negative</option>
+              </select>
+            ) : (
+              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
+                review.sentiment === 'positive' 
+                  ? 'bg-green-100 text-green-800' 
+                  : 'bg-red-100 text-red-800'
+              }`}>
+                {review.sentiment === 'positive' ? '👍 Positive' : '👎 Negative'}
+              </span>
+            )}
+            <span className="text-gray-500 text-sm">
+              Reviewed by {review.userName}
+            </span>
+          </div>
+          <span className="text-gray-400 text-sm">
+            {new Date(review.createdAt).toLocaleDateString()}
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// CreateReviewForm Component
+const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
+  const [formData, setFormData] = useState({
+    bookName: '',
+    author: '',
+    review: '',
+    sentiment: 'positive'
+  });
+  const [loading, setLoading] = useState(false);
+
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.bookName || !formData.author || !formData.review) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const reviewData = {
+        userName: currentUser.name,
+        userEmail: currentUser.email,
+        bookName: formData.bookName,
+        author: formData.author,
+        review: formData.review,
+        sentiment: formData.sentiment
+      };
+
+      const response = await axios.post(`${API_URL}/reviews`, reviewData);
+      
+      if (response.data.success) {
+        onReviewCreated(response.data.review);
+        setFormData({ bookName: '', author: '', review: '', sentiment: 'positive' });
+      }
+    } catch (error) {
+      console.error('Error creating review:', error);
+      alert('Failed to create review');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
+      <h2 className="text-2xl font-bold mb-6 text-gray-900">Write a New Review</h2>
+      <form onSubmit={handleSubmit}>
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
+            <input
+              type="text"
+              value={formData.bookName}
+              onChange={(e) => setFormData({...formData, bookName: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
+              placeholder="Enter book name"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-semibold text-gray-700 mb-2">Author *</label>
+            <input
+              type="text"
+              value={formData.author}
+              onChange={(e) => setFormData({...formData, author: e.target.value})}
+              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
+              placeholder="Enter author name"
+              required
+            />
+          </div>
+        </div>
+        
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Your Review *</label>
+          <textarea
+            value={formData.review}
+            onChange={(e) => setFormData({...formData, review: e.target.value})}
+            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
+            rows="4"
+            placeholder="Share your thoughts about the book..."
+            required
+          />
+        </div>
+        
+        <div className="mb-6">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">Sentiment</label>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setFormData({...formData, sentiment: 'positive'})}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+                formData.sentiment === 'positive'
+                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <ThumbsUp className="w-4 h-4" /> Positive
+            </button>
+            <button
+              type="button"
+              onClick={() => setFormData({...formData, sentiment: 'negative'})}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
+                formData.sentiment === 'negative'
+                  ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              <ThumbsDown className="w-4 h-4" /> Negative
+            </button>
+          </div>
+        </div>
+        
+        <div className="flex gap-3">
+          <button
+            type="submit"
+            disabled={loading}
+            className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
+          >
+            {loading ? 'Posting Review...' : 'Post Review'}
+          </button>
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-8 py-4 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition"
+          >
+            Cancel
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
+// Import axios
+import axios from 'axios';
 
 const App = () => {
   // Authentication states
@@ -45,14 +470,20 @@ const App = () => {
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showPostDetail, setShowPostDetail] = useState(false);
   
-  // Backend connection states (kept internally but not displayed)
+  // Book Reviews App states
+  const [reviews, setReviews] = useState([]);
+  const [reviewsLoading, setReviewsLoading] = useState(true);
+  const [showCreateReviewForm, setShowCreateReviewForm] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [notification, setNotification] = useState(null);
+  const [filteredReviews, setFilteredReviews] = useState([]);
+  
+  // Backend connection states
   const [backendConnected, setBackendConnected] = useState(false);
   const [backendChecking, setBackendChecking] = useState(true);
   
   // Data states
   const [donations, setDonations] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [filteredReviews, setFilteredReviews] = useState([]);
   const [userActivity, setUserActivity] = useState({
     savedPosts: [],
     likedPosts: [],
@@ -62,7 +493,6 @@ const App = () => {
   // Form states
   const [donationForm, setDonationForm] = useState({ bookName: '', story: '', image: null, imagePreview: null });
   const [reviewForm, setReviewForm] = useState({ bookName: '', author: '', review: '', sentiment: 'positive' });
-  const [searchQuery, setSearchQuery] = useState('');
   const [recommendKeywords, setRecommendKeywords] = useState('');
   const [recommendations, setRecommendations] = useState([]);
   const [readingGoal, setReadingGoal] = useState({ monthly: 0, books: [] });
@@ -70,6 +500,8 @@ const App = () => {
   
   // Selected post for detail view
   const [selectedPost, setSelectedPost] = useState(null);
+
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   // ✅ Check backend connection on startup (silently)
   useEffect(() => {
@@ -119,6 +551,77 @@ const App = () => {
     loadReviewsFromBackend();
   }, []);
 
+  // ========== BOOK REVIEWS FUNCTIONS ==========
+  const fetchReviews = async () => {
+    try {
+      setReviewsLoading(true);
+      const response = await axios.get(`${API_URL}/reviews`, {
+        params: { userEmail: currentUser?.email || '' }
+      });
+
+      if (response.data.success) {
+        setReviews(response.data.reviews);
+        setFilteredReviews(response.data.reviews);
+      }
+    } catch (error) {
+      console.error('Error fetching reviews:', error);
+      showNotification('Error loading reviews', 'error');
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const handleSearchReviews = async () => {
+    if (!searchQuery.trim()) {
+      fetchReviews();
+      return;
+    }
+
+    try {
+      setReviewsLoading(true);
+      const response = await axios.get(`${API_URL}/reviews/search`, {
+        params: { 
+          query: searchQuery,
+          userEmail: currentUser?.email || ''
+        }
+      });
+
+      if (response.data.success) {
+        setFilteredReviews(response.data.reviews);
+      }
+    } catch (error) {
+      console.error('Error searching reviews:', error);
+      showNotification('Error searching reviews', 'error');
+    } finally {
+      setReviewsLoading(false);
+    }
+  };
+
+  const handleReviewCreated = (newReview) => {
+    setReviews([newReview, ...reviews]);
+    setFilteredReviews([newReview, ...filteredReviews]);
+    setShowCreateReviewForm(false);
+    showNotification('Review posted successfully!', 'success');
+  };
+
+  const handleReviewDeleted = (deletedReviewId) => {
+    setReviews(reviews.filter(review => review._id !== deletedReviewId));
+    setFilteredReviews(filteredReviews.filter(review => review._id !== deletedReviewId));
+    showNotification('Review deleted successfully', 'success');
+  };
+
+  const showNotification = (message, type = 'info') => {
+    setNotification({ message, type });
+    setTimeout(() => setNotification(null), 3000);
+  };
+
+  const handleSearchKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSearchReviews();
+    }
+  };
+
+  // ========== DONATION FUNCTIONS ==========
   const loadDonationsFromBackend = async () => {
     try {
       const result = await donationAPI.getAll();
@@ -264,52 +767,6 @@ const App = () => {
       setLoading(false);
     }
   };
-
-  // ========== REVIEW FUNCTIONS ==========
-
-  const handleSearchReviews = (query) => {
-    setSearchQuery(query);
-    if (!query.trim()) {
-      setFilteredReviews(reviews);
-      return;
-    }
-    
-    try {
-      const regex = new RegExp(query, 'i');
-      const filtered = reviews.filter(review => 
-        regex.test(review.bookName) || 
-        regex.test(review.author) || 
-        regex.test(review.review) ||
-        regex.test(review.userName)
-      );
-      
-      const sorted = filtered.sort((a, b) => {
-        const aBookExact = a.bookName.toLowerCase() === query.toLowerCase();
-        const bBookExact = b.bookName.toLowerCase() === query.toLowerCase();
-        const aAuthorExact = a.author.toLowerCase() === query.toLowerCase();
-        const bAuthorExact = b.author.toLowerCase() === query.toLowerCase();
-        
-        if (aBookExact && !bBookExact) return -1;
-        if (!aBookExact && bBookExact) return 1;
-        if (aAuthorExact && !bAuthorExact) return -1;
-        if (!aAuthorExact && bAuthorExact) return 1;
-        
-        return 0;
-      });
-      
-      setFilteredReviews(sorted);
-    } catch (error) {
-      const filtered = reviews.filter(review => 
-        review.bookName.toLowerCase().includes(query.toLowerCase()) ||
-        review.author.toLowerCase().includes(query.toLowerCase()) ||
-        review.review.toLowerCase().includes(query.toLowerCase()) ||
-        review.userName.toLowerCase().includes(query.toLowerCase())
-      );
-      setFilteredReviews(filtered);
-    }
-  };
-
-  // ========== DONATION FUNCTIONS ==========
 
   const handleOpenPostDetail = (post) => {
     setSelectedPost(post);
@@ -678,7 +1135,7 @@ const App = () => {
                         value={loginForm.name}
                         onChange={(e) => setLoginForm({ ...loginForm, name: e.target.value })}
                         className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                        placeholder="John Doe"
+                        placeholder="Neha Sharma"
                       />
                     </div>
                     <div>
@@ -688,7 +1145,7 @@ const App = () => {
                         value={loginForm.email}
                         onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
                         className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                        placeholder="john@example.com"
+                        placeholder="neha.sharma@example.com"
                       />
                     </div>
                     <div>
@@ -757,9 +1214,16 @@ const App = () => {
   // ========== RENDER: MAIN APP ==========
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* REMOVED: Backend Status Indicator */}
-
-      {/* REMOVED: Debug Buttons */}
+      {/* Notification */}
+      {notification && (
+        <div className={`notification fixed top-4 right-4 px-6 py-3 rounded-xl font-medium text-white shadow-lg z-50 ${
+          notification.type === 'success' ? 'bg-green-500' :
+          notification.type === 'error' ? 'bg-red-500' :
+          'bg-blue-500'
+        }`}>
+          {notification.message}
+        </div>
+      )}
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
@@ -778,7 +1242,7 @@ const App = () => {
             {[
               { name: 'Home', page: 'home', icon: BookOpen },
               { name: 'Shared Stories', page: 'donation', icon: Gift },
-              { name: 'Reviews', page: 'reviews', icon: Star },
+              { name: 'Book Reviews', page: 'reviews', icon: Star },
               { name: 'Recommendations', page: 'recommend', icon: Sparkles }
             ].map(({ name, page, icon: Icon }) => (
               <button
@@ -1059,7 +1523,7 @@ const App = () => {
         </div>
       )}
 
-      {/* Reviews Page */}
+      {/* Book Reviews Page */}
       {currentPage === 'reviews' && (
         <div className="max-w-7xl mx-auto px-6 py-8">
           <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
@@ -1071,175 +1535,81 @@ const App = () => {
             <p className="text-purple-100">Discover what others are reading</p>
           </div>
 
-          <div className="grid md:grid-cols-2 gap-8">
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-              <h2 className="text-2xl font-bold mb-6 text-gray-900">Write a Review</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
-                  <input
-                    type="text"
-                    value={reviewForm.bookName}
-                    onChange={(e) => setReviewForm({ ...reviewForm, bookName: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
-                    placeholder="Enter book name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Author *</label>
-                  <input
-                    type="text"
-                    value={reviewForm.author}
-                    onChange={(e) => setReviewForm({ ...reviewForm, author: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
-                    placeholder="Enter author name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Your Review *</label>
-                  <textarea
-                    value={reviewForm.review}
-                    onChange={(e) => setReviewForm({ ...reviewForm, review: e.target.value })}
-                    className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
-                    rows="4"
-                    placeholder="Share your thoughts..."
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-2">Sentiment</label>
-                  <div className="flex gap-3">
-                    <button
-                      onClick={() => setReviewForm({ ...reviewForm, sentiment: 'positive' })}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
-                        reviewForm.sentiment === 'positive'
-                          ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      <ThumbsUp className="w-4 h-4" /> Positive
-                    </button>
-                    <button
-                      onClick={() => setReviewForm({ ...reviewForm, sentiment: 'negative' })}
-                      className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
-                        reviewForm.sentiment === 'negative'
-                          ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      <ThumbsDown className="w-4 h-4" /> Negative
-                    </button>
-                  </div>
-                </div>
-                <button
-                  onClick={handleReviewSubmit}
-                  disabled={!reviewForm.bookName || !reviewForm.author || !reviewForm.review || reviewForm.review.trim().length < 20 || loading}
-                  className="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
+          {/* Search and Actions */}
+          <div className="controls mb-8">
+            <div className="search-bar flex-1">
+              <input
+                type="text"
+                placeholder="Search by book, author, or user..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyPress={handleSearchKeyPress}
+                className="flex-1 border-none px-4 py-3 outline-none rounded-xl"
+              />
+              <button 
+                onClick={handleSearchReviews}
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition"
+              >
+                🔍 Search
+              </button>
+              {searchQuery && (
+                <button 
+                  onClick={() => {
+                    setSearchQuery('');
+                    fetchReviews();
+                  }}
+                  className="bg-red-500 text-white px-4 py-3 rounded-xl hover:bg-red-600 transition ml-2"
                 >
-                  {loading ? 'Posting...' : 'Post Review'}
+                  ✕ Clear
                 </button>
-              </div>
+              )}
             </div>
 
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-              <h2 className="text-2xl font-bold mb-6 text-gray-900">Search Reviews</h2>
-              <div className="relative mb-6">
-                <Search className="absolute left-4 top-4 text-gray-400" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => handleSearchReviews(e.target.value)}
-                  className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
-                  placeholder="Search books, authors, reviews..."
-                />
-                {searchQuery && (
-                  <button
-                    onClick={() => handleSearchReviews('')}
-                    className="absolute right-4 top-4 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                )}
+            <button 
+              className="create-review-btn bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition font-medium"
+              onClick={() => setShowCreateReviewForm(!showCreateReviewForm)}
+            >
+              {showCreateReviewForm ? '✕ Cancel' : '✍️ Write Review'}
+            </button>
+          </div>
+
+          {/* Create Review Form */}
+          {showCreateReviewForm && (
+            <CreateReviewForm
+              currentUser={currentUser}
+              onReviewCreated={handleReviewCreated}
+              onCancel={() => setShowCreateReviewForm(false)}
+            />
+          )}
+
+          {/* Reviews List */}
+          <div className="reviews-container mt-8">
+            {reviewsLoading ? (
+              <div className="loading flex flex-col items-center justify-center py-20">
+                <div className="spinner w-12 h-12 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-4"></div>
+                <p className="text-gray-600">Loading reviews...</p>
               </div>
-              
-              {searchQuery && (
-                <div className="mb-4 px-3 py-2 bg-purple-50 text-purple-700 rounded-lg flex items-center gap-2">
-                  <Search className="w-4 h-4" />
-                  <span className="text-sm">
-                    Showing {filteredReviews.length} result{filteredReviews.length !== 1 ? 's' : ''} for "{searchQuery}"
-                  </span>
+            ) : filteredReviews.length === 0 ? (
+              <div className="no-reviews text-center py-20 bg-white rounded-2xl shadow-lg">
+                <p className="text-2xl text-gray-700 mb-2">📖 No reviews found</p>
+                {searchQuery && <p className="text-gray-500">Try a different search term</p>}
+              </div>
+            ) : (
+              <>
+                <div className="reviews-count bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 px-4 py-3 rounded-xl mb-6">
+                  {filteredReviews.length} {filteredReviews.length === 1 ? 'review' : 'reviews'} found
                 </div>
-              )}
-              
-              <div className="space-y-4 max-h-96 overflow-y-auto">
-                {filteredReviews.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Star className="w-16 h-16 text-gray-300 mx-auto mb-3" />
-                    <p className="text-gray-500">
-                      {searchQuery ? 'No reviews found for your search' : 'No reviews yet'}
-                    </p>
-                    {searchQuery && (
-                      <button
-                        onClick={() => handleSearchReviews('')}
-                        className="mt-2 text-purple-600 hover:text-purple-700 font-medium"
-                      >
-                        Clear search
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  filteredReviews.map(review => (
-                    <div key={review._id} className="bg-gradient-to-r from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-100 hover:border-purple-300 transition">
-                      <div className="flex justify-between items-start mb-2">
-                        <div>
-                          <h3 className="font-bold text-gray-900">
-                            {searchQuery && review.bookName.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-                              <span className="bg-yellow-200 px-1">
-                                {review.bookName}
-                              </span>
-                            ) : (
-                              review.bookName
-                            )}
-                          </h3>
-                          <p className="text-sm text-gray-600">
-                            by {searchQuery && review.author.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-                              <span className="bg-yellow-200 px-1">
-                                {review.author}
-                              </span>
-                            ) : (
-                              review.author
-                            )}
-                          </p>
-                        </div>
-                        {review.sentiment === 'positive' ? (
-                          <ThumbsUp className="w-5 h-5 text-green-600" />
-                        ) : (
-                          <ThumbsDown className="w-5 h-5 text-red-600" />
-                        )}
-                      </div>
-                      <p className="text-gray-700 text-sm mb-2">
-                        {searchQuery && review.review.toLowerCase().includes(searchQuery.toLowerCase()) ? (
-                          <>
-                            {review.review.split(new RegExp(`(${searchQuery})`, 'gi')).map((part, i) => 
-                              part.toLowerCase() === searchQuery.toLowerCase() ? (
-                                <span key={i} className="bg-yellow-200">{part}</span>
-                              ) : (
-                                part
-                              )
-                            )}
-                          </>
-                        ) : (
-                          review.review
-                        )}
-                      </p>
-                      <div className="flex justify-between items-center text-xs">
-                        <span className="text-gray-500">by {review.userName}</span>
-                        <span className="text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
+                {filteredReviews.map((review) => (
+                  <ReviewCard
+                    key={review._id}
+                    review={review}
+                    currentUserEmail={currentUser?.email}
+                    onUpdate={fetchReviews}
+                    onDelete={handleReviewDeleted}
+                  />
+                ))}
+              </>
+            )}
           </div>
         </div>
       )}
@@ -1891,7 +2261,7 @@ const App = () => {
             </div>
             <div className="text-center md:text-right">
               <p className="text-gray-400">© {new Date().getFullYear()} ReadCrew Community</p>
-              <p className="text-gray-500 text-sm mt-1">Made with ❤️ for book lovers</p>
+              <p className="text-gray-500 text-sm mt-1">Made with love for book lovers</p>
             </div>
           </div>
         </div>
