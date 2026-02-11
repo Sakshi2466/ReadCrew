@@ -2261,7 +2261,7 @@ const App = () => {
             </div>
             <div className="text-center md:text-right">
               <p className="text-gray-400">© {new Date().getFullYear()} ReadCrew Community</p>
-              <p className="text-gray-500 text-sm mt-1">Made with love for book lovers</p>
+              <p className="text-gray-500 text-sm mt-1">Made with loves for book lovers</p>
             </div>
           </div>
         </div>
