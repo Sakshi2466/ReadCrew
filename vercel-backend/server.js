@@ -10,7 +10,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://versal-book-app.vercel.app',
+    'https://readcrew.vercel.app/',
     'https://*.vercel.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -25,7 +25,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.get('/', (req, res) => {
   res.json({
     success: true,
-    message: 'Versal Book App Backend API',
+    message: 'ReadCrew App Backend API',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
     endpoints: {
@@ -90,7 +90,7 @@ const PORT = process.env.PORT || 10000;
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🌐 CORS enabled for: https://versal-book-app.vercel.app`);
+  console.log(`🌐 CORS enabled for: https://readcrew.vercel.app/`);
   console.log(`📌 Health check: GET /api/health`);
   console.log(`📌 OTP Endpoint: POST /api/otp/send-otp`);
 });
