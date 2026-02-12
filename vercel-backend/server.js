@@ -10,7 +10,7 @@ app.use(cors({
   origin: [
     'http://localhost:3000',
     'http://localhost:5173',
-    'https://readcrew.vercel.app/',
+    'https://readcrew.vercel.app',
     'https://*.vercel.app'
   ],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
