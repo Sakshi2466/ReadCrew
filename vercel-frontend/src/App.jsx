@@ -1248,7 +1248,7 @@ const App = () => {
                     </button>
                     
                     <div className="text-center text-sm text-gray-500 mt-4">
-                      <p>Note: Check console for OTP if email doesn't work</p>
+                      
                     </div>
                   </div>
                 </>
@@ -1394,7 +1394,7 @@ const App = () => {
               className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition text-center border-2 border-transparent hover:border-orange-300"
             >
               <Sparkles className="w-10 h-10 text-orange-600 mx-auto mb-3" />
-              <h3 className="font-bold text-gray-900">AI Recommendations</h3>
+              <h3 className="font-bold text-gray-900">AI Books Recommendations</h3>
             </button>
           </div>
 
@@ -1557,7 +1557,7 @@ const App = () => {
                 </div>
                 <div>
                   <h1 className="text-4xl font-bold">About ReadCrew</h1>
-                  <p className="text-orange-100 text-lg">Read. Reflect. Rise.</p>
+                  <p className="text-orange-100 text-lg">Share • Inspire • Discover</p>
                 </div>
               </div>
             </div>
@@ -1680,7 +1680,7 @@ const App = () => {
           <div className="flex justify-between items-center mb-8">
             <div>
               <h1 className="text-4xl font-bold text-gray-900 mb-2">Shared Stories</h1>
-              <p className="text-gray-600">Moments of reading, gifting, donating, and sharing books</p>
+             
             </div>
             <button
               onClick={() => setShowSavedPosts(true)}
