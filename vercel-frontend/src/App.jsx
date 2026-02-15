@@ -1,12 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import axios from 'axios'; // ✅ MUST BE AT THE TOP
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
 
-// ✅ Import API functions
-import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, getTrendingBooks } from './services/api';
-
-// ✅ Define API_URL for axios calls
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
+// ✅ CORRECT IMPORT - Added getBookRecommendations
+import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations } from './services/api';
 
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
@@ -90,7 +86,7 @@ const BOOK_RECOMMENDATIONS = [
     books: [
       { title: 'The Book Thief', author: 'Markus Zusak', rating: 4.7 },
       { title: 'All the Light We Cannot See', author: 'Anthony Doerr', rating: 4.6 },
-      { title: 'The Nightingale', author: 'Kristin Hannah', rating: 4.8 },
+      { title: 'The Nightingale', author: 'Kristen Hannah', rating: 4.8 },
       { title: 'Wolf Hall', author: 'Hilary Mantel', rating: 4.5 }
     ]
   },
@@ -161,28 +157,7 @@ const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
 const validateName = (name) => name && name.trim().length >= 2;
 
-// Helper function to parse AI response into structured book data
-const parseAIBooksResponse = (text) => {
-  const books = [];
-  const lines = text.split('\n\n');
-  
-  for (const line of lines) {
-    // Match **Title by Author** pattern
-    const titleMatch = line.match(/\*\*(.+?)\s+by\s+(.+?)\*\*/);
-    if (titleMatch) {
-      const title = titleMatch[1].trim();
-      const author = titleMatch[2].trim();
-      // Get description (text after the title line)
-      const description = line.replace(/\*\*.*?\*\*/, '').trim();
-      
-      books.push({ title, author, description });
-    }
-  }
-  
-  return books;
-};
-
-// ReviewCard Component - FIXED: Using global API_URL
+// ReviewCard Component
 const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -193,12 +168,14 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   });
   const [loading, setLoading] = useState(false);
 
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
   const handleDelete = async () => {
     if (!window.confirm('Are you sure you want to delete this review?')) return;
     
     try {
       setLoading(true);
-      await axios.delete(`${API_URL}/api/reviews/${review._id}`);
+      await axios.delete(`${API_URL}/reviews/${review._id}`);
       onDelete(review._id);
     } catch (error) {
       console.error('Error deleting review:', error);
@@ -211,7 +188,7 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   const handleUpdate = async () => {
     try {
       setLoading(true);
-      const response = await axios.put(`${API_URL}/api/reviews/${review._id}`, editForm);
+      const response = await axios.put(`${API_URL}/reviews/${review._id}`, editForm);
       if (response.data.success) {
         onUpdate();
         setIsEditing(false);
@@ -226,9 +203,9 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
 
   return (
     <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6 hover:shadow-xl transition">
-      <div className="p-4 sm:p-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start gap-4 mb-4">
-          <div className="flex-1 w-full">
+      <div className="p-6">
+        <div className="flex justify-between items-start mb-4">
+          <div className="flex-1">
             {isEditing ? (
               <input
                 type="text"
@@ -238,7 +215,7 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
                 placeholder="Book Name"
               />
             ) : (
-              <h3 className="text-xl font-bold text-gray-900 break-words">{review.bookName}</h3>
+              <h3 className="text-xl font-bold text-gray-900">{review.bookName}</h3>
             )}
             {isEditing ? (
               <input
@@ -249,23 +226,23 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
                 placeholder="Author"
               />
             ) : (
-              <p className="text-gray-600 mb-2 break-words">by {review.author}</p>
+              <p className="text-gray-600 mb-2">by {review.author}</p>
             )}
           </div>
           {review.userEmail === currentUserEmail && (
-            <div className="flex gap-2 w-full sm:w-auto">
+            <div className="flex gap-2">
               {isEditing ? (
                 <>
                   <button 
                     onClick={handleUpdate}
                     disabled={loading}
-                    className="flex-1 sm:flex-none px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50 text-sm"
+                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
                   >
                     {loading ? 'Saving...' : 'Save'}
                   </button>
                   <button 
                     onClick={() => setIsEditing(false)}
-                    className="flex-1 sm:flex-none px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm"
+                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
                   >
                     Cancel
                   </button>
@@ -274,14 +251,14 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
                 <>
                   <button 
                     onClick={() => setIsEditing(true)}
-                    className="flex-1 sm:flex-none px-3 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200 text-sm"
+                    className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
                   >
                     Edit
                   </button>
                   <button 
                     onClick={handleDelete}
                     disabled={loading}
-                    className="flex-1 sm:flex-none px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50 text-sm"
+                    className="px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50"
                   >
                     {loading ? 'Deleting...' : 'Delete'}
                   </button>
@@ -300,16 +277,16 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
             placeholder="Your review"
           />
         ) : (
-          <p className="text-gray-700 mb-4 break-words">{review.review}</p>
+          <p className="text-gray-700 mb-4">{review.review}</p>
         )}
 
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pt-4 border-t border-gray-100">
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
+          <div className="flex items-center gap-2">
             {isEditing ? (
               <select
                 value={editForm.sentiment}
                 onChange={(e) => setEditForm({...editForm, sentiment: e.target.value})}
-                className="px-3 py-1 border rounded-lg text-sm"
+                className="px-3 py-1 border rounded-lg"
               >
                 <option value="positive">Positive</option>
                 <option value="negative">Negative</option>
@@ -324,7 +301,7 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
               </span>
             )}
             <span className="text-gray-500 text-sm">
-              by {review.userName}
+              Reviewed by {review.userName}
             </span>
           </div>
           <span className="text-gray-400 text-sm">
@@ -336,7 +313,7 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   );
 };
 
-// CreateReviewForm Component - FIXED: Using global API_URL
+// CreateReviewForm Component
 const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
   const [formData, setFormData] = useState({
     bookName: '',
@@ -345,6 +322,8 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
     sentiment: 'positive'
   });
   const [loading, setLoading] = useState(false);
+
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -365,7 +344,7 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
         sentiment: formData.sentiment
       };
 
-      const response = await axios.post(`${API_URL}/api/reviews`, reviewData);
+      const response = await axios.post(`${API_URL}/reviews`, reviewData);
       
       if (response.data.success) {
         onReviewCreated(response.data.review);
@@ -380,7 +359,7 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow-xl p-4 sm:p-8 mb-8 border border-gray-100">
+    <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
       <h2 className="text-2xl font-bold mb-6 text-gray-900">Write a New Review</h2>
       <form onSubmit={handleSubmit}>
         <div className="grid md:grid-cols-2 gap-6 mb-6">
@@ -422,7 +401,7 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
         
         <div className="mb-6">
           <label className="block text-sm font-semibold text-gray-700 mb-2">Sentiment</label>
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={() => setFormData({...formData, sentiment: 'positive'})}
@@ -448,7 +427,7 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
           </div>
         </div>
         
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex gap-3">
           <button
             type="submit"
             disabled={loading}
@@ -469,6 +448,9 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
   );
 };
 
+// Import axios
+import axios from 'axios';
+
 const App = () => {
   // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -487,7 +469,6 @@ const App = () => {
   const [showSharedPosts, setShowSharedPosts] = useState(false);
   const [showGoalModal, setShowGoalModal] = useState(false);
   const [showPostDetail, setShowPostDetail] = useState(false);
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   // Book Reviews App states
   const [reviews, setReviews] = useState([]);
@@ -515,21 +496,17 @@ const App = () => {
   const [recommendKeywords, setRecommendKeywords] = useState('');
   const [recommendations, setRecommendations] = useState([]);
   
-  // ✅ AI streaming states
+  // ✅ NEW: AI streaming states
   const [aiResponse, setAiResponse] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  
-  // ✅ Trending books states
-  const [trendingBooks, setTrendingBooks] = useState([]);
-  const [trendingLoading, setTrendingLoading] = useState(false);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [showBookModal, setShowBookModal] = useState(false);
   
   const [readingGoal, setReadingGoal] = useState({ monthly: 0, books: [] });
   const [newBook, setNewBook] = useState('');
   
   // Selected post for detail view
   const [selectedPost, setSelectedPost] = useState(null);
+
+  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   // ✅ Check backend connection on startup (silently)
   useEffect(() => {
@@ -564,6 +541,11 @@ const App = () => {
             const saved = localStorage.getItem(`user_${parsed.email}_activity`);
             if (saved) {
               setUserActivity(JSON.parse(saved));
+            } else {
+              // Initialize empty activity
+              const initialActivity = { savedPosts: [], likedPosts: [], sharedPosts: [] };
+              localStorage.setItem(`user_${parsed.email}_activity`, JSON.stringify(initialActivity));
+              setUserActivity(initialActivity);
             }
           } catch (error) {
             console.error('Error loading user activity:', error);
@@ -579,47 +561,11 @@ const App = () => {
     loadReviewsFromBackend();
   }, []);
 
-  // ✅ Fetch trending books on mount
-  useEffect(() => {
-    if (isLoggedIn) {
-      fetchTrendingBooks();
-    }
-  }, [isLoggedIn]);
-
-  // ✅ Function to fetch trending books
-  const fetchTrendingBooks = async () => {
-    setTrendingLoading(true);
-    let response = '';
-    
-    try {
-      await getTrendingBooks(
-        (token) => { response += token; },
-        () => {
-          // Parse the AI response to extract books
-          const books = parseAIBooksResponse(response);
-          setTrendingBooks(books.slice(0, 5)); // Top 5
-          setTrendingLoading(false);
-        }
-      );
-    } catch (error) {
-      console.error('Error fetching trending books:', error);
-      setTrendingLoading(false);
-      // Fallback to static data
-      setTrendingBooks([
-        { title: 'Atomic Habits', author: 'James Clear', description: 'Transform your life with tiny changes' },
-        { title: 'The Hobbit', author: 'J.R.R. Tolkien', description: 'Epic fantasy adventure' },
-        { title: 'Educated', author: 'Tara Westover', description: 'Powerful memoir of transformation' },
-        { title: '1984', author: 'George Orwell', description: 'Dystopian masterpiece' },
-        { title: 'The Alchemist', author: 'Paulo Coelho', description: 'Journey of self-discovery' }
-      ]);
-    }
-  };
-
   // ========== BOOK REVIEWS FUNCTIONS ==========
   const fetchReviews = async () => {
     try {
       setReviewsLoading(true);
-      const response = await axios.get(`${API_URL}/api/reviews`, {
+      const response = await axios.get(`${API_URL}/reviews`, {
         params: { userEmail: currentUser?.email || '' }
       });
 
@@ -643,7 +589,7 @@ const App = () => {
 
     try {
       setReviewsLoading(true);
-      const response = await axios.get(`${API_URL}/api/reviews/search`, {
+      const response = await axios.get(`${API_URL}/reviews/search`, {
         params: { 
           query: searchQuery,
           userEmail: currentUser?.email || ''
@@ -786,6 +732,11 @@ const App = () => {
         setOtpInput('');
         alert('✅ Account verified! Welcome to ReadCrew!');
         
+        // Initialize user activity
+        const initialActivity = { savedPosts: [], likedPosts: [], sharedPosts: [] };
+        localStorage.setItem(`user_${userData.email}_activity`, JSON.stringify(initialActivity));
+        setUserActivity(initialActivity);
+        
         // Load data from backend
         await loadDonationsFromBackend();
         await loadReviewsFromBackend();
@@ -817,6 +768,11 @@ const App = () => {
         setLoginForm({ name: '', email: '', phone: '' });
         setOtpInput('');
         
+        // Initialize user activity
+        const initialActivity = { savedPosts: [], likedPosts: [], sharedPosts: [] };
+        localStorage.setItem(`user_${userData.email}_activity`, JSON.stringify(initialActivity));
+        setUserActivity(initialActivity);
+        
         localStorage.removeItem('devOTP');
         localStorage.removeItem('devUser');
         alert('✅ Account verified! Welcome to ReadCrew!');
@@ -833,6 +789,7 @@ const App = () => {
   };
 
   const handleOpenPostDetail = (post) => {
+    console.log('Opening post:', post);
     setSelectedPost(post);
     setShowPostDetail(true);
   };
@@ -840,9 +797,8 @@ const App = () => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      // Check file size - increased to 10MB
-      if (file.size > 10 * 1024 * 1024) {
-        alert('Image size should be less than 10MB');
+      if (file.size > 2 * 1024 * 1024) {
+        alert('Image size should be less than 2MB');
         return;
       }
       const reader = new FileReader();
@@ -854,8 +810,8 @@ const App = () => {
   };
 
   const handleDonationSubmit = async () => {
-    if (!donationForm.bookName || !donationForm.story) {
-      alert('Please fill all required fields');
+    if (!donationForm.bookName || !donationForm.story || !donationForm.image) {
+      alert('Please fill all fields');
       return;
     }
     
@@ -872,7 +828,7 @@ const App = () => {
         userEmail: currentUser.email,
         bookName: donationForm.bookName,
         story: donationForm.story,
-        image: donationForm.image, // This can be null (no image uploaded)
+        image: donationForm.image,
       };
       
       const result = await donationAPI.create(donationData);
@@ -895,60 +851,103 @@ const App = () => {
   };
 
   const handleDeleteDonation = async (id) => {
-    if (!confirm('Are you sure you want to delete this story?')) return;
+    if (!window.confirm('Are you sure you want to delete this story?')) return;
     
     try {
       await donationAPI.delete(id);
+      await loadDonationsFromBackend();
+      alert('Story deleted successfully');
+      if (showPostDetail) setShowPostDetail(false);
     } catch (error) {
-      console.error('Error deleting donation from backend:', error);
+      console.error('Error deleting donation:', error);
+      alert('Failed to delete story');
     }
-    
-    await loadDonationsFromBackend();
-    
-    alert('Story deleted successfully');
-    if (showPostDetail) setShowPostDetail(false);
   };
 
+  // ========== UPDATED LIKE FUNCTION ==========
   const handleLikeDonation = async (id) => {
     try {
-      await donationAPI.like(id);
-    } catch (error) {
-      console.error('Error liking donation on backend:', error);
-    }
-    
-    await loadDonationsFromBackend();
-    
-    if (currentUser?.email) {
-      const activityKey = `user_${currentUser.email}_activity`;
-      const saved = JSON.parse(localStorage.getItem(activityKey) || '{}');
-      if (!saved.likedPosts) saved.likedPosts = [];
-      if (!saved.likedPosts.includes(id)) {
-        saved.likedPosts.push(id);
-        setUserActivity(prev => ({ ...prev, likedPosts: saved.likedPosts }));
-        localStorage.setItem(activityKey, JSON.stringify(saved));
+      // Optimistically update UI
+      setDonations(prevDonations => 
+        prevDonations.map(donation => 
+          donation._id === id 
+            ? { ...donation, likes: (donation.likes || 0) + (userActivity.likedPosts?.includes(id) ? -1 : 1) }
+            : donation
+        )
+      );
+
+      const result = await donationAPI.like(id);
+      
+      if (result.success) {
+        // Update user activity
+        if (currentUser?.email) {
+          const activityKey = `user_${currentUser.email}_activity`;
+          const saved = JSON.parse(localStorage.getItem(activityKey) || '{"savedPosts":[],"likedPosts":[],"sharedPosts":[]}');
+          
+          if (userActivity.likedPosts?.includes(id)) {
+            // Unlike
+            saved.likedPosts = saved.likedPosts.filter(postId => postId !== id);
+          } else {
+            // Like
+            if (!saved.likedPosts.includes(id)) {
+              saved.likedPosts.push(id);
+            }
+          }
+          
+          setUserActivity(saved);
+          localStorage.setItem(activityKey, JSON.stringify(saved));
+        }
+      } else {
+        // Revert on failure
+        await loadDonationsFromBackend();
       }
+    } catch (error) {
+      console.error('Error liking donation:', error);
+      await loadDonationsFromBackend();
     }
   };
 
+  // ========== UPDATED SAVE FUNCTION ==========
   const handleSaveDonation = async (id) => {
     try {
-      await donationAPI.save(id);
-    } catch (error) {
-      console.error('Error saving donation on backend:', error);
-    }
-    
-    await loadDonationsFromBackend();
-    
-    if (currentUser?.email) {
-      const activityKey = `user_${currentUser.email}_activity`;
-      const saved = JSON.parse(localStorage.getItem(activityKey) || '{}');
-      if (!saved.savedPosts) saved.savedPosts = [];
-      if (!saved.savedPosts.includes(id)) {
-        saved.savedPosts.push(id);
-        setUserActivity(prev => ({ ...prev, savedPosts: saved.savedPosts }));
-        localStorage.setItem(activityKey, JSON.stringify(saved));
-        alert('✅ Saved to your collection!');
+      // Optimistically update UI
+      setDonations(prevDonations => 
+        prevDonations.map(donation => 
+          donation._id === id 
+            ? { ...donation, saves: (donation.saves || 0) + (userActivity.savedPosts?.includes(id) ? -1 : 1) }
+            : donation
+        )
+      );
+
+      const result = await donationAPI.save(id);
+      
+      if (result.success) {
+        // Update user activity
+        if (currentUser?.email) {
+          const activityKey = `user_${currentUser.email}_activity`;
+          const saved = JSON.parse(localStorage.getItem(activityKey) || '{"savedPosts":[],"likedPosts":[],"sharedPosts":[]}');
+          
+          if (userActivity.savedPosts?.includes(id)) {
+            // Unsave
+            saved.savedPosts = saved.savedPosts.filter(postId => postId !== id);
+          } else {
+            // Save
+            if (!saved.savedPosts.includes(id)) {
+              saved.savedPosts.push(id);
+            }
+          }
+          
+          setUserActivity(saved);
+          localStorage.setItem(activityKey, JSON.stringify(saved));
+          alert('✅ Saved to your collection!');
+        }
+      } else {
+        // Revert on failure
+        await loadDonationsFromBackend();
       }
+    } catch (error) {
+      console.error('Error saving donation:', error);
+      await loadDonationsFromBackend();
     }
   };
 
@@ -1001,7 +1000,7 @@ const App = () => {
     setLoading(false);
   };
 
-  // ========== RECOMMENDATION FUNCTIONS - WITH AI STREAMING ==========
+  // ========== RECOMMENDATION FUNCTIONS ==========
 
   const handleRecommendation = async () => {
     if (!recommendKeywords.trim()) {
@@ -1024,7 +1023,7 @@ const App = () => {
       console.error('AI recommendation error:', error);
       setAiLoading(false);
       
-      // Fallback to static logic if AI fails
+      // Fallback to old static logic if AI fails
       const keywords = recommendKeywords.toLowerCase().trim();
       const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
         const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
@@ -1134,7 +1133,7 @@ const App = () => {
   const handleShareDonation = (id) => {
     if (currentUser?.email) {
       const activityKey = `user_${currentUser.email}_activity`;
-      const saved = JSON.parse(localStorage.getItem(activityKey) || '{}');
+      const saved = JSON.parse(localStorage.getItem(activityKey) || '{"savedPosts":[],"likedPosts":[],"sharedPosts":[]}');
       if (!saved.sharedPosts) saved.sharedPosts = [];
       if (!saved.sharedPosts.includes(id)) {
         saved.sharedPosts.push(id);
@@ -1165,7 +1164,7 @@ const App = () => {
 
         <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-5xl w-full grid md:grid-cols-2">
-            <div className="bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 p-8 sm:p-12 text-white relative overflow-hidden">
+            <div className="bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 p-12 text-white relative overflow-hidden">
               <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
               <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24" />
               
@@ -1175,13 +1174,13 @@ const App = () => {
                     <BookOpen className="w-10 h-10 text-orange-500" />
                   </div>
                   <div>
-                    <h1 className="text-3xl sm:text-4xl font-bold">ReadCrew</h1>
-                    <p className="text-orange-100 text-sm sm:text-base">Share • Inspire • Discover</p>
+                    <h1 className="text-4xl font-bold">ReadCrew</h1>
+                    <p className="text-orange-100">Share • Inspire • Discover</p>
                   </div>
                 </div>
 
-                <h2 className="text-2xl sm:text-3xl font-bold mb-4">Let's make reading a habit</h2>
-                <p className="text-orange-100 mb-8 leading-relaxed text-sm sm:text-base">
+                <h2 className="text-3xl font-bold mb-4">Let's make reading a habit</h2>
+                <p className="text-orange-100 mb-8 leading-relaxed">
                   Join thousands of book lovers sharing their reading journeys, discovering new favorites, and building a vibrant reading community.
                 </p>
 
@@ -1195,18 +1194,18 @@ const App = () => {
                       <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
                         <Icon className="w-5 h-5" />
                       </div>
-                      <span className="text-sm sm:text-base">{text}</span>
+                      <span>{text}</span>
                     </div>
                   ))}
                 </div>
               </div>
             </div>
 
-            <div className="p-8 sm:p-12">
+            <div className="p-12">
               {!showOTP ? (
                 <>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-                  <p className="text-gray-600 mb-8 text-sm sm:text-base">Enter your details to get started</p>
+                  <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
+                  <p className="text-gray-600 mb-8">Enter your details to get started</p>
 
                   <div className="space-y-5">
                     <div>
@@ -1248,12 +1247,16 @@ const App = () => {
                     >
                       {loading ? 'Sending OTP...' : 'Get Started →'}
                     </button>
+                    
+                    <div className="text-center text-sm text-gray-500 mt-4">
+                      <p>Note: Check console for OTP if email doesn't work</p>
+                    </div>
                   </div>
                 </>
               ) : (
                 <>
-                  <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 mb-2">Verify OTP</h2>
-                  <p className="text-gray-600 mb-8 text-sm sm:text-base">Enter the code sent to {verificationData.email}</p>
+                  <h2 className="text-3xl font-bold text-gray-800 mb-2">Verify OTP</h2>
+                  <p className="text-gray-600 mb-8">Enter the code sent to {verificationData.email}</p>
 
                   <input
                     type="text"
@@ -1293,7 +1296,7 @@ const App = () => {
     <div className="min-h-screen bg-gray-50">
       {/* Notification */}
       {notification && (
-        <div className={`notification fixed top-4 right-4 left-4 sm:left-auto sm:right-4 px-4 sm:px-6 py-3 rounded-xl font-medium text-white shadow-lg z-50 text-sm sm:text-base ${
+        <div className={`fixed top-4 right-4 px-6 py-3 rounded-xl font-medium text-white shadow-lg z-50 ${
           notification.type === 'success' ? 'bg-green-500' :
           notification.type === 'error' ? 'bg-red-500' :
           'bg-blue-500'
@@ -1304,18 +1307,17 @@ const App = () => {
 
       {/* Header */}
       <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
-              <BookOpen className="w-6 h-6 sm:w-7 sm:h-7 text-white" />
+        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
+              <BookOpen className="w-7 h-7 text-white" />
             </div>
             <div>
-              <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">ReadCrew</h1>
-              <p className="text-xs text-gray-500 hidden sm:block">Let's make reading a habit</p>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">ReadCrew</h1>
+              <p className="text-xs text-gray-500">Let's make reading a habit</p>
             </div>
           </div>
 
-          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center gap-1">
             {[
               { name: 'Home', page: 'home', icon: BookOpen },
@@ -1334,21 +1336,13 @@ const App = () => {
               >
                 <span className="flex items-center gap-2">
                   <Icon className="w-4 h-4" />
-                  <span className="hidden lg:inline">{name}</span>
+                  {name}
                 </span>
               </button>
             ))}
           </nav>
 
-          {/* Mobile Menu Button */}
-          <button
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            className="md:hidden p-2 rounded-lg hover:bg-gray-100 transition"
-          >
-            {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-          </button>
-
-          <div className="hidden md:flex items-center gap-3">
+          <div className="flex items-center gap-3">
             <button
               onClick={() => setShowProfile(true)}
               className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-100 to-red-100 hover:from-orange-200 hover:to-red-200 rounded-xl transition"
@@ -1356,380 +1350,126 @@ const App = () => {
               <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
                 {currentUser?.name?.charAt(0)}
               </div>
-              <span className="hidden lg:block font-medium text-gray-700">{currentUser?.name?.split(' ')[0]}</span>
+              <span className="hidden md:block font-medium text-gray-700">{currentUser?.name}</span>
             </button>
           </div>
         </div>
-
-        {/* Mobile Navigation Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden bg-white border-t border-gray-100 p-4">
-            <div className="flex flex-col space-y-2">
-              {[
-                { name: 'Home', page: 'home', icon: BookOpen },
-                { name: 'Shared Stories', page: 'donation', icon: Gift },
-                { name: 'Book Reviews', page: 'reviews', icon: Star },
-                { name: 'Recommendations', page: 'recommend', icon: Sparkles }
-              ].map(({ name, page, icon: Icon }) => (
-                <button
-                  key={page}
-                  onClick={() => {
-                    setCurrentPage(page);
-                    setIsMenuOpen(false);
-                  }}
-                  className={`flex items-center gap-3 px-4 py-3 rounded-xl font-medium transition-all w-full ${
-                    currentPage === page
-                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
-                      : 'text-gray-600 hover:bg-gray-100'
-                  }`}
-                >
-                  <Icon className="w-5 h-5" />
-                  {name}
-                </button>
-              ))}
-              <button
-                onClick={() => {
-                  setShowProfile(true);
-                  setIsMenuOpen(false);
-                }}
-                className="flex items-center gap-3 px-4 py-3 rounded-xl font-medium text-gray-600 hover:bg-gray-100 w-full"
-              >
-                <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                  {currentUser?.name?.charAt(0)}
-                </div>
-                Profile
-              </button>
-            </div>
-          </div>
-        )}
       </header>
 
-      {/* Home Page - Removed duplicate header text */}
+      {/* Home Page */}
       {currentPage === 'home' && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-          {/* Navigation Buttons */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 mb-8 sm:mb-12">
-            <button
-              onClick={() => setCurrentPage('donation')}
-              className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition text-center border-2 border-transparent hover:border-blue-300"
-            >
-              <Gift className="w-8 h-8 sm:w-10 sm:h-10 text-blue-600 mx-auto mb-2 sm:mb-3" />
-              <h3 className="font-bold text-gray-900 text-sm sm:text-base">Shared Stories</h3>
-            </button>
-            <button
-              onClick={() => setCurrentPage('reviews')}
-              className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition text-center border-2 border-transparent hover:border-purple-300"
-            >
-              <Star className="w-8 h-8 sm:w-10 sm:h-10 text-purple-600 mx-auto mb-2 sm:mb-3" />
-              <h3 className="font-bold text-gray-900 text-sm sm:text-base">Book Reviews</h3>
-            </button>
-            <button
-              onClick={() => setCurrentPage('recommend')}
-              className="bg-white rounded-xl sm:rounded-2xl p-4 sm:p-6 shadow-lg hover:shadow-xl transition text-center border-2 border-transparent hover:border-orange-300"
-            >
-              <Sparkles className="w-8 h-8 sm:w-10 sm:h-10 text-orange-600 mx-auto mb-2 sm:mb-3" />
-              <h3 className="font-bold text-gray-900 text-sm sm:text-base">AI Recommendations</h3>
-            </button>
-          </div>
-
-          {/* Top Trending Books Section */}
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl p-4 sm:p-8 mb-8 sm:mb-12 border border-gray-100">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4 sm:mb-6">
-              <div className="flex items-center gap-2 sm:gap-3">
-                <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-orange-600" />
-                <h2 className="text-xl sm:text-3xl font-bold text-gray-900">Trending Books</h2>
-              </div>
-              <button
-                onClick={fetchTrendingBooks}
-                disabled={trendingLoading}
-                className="w-full sm:w-auto px-4 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50 flex items-center justify-center gap-2 text-sm"
-              >
-                {trendingLoading ? (
-                  <>
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4" />
-                    Refresh
-                  </>
-                )}
-              </button>
-            </div>
-
-            {trendingLoading && trendingBooks.length === 0 ? (
-              <div className="space-y-4">
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <div key={i} className="animate-pulse flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
-                    <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-white font-bold">
-                      {i}
-                    </div>
-                    <div className="flex-1">
-                      <div className="h-4 bg-gray-300 rounded w-3/4 mb-2" />
-                      <div className="h-3 bg-gray-200 rounded w-1/2" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-2 sm:space-y-3">
-                {trendingBooks.map((book, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      setSelectedBook(book);
-                      setShowBookModal(true);
-                    }}
-                    className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 rounded-xl transition-all hover:shadow-md text-left group"
-                  >
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-sm sm:text-lg shrink-0">
-                      {index + 1}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 text-sm sm:text-lg group-hover:text-orange-600 transition truncate">
-                        {book.title}
-                      </h3>
-                      <p className="text-gray-600 text-xs sm:text-sm truncate">by {book.author}</p>
-                    </div>
-                    <Search className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 group-hover:text-orange-500 transition shrink-0" />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <p className="text-xs sm:text-sm text-gray-500 text-center mt-4 sm:mt-6">
-              <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 inline mr-1" />
-              Powered by Groq AI
-            </p>
-          </div>
-
-          {/* Featured Stories Section */}
-          <div className="mb-8 sm:mb-12">
-            <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mb-4 sm:mb-6 flex items-center gap-2">
-              <Gift className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600" />
-              Featured Stories
-            </h2>
-            {donations.length === 0 ? (
-              <div className="bg-white rounded-xl sm:rounded-2xl p-8 sm:p-12 text-center">
-                <Gift className="w-12 h-12 sm:w-16 sm:h-16 text-gray-300 mx-auto mb-4" />
-                <p className="text-gray-500 text-sm sm:text-base">No stories yet. Be the first to share!</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                {donations.slice(0, 3).map((donation) => (
-                  <div
-                    key={donation._id}
-                    onClick={() => handleOpenPostDetail(donation)}
-                    className="bg-white rounded-xl sm:rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition cursor-pointer group"
-                  >
-                    <div className="relative h-40 sm:h-48 overflow-hidden">
-                      {donation.image ? (
-                        <img
-                          src={donation.image}
-                          alt={donation.bookName}
-                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                        />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
-                          <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-blue-400" />
-                        </div>
-                      )}
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                      <div className="absolute bottom-3 sm:bottom-4 left-3 sm:left-4 right-3 sm:right-4">
-                        <h3 className="text-white font-bold text-base sm:text-lg truncate">{donation.bookName}</h3>
-                        <p className="text-white/80 text-xs sm:text-sm truncate">by {donation.userName}</p>
-                      </div>
-                    </div>
-                    <div className="p-3 sm:p-4">
-                      <p className="text-gray-700 text-xs sm:text-sm line-clamp-2">{donation.story}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* About Us Link Section */}
-          <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl sm:rounded-3xl p-4 sm:p-8 border border-orange-100">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
-              <div className="flex items-center gap-3 sm:gap-4">
-                <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
-                  <BookOpen className="w-6 h-6 sm:w-8 sm:h-8 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-lg sm:text-2xl font-bold text-gray-900">About ReadCrew</h2>
-                  <p className="text-gray-600 text-sm sm:text-base">Discover our story and mission</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setCurrentPage('about')}
-                className="w-full sm:w-auto px-6 sm:px-8 py-3 sm:py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105 flex items-center justify-center gap-2 text-sm sm:text-base"
-              >
-                <BookOpen className="w-4 h-4 sm:w-5 sm:h-5" />
-                Learn About Us
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* About Us Page */}
-      {currentPage === 'about' && (
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 sm:py-12">
-          <button
-            onClick={() => setCurrentPage('home')}
-            className="mb-6 sm:mb-8 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold text-sm sm:text-base"
-          >
-            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /> Back to Home
-          </button>
-
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl overflow-hidden">
-            {/* Hero Section */}
-            <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 p-6 sm:p-12 text-white">
-              <div className="flex items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
-                <div className="w-16 h-16 sm:w-20 sm:h-20 bg-white rounded-xl sm:rounded-2xl flex items-center justify-center shrink-0">
-                  <BookOpen className="w-8 h-8 sm:w-12 sm:h-12 text-orange-500" />
-                </div>
-                <div>
-                  <h1 className="text-2xl sm:text-4xl font-bold">About ReadCrew</h1>
-                  <p className="text-orange-100 text-sm sm:text-lg">Share • Inspire • Discover</p>
-                </div>
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="p-4 sm:p-8 md:p-12">
-              <div className="prose prose-sm sm:prose-lg max-w-none">
-                <p className="text-base sm:text-xl text-gray-700 leading-relaxed mb-6 sm:mb-8">
-                  ReadCrew was born from a simple yet powerful belief — reading can transform lives.
+        <div className="max-w-7xl mx-auto px-6 py-12">
+          {/* Hero Section */}
+          <div className="relative overflow-hidden rounded-3xl mb-12 text-white">
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-900/90 via-red-900/85 to-pink-900/90" />
+            <div className="relative z-10 p-12">
+              <div className="max-w-2xl">
+                <h2 className="text-5xl font-bold mb-4">Let's make reading a habit</h2>
+                <p className="text-xl text-orange-100 mb-8">
+                  Join our vibrant community of book lovers. Share stories, discover reviews, and find your next favorite book.
                 </p>
-
-                <p className="text-sm sm:text-base text-gray-700 leading-relaxed mb-4 sm:mb-6">
-                  In a fast-moving digital world where attention is constantly divided, ReadCrew stands as a space that encourages people to slow down, reflect, and reconnect with the timeless habit of reading. We are a growing community committed to nurturing curiosity, critical thinking, empathy, and imagination through books.
-                </p>
-
-                <h2 className="text-xl sm:text-2xl font-bold text-gray-900 mt-8 sm:mt-10 mb-4 sm:mb-6">Our Mission</h2>
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-6 sm:mb-8">
-                  {[
-                    "Inculcate a consistent reading habit",
-                    "Create a supportive and inspiring reading community",
-                    "Encourage meaningful discussions around books",
-                    "Make reading accessible, enjoyable, and rewarding"
-                  ].map((item, index) => (
-                    <div key={index} className="flex items-start gap-2 sm:gap-3 bg-orange-50 p-3 sm:p-4 rounded-xl">
-                      <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-xs sm:text-sm font-bold mt-0.5 shrink-0">
-                        {index + 1}
-                      </div>
-                      <p className="text-sm sm:text-base text-gray-700">{item}</p>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-6 sm:p-8 rounded-xl sm:rounded-2xl text-center mt-8 sm:mt-10">
-                  <h3 className="text-xl sm:text-2xl font-bold mb-3 sm:mb-4">Join the Crew</h3>
-                  <p className="text-base sm:text-xl mb-4 sm:mb-6">Share • Inspire • Discover</p>
-                  <button
-                    onClick={() => setCurrentPage('home')}
-                    className="w-full sm:w-auto px-6 sm:px-8 py-2 sm:py-3 bg-white text-orange-600 rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105 text-sm sm:text-base"
-                  >
-                    Start Reading Today
-                  </button>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">
+                    <Users className="w-5 h-5" />
+                    <span>{donations.length + reviews.length}+ Stories</span>
+                  </div>
+                  <div className="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">
+                    <TrendingUp className="w-5 h-5" />
+                    <span>Growing Daily</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* Book Detail Modal */}
-      {showBookModal && selectedBook && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl max-w-2xl w-full p-4 sm:p-8 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-start gap-4 mb-4 sm:mb-6">
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1 sm:mb-2 break-words">{selectedBook.title}</h2>
-                <p className="text-lg sm:text-xl text-gray-600 break-words">by {selectedBook.author}</p>
+          {/* Feature Cards */}
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            {[
+              { page: 'donation', gradient: 'from-blue-500 to-cyan-500', icon: Gift, title: 'Shared Stories', desc: 'Moments of reading, gifting, and sharing books' },
+              { page: 'reviews', gradient: 'from-purple-500 to-pink-500', icon: Star, title: 'Book Reviews', desc: 'Read and share honest book reviews' },
+              { page: 'recommend', gradient: 'from-amber-500 to-orange-500', icon: Sparkles, title: 'Recommendations', desc: 'Get personalized book suggestions' }
+            ].map(({ page, gradient, icon: Icon, title, desc }, idx) => (
+              <div
+                key={idx}
+                onClick={() => setCurrentPage(page)}
+                className="group relative overflow-hidden rounded-2xl cursor-pointer hover:shadow-2xl transform hover:scale-105 transition-all duration-300 h-64 bg-gradient-to-br from-gray-900 to-black"
+              >
+                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-90 group-hover:opacity-95 transition`} />
+                <div className="relative z-10 p-8 h-full flex flex-col justify-end text-white">
+                  <Icon className="w-12 h-12 mb-4 group-hover:scale-110 transition-transform" />
+                  <h3 className="text-2xl font-bold mb-3">{title}</h3>
+                  <p className="text-white/90 mb-4">{desc}</p>
+                  <div className="flex items-center text-sm font-semibold">
+                    Explore Now
+                  </div>
+                </div>
               </div>
-              <button
-                onClick={() => setShowBookModal(false)}
-                className="p-2 hover:bg-gray-100 rounded-full transition shrink-0"
-              >
-                <X className="w-5 h-5 sm:w-6 sm:h-6" />
-              </button>
-            </div>
+            ))}
+          </div>
 
-            <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl sm:rounded-2xl p-4 sm:p-6 mb-4 sm:mb-6">
-              <h3 className="font-semibold text-gray-900 mb-2 sm:mb-3 flex items-center gap-2 text-base sm:text-lg">
-                <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-orange-500" />
-                Why This Book?
-              </h3>
-              <p className="text-sm sm:text-base text-gray-700 leading-relaxed">{selectedBook.description}</p>
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              <button
-                onClick={() => {
-                  setShowBookModal(false);
-                  setRecommendKeywords(selectedBook.title);
-                  setCurrentPage('recommend');
-                  setTimeout(() => handleRecommendation(), 500);
-                }}
-                className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 px-4 sm:px-6 rounded-xl font-semibold hover:shadow-lg transition text-sm sm:text-base"
-              >
-                Find Similar Books
-              </button>
-              <button
-                onClick={() => setShowBookModal(false)}
-                className="px-4 sm:px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition text-sm sm:text-base"
-              >
-                Close
-              </button>
-            </div>
+          {/* Stats */}
+          <div className="grid md:grid-cols-3 gap-6">
+            {[
+              { label: 'Stories Shared', value: donations.length, icon: Gift, gradient: 'from-blue-100 to-cyan-100', color: 'text-blue-600' },
+              { label: 'Reviews Written', value: reviews.length, icon: Star, gradient: 'from-purple-100 to-pink-100', color: 'text-purple-600' },
+              { label: 'Your Activity', value: userActivity.savedPosts.length + userActivity.likedPosts.length, icon: Heart, gradient: 'from-orange-100 to-red-100', color: 'text-orange-600' }
+            ].map(({ label, value, icon: Icon, gradient, color }, idx) => (
+              <div key={idx} className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-gray-500 mb-1">{label}</p>
+                    <p className={`text-4xl font-bold ${color}`}>{value}</p>
+                  </div>
+                  <div className={`w-16 h-16 bg-gradient-to-br ${gradient} rounded-2xl flex items-center justify-center`}>
+                    <Icon className={`w-8 h-8 ${color}`} />
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
       )}
 
       {/* Shared Stories Page */}
       {currentPage === 'donation' && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
+        <div className="max-w-7xl mx-auto px-6 py-8">
           <button
             onClick={() => setCurrentPage('home')}
-            className="mb-4 sm:mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold text-sm sm:text-base"
+            className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold"
           >
-            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /> Back to Home
+            <ChevronLeft className="w-5 h-5" /> Back to Home
           </button>
 
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 sm:mb-8">
+          <div className="flex justify-between items-center mb-8">
             <div>
-              <h1 className="text-2xl sm:text-4xl font-bold text-gray-900 mb-1 sm:mb-2">Shared Stories</h1>
+              <h1 className="text-4xl font-bold text-gray-900 mb-2">Shared Stories</h1>
+              <p className="text-gray-600">Moments of reading, gifting, donating, and sharing books</p>
             </div>
             <button
               onClick={() => setShowSavedPosts(true)}
-              className="w-full sm:w-auto px-4 sm:px-6 py-2 sm:py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition flex items-center justify-center gap-2 text-sm"
+              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition flex items-center gap-2"
             >
-              <Bookmark className="w-4 h-4 sm:w-5 sm:h-5" />
-              Saved ({userActivity.savedPosts.length})
+              <Bookmark className="w-5 h-5" />
+              Saved ({userActivity.savedPosts?.length || 0})
             </button>
           </div>
 
           {/* Upload Form */}
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-8 mb-8 sm:mb-12 border border-gray-100">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900">Share Your Reading Journey</h2>
-            <div className="space-y-4 sm:space-y-6">
+          <div className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-gray-100">
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">Share Your Reading Journey</h2>
+            <div className="grid md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
                 <input
                   type="text"
                   value={donationForm.bookName}
                   onChange={(e) => setDonationForm({ ...donationForm, bookName: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition text-sm"
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition"
                   placeholder="Enter book name"
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Photo (Optional, max 10MB)</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Photo *</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -1739,40 +1479,38 @@ const App = () => {
                 />
                 <label
                   htmlFor="image-upload"
-                  className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 cursor-pointer transition bg-gray-50 hover:bg-blue-50 text-sm"
+                  className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 cursor-pointer transition bg-gray-50 hover:bg-blue-50"
                 >
-                  <Upload className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400" />
-                  <span className="text-gray-600">{donationForm.image ? 'Change Image' : 'Choose Image (optional)'}</span>
+                  <Upload className="w-5 h-5 text-gray-400" />
+                  <span className="text-gray-600">Choose Image (max 2MB)</span>
                 </label>
-                {donationForm.image && (
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Your Story *</label>
+                <textarea
+                  value={donationForm.story}
+                  onChange={(e) => setDonationForm({ ...donationForm, story: e.target.value })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition"
+                  rows="4"
+                  placeholder="Share the special moment..."
+                />
+              </div>
+              {donationForm.imagePreview && (
+                <div className="md:col-span-2">
+                  <img src={donationForm.imagePreview} alt="Preview" className="w-full h-64 object-cover rounded-xl shadow-lg" />
                   <button
                     onClick={() => setDonationForm({ ...donationForm, image: null, imagePreview: null })}
                     className="mt-2 text-sm text-red-600 hover:text-red-700"
                   >
                     Remove Image
                   </button>
-                )}
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Your Story *</label>
-                <textarea
-                  value={donationForm.story}
-                  onChange={(e) => setDonationForm({ ...donationForm, story: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition text-sm"
-                  rows="4"
-                  placeholder="Share the special moment..."
-                />
-              </div>
-              {donationForm.imagePreview && (
-                <div>
-                  <img src={donationForm.imagePreview} alt="Preview" className="w-full h-48 sm:h-64 object-cover rounded-xl shadow-lg" />
                 </div>
               )}
-              <div>
+              <div className="md:col-span-2">
                 <button
                   onClick={handleDonationSubmit}
-                  disabled={!donationForm.bookName || !donationForm.story || loading}
-                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-xl transition-all disabled:opacity-50"
+                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading}
+                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   {loading ? 'Sharing...' : 'Share My Story'}
                 </button>
@@ -1781,33 +1519,34 @@ const App = () => {
           </div>
 
           {/* Stories Grid */}
-          <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900">Community Stories</h2>
+          <h2 className="text-2xl font-bold mb-6 text-gray-900">Community Stories</h2>
           {donations.length === 0 ? (
-            <div className="text-center py-12 sm:py-20 bg-white rounded-xl sm:rounded-2xl">
-              <Gift className="w-16 h-16 sm:w-20 sm:h-20 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-sm sm:text-lg">No stories yet. Be the first to share!</p>
+            <div className="text-center py-20 bg-white rounded-2xl">
+              <Gift className="w-20 h-20 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 text-lg">No stories yet. Be the first to share!</p>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
               {donations.map(donation => (
                 <div 
                   key={donation._id} 
                   id={`post-${donation._id}`}
-                  onClick={() => handleOpenPostDetail(donation)}
-                  className="group bg-white rounded-xl sm:rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all cursor-pointer"
+                  onClick={() => {
+                    console.log('Opening post:', donation);
+                    setSelectedPost(donation);
+                    setShowPostDetail(true);
+                  }}
+                  className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all cursor-pointer"
                 >
-                  <div className="relative overflow-hidden h-40 sm:h-48">
-                    {donation.image ? (
-                      <img 
-                        src={donation.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c'} 
-                        alt={donation.bookName} 
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
-                        <BookOpen className="w-12 h-12 sm:w-16 sm:h-16 text-blue-400" />
-                      </div>
-                    )}
+                  <div className="relative overflow-hidden h-48">
+                    <img 
+                      src={donation.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'} 
+                      alt={donation.bookName} 
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      onError={(e) => {
+                        e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
+                      }}
+                    />
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     {donation.userEmail === currentUser?.email && (
                       <button
@@ -1815,53 +1554,53 @@ const App = () => {
                           e.stopPropagation();
                           handleDeleteDonation(donation._id);
                         }}
-                        className="absolute top-2 right-2 sm:top-3 sm:right-3 w-8 h-8 sm:w-10 sm:h-10 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg transition"
+                        className="absolute top-3 right-3 w-10 h-10 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg transition"
                       >
-                        <Trash2 className="w-4 h-4 sm:w-5 sm:h-5" />
+                        <Trash2 className="w-5 h-5" />
                       </button>
                     )}
-                    <div className="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4">
-                      <h3 className="text-white font-bold text-base sm:text-xl mb-1 truncate">{donation.bookName}</h3>
-                      <p className="text-white/80 text-xs sm:text-sm truncate">by {donation.userName}</p>
+                    <div className="absolute bottom-4 left-4 right-4">
+                      <h3 className="text-white font-bold text-xl mb-1">{donation.bookName}</h3>
+                      <p className="text-white/80 text-sm">by {donation.userName}</p>
                     </div>
                   </div>
-                  <div className="p-3 sm:p-5">
-                    <p className="text-gray-700 text-xs sm:text-sm line-clamp-3 mb-3 sm:mb-4">{donation.story}</p>
-                    <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-100 text-xs sm:text-sm">
+                  <div className="p-5">
+                    <p className="text-gray-700 line-clamp-3 mb-4">{donation.story}</p>
+                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleLikeDonation(donation._id);
                         }}
-                        className={`flex items-center gap-1 sm:gap-2 transition ${
-                          userActivity.likedPosts.includes(donation._id) ? 'text-pink-600' : 'text-gray-400 hover:text-pink-600'
+                        className={`flex items-center gap-2 transition ${
+                          userActivity.likedPosts?.includes(donation._id) ? 'text-pink-600' : 'text-gray-400 hover:text-pink-600'
                         }`}
                       >
-                        <Heart className={`w-3 h-3 sm:w-4 sm:h-4 ${userActivity.likedPosts.includes(donation._id) ? 'fill-current' : ''}`} />
-                        <span className="font-semibold text-xs sm:text-sm">{donation.likes || 0}</span>
+                        <Heart className={`w-5 h-5 ${userActivity.likedPosts?.includes(donation._id) ? 'fill-current' : ''}`} />
+                        <span className="font-semibold">{donation.likes || 0}</span>
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleSaveDonation(donation._id);
                         }}
-                        className={`flex items-center gap-1 sm:gap-2 transition ${
-                          userActivity.savedPosts.includes(donation._id) ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
+                        className={`flex items-center gap-2 transition ${
+                          userActivity.savedPosts?.includes(donation._id) ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
                         }`}
                       >
-                        <Bookmark className={`w-3 h-3 sm:w-4 sm:h-4 ${userActivity.savedPosts.includes(donation._id) ? 'fill-current' : ''}`} />
-                        <span className="font-semibold text-xs sm:text-sm">{donation.saves || 0}</span>
+                        <Bookmark className={`w-5 h-5 ${userActivity.savedPosts?.includes(donation._id) ? 'fill-current' : ''}`} />
+                        <span className="font-semibold">{donation.saves || 0}</span>
                       </button>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
                           handleShareDonation(donation._id);
                         }}
-                        className="flex items-center gap-1 sm:gap-2 text-gray-400 hover:text-green-600 transition"
+                        className="flex items-center gap-2 text-gray-400 hover:text-green-600 transition"
                       >
-                        <Share2 className="w-3 h-3 sm:w-4 sm:h-4" />
+                        <Share2 className="w-5 h-5" />
                       </button>
-                      <span className="text-gray-400 text-xs">{new Date(donation.createdAt).toLocaleDateString().slice(0,5)}</span>
+                      <span className="text-sm text-gray-500">{new Date(donation.createdAt).toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
@@ -1873,32 +1612,32 @@ const App = () => {
 
       {/* Book Reviews Page */}
       {currentPage === 'reviews' && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <button onClick={() => setCurrentPage('home')} className="mb-4 sm:mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold text-sm sm:text-base">
-            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /> Back to Home
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
+            <ChevronLeft className="w-5 h-5" /> Back to Home
           </button>
 
-          <div className="mb-6 sm:mb-8 rounded-xl sm:rounded-2xl overflow-hidden bg-gradient-to-r from-purple-900 to-pink-900 p-6 sm:p-12">
-            <h1 className="text-2xl sm:text-4xl font-bold text-white mb-1 sm:mb-2">Book Reviews</h1>
-            <p className="text-purple-100 text-sm sm:text-base">Discover what others are reading</p>
+          <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-purple-900 to-pink-900 p-12">
+            <h1 className="text-4xl font-bold text-white mb-2">Book Reviews</h1>
+            <p className="text-purple-100">Discover what others are reading</p>
           </div>
 
           {/* Search and Actions */}
-          <div className="flex flex-col sm:flex-row gap-3 items-stretch sm:items-center mb-6 sm:mb-8">
+          <div className="flex flex-wrap gap-4 mb-8">
             <div className="flex-1 flex gap-2">
               <input
                 type="text"
-                placeholder="Search..."
+                placeholder="Search by book, author, or user..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyPress={handleSearchKeyPress}
-                className="flex-1 px-3 sm:px-4 py-2 sm:py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-sm"
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
               />
               <button 
                 onClick={handleSearchReviews}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl hover:shadow-lg transition font-medium"
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition"
               >
-                <Search className="w-4 h-4 sm:w-5 sm:h-5" />
+                Search
               </button>
               {searchQuery && (
                 <button 
@@ -1906,7 +1645,7 @@ const App = () => {
                     setSearchQuery('');
                     fetchReviews();
                   }}
-                  className="bg-gray-500 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-xl hover:bg-gray-600 transition text-sm"
+                  className="bg-red-500 text-white px-4 py-3 rounded-xl hover:bg-red-600 transition"
                 >
                   Clear
                 </button>
@@ -1914,7 +1653,7 @@ const App = () => {
             </div>
 
             <button 
-              className="w-full sm:w-auto bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-xl hover:shadow-lg transition font-medium flex items-center justify-center gap-2 text-sm"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition font-medium"
               onClick={() => setShowCreateReviewForm(!showCreateReviewForm)}
             >
               {showCreateReviewForm ? 'Cancel' : 'Write Review'}
@@ -1931,20 +1670,20 @@ const App = () => {
           )}
 
           {/* Reviews List */}
-          <div className="mt-6 sm:mt-8">
+          <div className="mt-8">
             {reviewsLoading ? (
-              <div className="flex flex-col items-center justify-center py-12 sm:py-20">
-                <div className="w-10 h-10 sm:w-12 sm:h-12 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-4"></div>
-                <p className="text-gray-600 text-sm sm:text-base">Loading reviews...</p>
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-4"></div>
+                <p className="text-gray-600">Loading reviews...</p>
               </div>
             ) : filteredReviews.length === 0 ? (
-              <div className="text-center py-12 sm:py-20 bg-white rounded-xl sm:rounded-2xl shadow-lg">
-                <p className="text-xl sm:text-2xl text-gray-700 mb-2">No reviews found</p>
-                {searchQuery && <p className="text-gray-500 text-sm">Try a different search term</p>}
+              <div className="text-center py-20 bg-white rounded-2xl shadow-lg">
+                <p className="text-2xl text-gray-700 mb-2">📖 No reviews found</p>
+                {searchQuery && <p className="text-gray-500">Try a different search term</p>}
               </div>
             ) : (
               <>
-                <div className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 px-3 sm:px-4 py-2 sm:py-3 rounded-xl mb-4 sm:mb-6 text-sm">
+                <div className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 px-4 py-3 rounded-xl mb-6">
                   {filteredReviews.length} {filteredReviews.length === 1 ? 'review' : 'reviews'} found
                 </div>
                 {filteredReviews.map((review) => (
@@ -1964,123 +1703,242 @@ const App = () => {
 
       {/* Recommendations Page */}
       {currentPage === 'recommend' && (
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
-          <button onClick={() => setCurrentPage('home')} className="mb-4 sm:mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold text-sm sm:text-base">
-            <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /> Back to Home
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
+            <ChevronLeft className="w-5 h-5" /> Back to Home
           </button>
 
-          <div className="mb-6 sm:mb-8 rounded-xl sm:rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-6 sm:p-12">
-            <h1 className="text-2xl sm:text-4xl font-bold text-white mb-1 sm:mb-2">Book Recommendations</h1>
-            <p className="text-orange-100 text-sm sm:text-base">AI-powered suggestions</p>
+          <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-12">
+            <h1 className="text-4xl font-bold text-white mb-2">Book Recommendations</h1>
+            <p className="text-orange-100">AI-powered suggestions from 24+ genres</p>
           </div>
 
-          <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-8 border border-gray-100 mb-6 sm:mb-8">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900">Find Your Next Read</h2>
-            <div className="grid md:grid-cols-2 gap-4 sm:gap-8">
+          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+            <h2 className="text-2xl font-bold mb-6 text-gray-900">Find Your Next Read</h2>
+            <div className="grid md:grid-cols-2 gap-8">
               <div>
-                <div className="relative mb-4">
-                  <Sparkles className="absolute left-3 sm:left-4 top-3 sm:top-4 text-orange-500 w-4 h-4 sm:w-5 sm:h-5" />
+                <div className="relative mb-6">
+                  <Sparkles className="absolute left-4 top-4 text-orange-500" />
                   <input
                     type="text"
                     value={recommendKeywords}
                     onChange={(e) => setRecommendKeywords(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleRecommendation()}
-                    className="w-full pl-10 sm:pl-12 pr-3 sm:pr-4 py-3 sm:py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition text-sm"
-                    placeholder="fantasy, mystery, self-help..."
+                    className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
+                    placeholder="fantasy, mystery, self-help, romance..."
                     disabled={aiLoading}
                   />
                 </div>
                 <button
                   onClick={handleRecommendation}
                   disabled={!recommendKeywords || aiLoading}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-3"
+                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4"
                 >
                   {aiLoading ? 'Getting AI Suggestions...' : 'Get AI Recommendations'}
                 </button>
                 <button
                   onClick={handleBrowseCategories}
                   disabled={aiLoading}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-3 sm:py-4 rounded-xl font-bold text-base sm:text-lg hover:shadow-xl transition-all disabled:opacity-50"
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
-                  Browse Categories
+                  Browse All Categories
                 </button>
               </div>
               
-              <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 sm:p-6">
-                <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-gray-900">AI Tips:</h3>
-                <ul className="space-y-2 text-gray-700 text-xs sm:text-sm">
+              <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6">
+                <h3 className="text-xl font-bold mb-4 text-gray-900">AI Search Tips:</h3>
+                <ul className="space-y-2 text-gray-700">
                   <li className="flex items-start gap-2">
-                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-orange-500 mt-1 shrink-0" />
-                    <span>Ask about topics</span>
+                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
+                    <span>Ask about topics: "books about space exploration"</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-orange-500 mt-1 shrink-0" />
-                    <span>Describe your mood</span>
+                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
+                    <span>Describe your mood: "lighthearted romance novels"</span>
                   </li>
                   <li className="flex items-start gap-2">
-                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-orange-500 mt-1 shrink-0" />
-                    <span>Compare authors</span>
+                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
+                    <span>Compare authors: "books similar to Stephen King"</span>
+                  </li>
+                  <li className="flex items-start gap-2">
+                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
+                    <span>Powered by Groq Llama 3.3 · 70B</span>
                   </li>
                 </ul>
               </div>
             </div>
           </div>
 
-          {/* AI Streaming Response - Fixed overflow */}
+          {/* AI Streaming Response */}
           {(aiLoading || aiResponse) && (
-            <div className="bg-white rounded-xl sm:rounded-2xl shadow-xl p-4 sm:p-8 border border-gray-100 mb-6 sm:mb-8">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 mb-4 sm:mb-6">
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center shrink-0">
-                    <Sparkles className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-                  </div>
-                  <div>
-                    <h2 className="text-lg sm:text-2xl font-bold text-gray-900">AI Recommendations</h2>
-                    <p className="text-xs text-gray-500">Powered by Groq</p>
-                  </div>
+            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">AI Recommendations</h2>
+                  <p className="text-sm text-gray-500">Powered by Groq · Llama 3.3</p>
                 </div>
                 {!aiLoading && (
                   <button
                     onClick={() => setAiResponse('')}
-                    className="sm:ml-auto text-gray-400 hover:text-gray-600 transition text-sm"
+                    className="ml-auto text-gray-400 hover:text-gray-600 transition"
                   >
                     Clear
                   </button>
                 )}
               </div>
 
-              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-4 sm:p-6 border border-orange-100 min-h-24 sm:min-h-32 overflow-x-auto">
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 border border-orange-100 min-h-32">
                 {aiLoading && !aiResponse && (
-                  <div className="flex items-center gap-2 sm:gap-3 text-orange-600">
-                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    <span className="text-xs sm:text-sm font-medium">Finding books...</span>
+                  <div className="flex items-center gap-3 text-orange-600">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="text-sm font-medium">Finding perfect books for you...</span>
                   </div>
                 )}
 
                 <div
-                  className="text-gray-800 leading-relaxed text-xs sm:text-base break-words"
+                  className="text-gray-800 leading-relaxed text-base"
                   dangerouslySetInnerHTML={{
                     __html: aiResponse
                       .replace(/\*\*(.*?)\*\*/g, '<strong class="text-orange-700">$1</strong>')
-                      .replace(/\n\n/g, '</p><p class="mt-3 sm:mt-4">')
+                      .replace(/\n\n/g, '</p><p class="mt-4">')
                       .replace(/\n/g, '<br/>')
                   }}
                 />
 
+                {/* Blinking cursor while streaming */}
                 {aiLoading && aiResponse && (
-                  <span className="inline-block w-0.5 h-3 sm:h-5 bg-orange-500 animate-pulse ml-0.5 align-middle" />
+                  <span className="inline-block w-0.5 h-5 bg-orange-500 animate-pulse ml-0.5 align-middle" />
                 )}
+              </div>
+            </div>
+          )}
+
+          {/* Old static recommendations (fallback) */}
+          {recommendations.length > 0 && (
+            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+              <div className="flex items-center justify-between mb-8">
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {recommendations[0].type === 'category' ? 'Recommended Categories' : 
+                   recommendations[0].type === 'keyword' ? `Results for "${recommendations[0].keyword}"` : 
+                   'Popular Recommendations'}
+                </h2>
+                <button
+                  onClick={() => setRecommendations([])}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  Clear Results
+                </button>
+              </div>
+
+              <div className="space-y-8">
+                {recommendations.map((rec, idx) => (
+                  <div key={idx} className="border border-gray-200 rounded-2xl overflow-hidden">
+                    {rec.type === 'category' ? (
+                      <div>
+                        <div className="bg-gradient-to-r from-orange-100 to-red-100 p-6">
+                          <div className="flex items-center gap-3">
+                            <span className="text-2xl">{rec.emoji}</span>
+                            <div>
+                              <h3 className="text-xl font-bold text-gray-900">{rec.category}</h3>
+                              <p className="text-gray-600">{rec.description}</p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-6">
+                          <h4 className="font-semibold text-gray-700 mb-4">Recommended Books:</h4>
+                          <div className="grid md:grid-cols-2 gap-4">
+                            {rec.books.map((book, bookIdx) => (
+                              <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <h5 className="font-bold text-gray-900">{book.title}</h5>
+                                    <p className="text-sm text-gray-600">by {book.author}</p>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                    <span className="text-sm font-semibold">{book.rating}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : rec.type === 'keyword' ? (
+                      <div>
+                        <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-6">
+                          <h3 className="text-xl font-bold text-gray-900">Books matching "{rec.keyword}"</h3>
+                        </div>
+                        <div className="p-6">
+                          <div className="grid md:grid-cols-2 gap-4">
+                            {rec.books.map((book, bookIdx) => (
+                              <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <h5 className="font-bold text-gray-900">{book.title}</h5>
+                                    <p className="text-sm text-gray-600">by {book.author}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                        {book.category}
+                                      </span>
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                    <span className="text-sm font-semibold">{book.rating}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div className="bg-gradient-to-r from-green-100 to-teal-100 p-6">
+                          <h3 className="text-xl font-bold text-gray-900">{rec.title}</h3>
+                        </div>
+                        <div className="p-6">
+                          <div className="grid md:grid-cols-2 gap-4">
+                            {rec.books.map((book, bookIdx) => (
+                              <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
+                                <div className="flex justify-between items-start mb-2">
+                                  <div>
+                                    <h5 className="font-bold text-gray-900">{book.title}</h5>
+                                    <p className="text-sm text-gray-600">by {book.author}</p>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                        {book.category}
+                                      </span>
+                                    </p>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                    <span className="text-sm font-semibold">{book.rating}</span>
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
           {/* Quick Category Grid */}
           {recommendations.length === 0 && !aiResponse && !aiLoading && (
-            <div className="mt-6 sm:mt-8">
-              <h2 className="text-lg sm:text-2xl font-bold mb-4 sm:mb-6 text-gray-900">Popular Categories</h2>
-              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-2 sm:gap-4">
+            <div className="mt-8">
+              <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Categories</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {BOOK_RECOMMENDATIONS.slice(0, 12).map(category => (
                   <button
                     key={category.id}
@@ -2088,10 +1946,10 @@ const App = () => {
                       setRecommendKeywords(category.category.toLowerCase());
                       setTimeout(() => handleRecommendation(), 100);
                     }}
-                    className="bg-white rounded-lg sm:rounded-xl p-2 sm:p-4 shadow-sm hover:shadow-md transition text-center border border-gray-200 hover:border-orange-300"
+                    className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition text-center border border-gray-200 hover:border-orange-300"
                   >
-                    <div className="text-xl sm:text-2xl mb-1 sm:mb-2">{category.emoji}</div>
-                    <p className="text-xs sm:text-sm font-medium text-gray-700 truncate">{category.category}</p>
+                    <div className="text-2xl mb-2">{category.emoji}</div>
+                    <p className="text-sm font-medium text-gray-700 truncate">{category.category}</p>
                   </button>
                 ))}
               </div>
@@ -2100,25 +1958,519 @@ const App = () => {
         </div>
       )}
 
-      {/* All other pages and modals remain the same but with responsive classes added */}
-      {/* ... (remaining code for modals and footer) ... */}
-
-      {/* Footer */}
-      <footer className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white py-8 sm:py-12 mt-12 sm:mt-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6">
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4 sm:gap-0">
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="w-8 h-8 sm:w-12 sm:h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-lg sm:rounded-xl flex items-center justify-center shrink-0">
-                <BookOpen className="w-4 h-4 sm:w-7 sm:h-7 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg sm:text-2xl font-bold">ReadCrew</h3>
-                <p className="text-gray-400 text-xs sm:text-sm hidden sm:block">Let's make reading a habit</p>
+      {/* Profile Modal */}
+      {showProfile && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
+          if (e.target === e.currentTarget) setShowProfile(false);
+        }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b bg-gradient-to-r from-orange-500 to-red-500 text-white sticky top-0">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-orange-500 text-2xl font-bold">
+                    {currentUser?.name?.charAt(0)}
+                  </div>
+                  <div>
+                    <h2 className="text-2xl font-bold">{currentUser?.name}</h2>
+                    <p className="text-orange-100">{currentUser?.email}</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowProfile(false)} className="text-white hover:text-orange-100 p-2">
+                  <X className="w-6 h-6" />
+                </button>
               </div>
             </div>
-            <div className="text-center sm:text-right">
-              <p className="text-gray-400 text-xs sm:text-sm">© {new Date().getFullYear()} ReadCrew</p>
-              <p className="text-gray-500 text-xs mt-1">Made for book lovers</p>
+            
+            <div className="p-6">
+              {/* Reading Goal Section */}
+              <div className="mb-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-100">
+                <div className="flex justify-between items-center mb-4">
+                  <div className="flex items-center gap-2">
+                    <Target className="w-6 h-6 text-blue-600" />
+                    <h3 className="text-xl font-bold text-gray-900">Reading Goal</h3>
+                  </div>
+                  <button
+                    onClick={() => setShowGoalModal(true)}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
+                  >
+                    <Edit className="w-4 h-4" /> Edit Goal
+                  </button>
+                </div>
+                <p className="text-gray-700">
+                  <span className="text-3xl font-bold text-blue-600">{readingGoal.monthly}</span> books this month
+                </p>
+                <div className="mt-4">
+                  <p className="text-sm font-semibold text-gray-700 mb-2">Books to Read:</p>
+                  {readingGoal.books.length === 0 ? (
+                    <p className="text-gray-500 text-sm">No books added yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {readingGoal.books.map((book, idx) => (
+                        <div key={idx} className="flex items-center gap-2 text-sm">
+                          <button
+                            onClick={() => handleToggleBook(idx)}
+                            className={`w-5 h-5 rounded flex items-center justify-center ${book.completed ? 'bg-green-500' : 'bg-gray-200'}`}
+                          >
+                            {book.completed && <Check className="w-3 h-3 text-white" />}
+                          </button>
+                          <span className={book.completed ? 'line-through text-gray-500' : 'text-gray-700'}>{book.title}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 mb-6">
+                <button
+                  onClick={() => { setShowProfile(false); setShowLikedPosts(true); }}
+                  className="bg-gradient-to-br from-pink-50 to-white p-4 rounded-xl border border-pink-100 hover:border-pink-300 transition cursor-pointer text-center"
+                >
+                  <Heart className="w-8 h-8 text-pink-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-gray-900">{userActivity.likedPosts?.length || 0}</p>
+                  <p className="text-sm text-gray-600">Liked</p>
+                </button>
+                <button
+                  onClick={() => { setShowProfile(false); setShowSavedPosts(true); }}
+                  className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-xl border border-blue-100 hover:border-blue-300 transition cursor-pointer text-center"
+                >
+                  <Bookmark className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-gray-900">{userActivity.savedPosts?.length || 0}</p>
+                  <p className="text-sm text-gray-600">Saved</p>
+                </button>
+                <button
+                  onClick={() => { setShowProfile(false); setShowSharedPosts(true); }}
+                  className="bg-gradient-to-br from-green-50 to-white p-4 rounded-xl border border-green-100 hover:border-green-300 transition cursor-pointer text-center"
+                >
+                  <Share2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
+                  <p className="text-2xl font-bold text-gray-900">{userActivity.sharedPosts?.length || 0}</p>
+                  <p className="text-sm text-gray-600">Shared</p>
+                </button>
+              </div>
+              
+              <button
+                onClick={handleLogout}
+                className="w-full bg-gradient-to-r from-red-500 to-pink-500 text-white py-3 rounded-xl font-semibold hover:shadow-xl transition flex items-center justify-center gap-2"
+              >
+                <LogOut className="w-5 h-5" /> Logout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Goal Modal */}
+      {showGoalModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
+          if (e.target === e.currentTarget) setShowGoalModal(false);
+        }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold mb-6">Set Reading Goal</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-2">Books to read this month</label>
+                <input
+                  type="number"
+                  value={readingGoal.monthly}
+                  onChange={(e) => setReadingGoal({ ...readingGoal, monthly: parseInt(e.target.value) || 0 })}
+                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
+                  min="0"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-2">Books you want to read</label>
+                <div className="flex gap-2 mb-3">
+                  <input
+                    type="text"
+                    value={newBook}
+                    onChange={(e) => setNewBook(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddBook()}
+                    className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
+                    placeholder="Add a book..."
+                  />
+                  <button
+                    onClick={handleAddBook}
+                    className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700"
+                  >
+                    <Plus className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {readingGoal.books.map((book, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
+                      <button
+                        onClick={() => handleToggleBook(idx)}
+                        className={`w-6 h-6 rounded flex items-center justify-center ${book.completed ? 'bg-green-500' : 'bg-gray-200'}`}
+                      >
+                        {book.completed && <Check className="w-4 h-4 text-white" />}
+                      </button>
+                      <span className={`flex-1 ${book.completed ? 'line-through text-gray-500' : ''}`}>{book.title}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowGoalModal(false)}
+                  className="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleUpdateGoal}
+                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:shadow-lg"
+                >
+                  Save Goal
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Saved Posts Modal */}
+      {showSavedPosts && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
+          if (e.target === e.currentTarget) setShowSavedPosts(false);
+        }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b bg-gradient-to-r from-blue-500 to-cyan-500 text-white sticky top-0">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <Bookmark className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-2xl font-bold">Saved Posts</h2>
+                    <p className="text-blue-100">{donations.filter(d => userActivity.savedPosts?.includes(d._id)).length} posts saved</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowSavedPosts(false)} className="text-white hover:text-blue-100 p-2">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {donations.filter(d => userActivity.savedPosts?.includes(d._id)).length === 0 ? (
+                <div className="text-center py-12">
+                  <Bookmark className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No saved posts yet</p>
+                  <p className="text-sm text-gray-400 mt-2">Click the bookmark icon on any post to save it</p>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {donations.filter(d => userActivity.savedPosts?.includes(d._id)).map(donation => (
+                    <div 
+                      key={donation._id} 
+                      className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-4 border border-blue-100 hover:border-blue-300 transition cursor-pointer" 
+                      onClick={() => { 
+                        setShowSavedPosts(false); 
+                        setSelectedPost(donation);
+                        setShowPostDetail(true);
+                      }}
+                    >
+                      <div className="flex gap-3">
+                        <img 
+                          src={donation.image} 
+                          alt={donation.bookName} 
+                          className="w-20 h-20 object-cover rounded-lg"
+                          onError={(e) => {
+                            e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
+                          }}
+                        />
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg mb-1">{donation.bookName}</h3>
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{donation.story}</p>
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>by {donation.userName}</span>
+                            <span className="text-blue-600 font-semibold">View →</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Liked Posts Modal */}
+      {showLikedPosts && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
+          if (e.target === e.currentTarget) setShowLikedPosts(false);
+        }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b bg-gradient-to-r from-pink-500 to-red-500 text-white sticky top-0">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <Heart className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-2xl font-bold">Liked Posts</h2>
+                    <p className="text-pink-100">{donations.filter(d => userActivity.likedPosts?.includes(d._id)).length} posts liked</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowLikedPosts(false)} className="text-white hover:text-pink-100 p-2">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {donations.filter(d => userActivity.likedPosts?.includes(d._id)).length === 0 ? (
+                <div className="text-center py-12">
+                  <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No liked posts yet</p>
+                  <p className="text-sm text-gray-400 mt-2">Click the heart icon on any post to like it</p>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {donations.filter(d => userActivity.likedPosts?.includes(d._id)).map(donation => (
+                    <div 
+                      key={donation._id} 
+                      className="bg-gradient-to-br from-pink-50 to-white rounded-xl p-4 border border-pink-100 hover:border-pink-300 transition cursor-pointer" 
+                      onClick={() => { 
+                        setShowLikedPosts(false); 
+                        setSelectedPost(donation);
+                        setShowPostDetail(true);
+                      }}
+                    >
+                      <div className="flex gap-3">
+                        <img 
+                          src={donation.image} 
+                          alt={donation.bookName} 
+                          className="w-20 h-20 object-cover rounded-lg"
+                          onError={(e) => {
+                            e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
+                          }}
+                        />
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg mb-1">{donation.bookName}</h3>
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{donation.story}</p>
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>by {donation.userName}</span>
+                            <span className="text-pink-600 font-semibold">View →</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Shared Posts Modal */}
+      {showSharedPosts && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
+          if (e.target === e.currentTarget) setShowSharedPosts(false);
+        }}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b bg-gradient-to-r from-green-500 to-emerald-500 text-white sticky top-0">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <Share2 className="w-8 h-8" />
+                  <div>
+                    <h2 className="text-2xl font-bold">Shared Posts</h2>
+                    <p className="text-green-100">{donations.filter(d => userActivity.sharedPosts?.includes(d._id)).length} posts shared</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowSharedPosts(false)} className="text-white hover:text-green-100 p-2">
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              {donations.filter(d => userActivity.sharedPosts?.includes(d._id)).length === 0 ? (
+                <div className="text-center py-12">
+                  <Share2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500">No shared posts yet</p>
+                  <p className="text-sm text-gray-400 mt-2">Click the share icon on any post to mark it as shared</p>
+                </div>
+              ) : (
+                <div className="grid md:grid-cols-2 gap-6">
+                  {donations.filter(d => userActivity.sharedPosts?.includes(d._id)).map(donation => (
+                    <div 
+                      key={donation._id} 
+                      className="bg-gradient-to-br from-green-50 to-white rounded-xl p-4 border border-green-100 hover:border-green-300 transition cursor-pointer" 
+                      onClick={() => { 
+                        setShowSharedPosts(false); 
+                        setSelectedPost(donation);
+                        setShowPostDetail(true);
+                      }}
+                    >
+                      <div className="flex gap-3">
+                        <img 
+                          src={donation.image} 
+                          alt={donation.bookName} 
+                          className="w-20 h-20 object-cover rounded-lg"
+                          onError={(e) => {
+                            e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
+                          }}
+                        />
+                        <div className="flex-1">
+                          <h3 className="font-bold text-lg mb-1">{donation.bookName}</h3>
+                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{donation.story}</p>
+                          <div className="flex items-center justify-between text-xs text-gray-500">
+                            <span>by {donation.userName}</span>
+                            <span className="text-green-600 font-semibold">View →</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Post Detail Modal - FIXED */}
+      {showPostDetail && selectedPost && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100]" onClick={(e) => {
+          if (e.target === e.currentTarget) setShowPostDetail(false);
+        }}>
+          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+            <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
+              <button
+                onClick={() => setShowPostDetail(false)}
+                className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
+              >
+                <ArrowLeft className="w-5 h-5" />
+                Back
+              </button>
+              <button
+                onClick={() => setShowPostDetail(false)}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6">
+              {/* Image Section */}
+              <div className="relative rounded-2xl overflow-hidden mb-6">
+                <img 
+                  src={selectedPost.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'} 
+                  alt={selectedPost.bookName}
+                  className="w-full h-96 object-cover"
+                  onError={(e) => {
+                    e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
+                  }}
+                />
+                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
+                  <h1 className="text-3xl font-bold text-white mb-2">{selectedPost.bookName}</h1>
+                  <p className="text-white/80">Shared by {selectedPost.userName}</p>
+                </div>
+                
+                {selectedPost.userEmail === currentUser?.email && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (window.confirm('Are you sure you want to delete this story?')) {
+                        handleDeleteDonation(selectedPost._id);
+                        setShowPostDetail(false);
+                      }
+                    }}
+                    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white p-3 rounded-full shadow-lg"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+              
+              {/* Story Content */}
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold mb-4 text-gray-900">The Story</h2>
+                <div className="bg-gray-50 rounded-xl p-6">
+                  <p className="text-gray-700 text-lg leading-relaxed whitespace-pre-line">
+                    {selectedPost.story}
+                  </p>
+                </div>
+              </div>
+              
+              {/* Stats and Actions */}
+              <div className="flex items-center justify-between border-t border-gray-200 pt-6">
+                <div className="flex items-center gap-2 text-gray-500">
+                  <Clock className="w-4 h-4" />
+                  <span>{new Date(selectedPost.createdAt).toLocaleDateString('en-US', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}</span>
+                </div>
+                
+                <div className="flex items-center gap-4">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLikeDonation(selectedPost._id);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                      userActivity.likedPosts?.includes(selectedPost._id) 
+                        ? 'bg-pink-50 text-pink-600 border border-pink-200'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Heart className={`w-5 h-5 ${userActivity.likedPosts?.includes(selectedPost._id) ? 'fill-current' : ''}`} />
+                    <span className="font-semibold">{selectedPost.likes || 0}</span>
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleSaveDonation(selectedPost._id);
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
+                      userActivity.savedPosts?.includes(selectedPost._id)
+                        ? 'bg-blue-50 text-blue-600 border border-blue-200'
+                        : 'text-gray-600 hover:bg-gray-100'
+                    }`}
+                  >
+                    <Bookmark className={`w-5 h-5 ${userActivity.savedPosts?.includes(selectedPost._id) ? 'fill-current' : ''}`} />
+                    <span className="font-semibold">{selectedPost.saves || 0}</span>
+                  </button>
+                  
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleShareDonation(selectedPost._id);
+                      if (navigator.share) {
+                        navigator.share({
+                          title: `Check out this story about ${selectedPost.bookName}`,
+                          text: selectedPost.story.substring(0, 100) + '...',
+                          url: window.location.href,
+                        }).catch(() => {});
+                      }
+                    }}
+                    className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+                  >
+                    <Share2 className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Footer */}
+      <footer className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white py-12 mt-20">
+        <div className="max-w-7xl mx-auto px-6">
+          <div className="flex flex-col md:flex-row justify-between items-center">
+            <div className="flex items-center gap-3 mb-6 md:mb-0">
+              <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+                <BookOpen className="w-7 h-7 text-white" />
+              </div>
+              <div>
+                <h3 className="text-2xl font-bold">ReadCrew</h3>
+                <p className="text-gray-400">Let's make reading a habit</p>
+              </div>
+            </div>
+            <div className="text-center md:text-right">
+              <p className="text-gray-400">© {new Date().getFullYear()} ReadCrew Community</p>
+              <p className="text-gray-500 text-sm mt-1">Made with loves for book lovers</p>
             </div>
           </div>
         </div>
