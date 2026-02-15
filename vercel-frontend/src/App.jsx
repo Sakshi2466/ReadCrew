@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios'; // ✅ MUST BE AT THE TOP
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
 
-// ✅ CORRECT IMPORT
-import { donationAPI, reviewAPI, otpAPI, checkBackendConnection } from './services/api';
+// ✅ Import API functions
+import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, getTrendingBooks } from './services/api';
+
+// ✅ Define API_URL for axios calls
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
@@ -157,7 +161,28 @@ const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
 const validateName = (name) => name && name.trim().length >= 2;
 
-// ReviewCard Component
+// Helper function to parse AI response into structured book data
+const parseAIBooksResponse = (text) => {
+  const books = [];
+  const lines = text.split('\n\n');
+  
+  for (const line of lines) {
+    // Match **Title by Author** pattern
+    const titleMatch = line.match(/\*\*(.+?)\s+by\s+(.+?)\*\*/);
+    if (titleMatch) {
+      const title = titleMatch[1].trim();
+      const author = titleMatch[2].trim();
+      // Get description (text after the title line)
+      const description = line.replace(/\*\*.*?\*\*/, '').trim();
+      
+      books.push({ title, author, description });
+    }
+  }
+  
+  return books;
+};
+
+// ReviewCard Component - FIXED: Using global API_URL
 const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState({
@@ -168,14 +193,12 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   });
   const [loading, setLoading] = useState(false);
 
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
   const handleDelete = async () => {
     if (!window.confirm('Are you sure you want to delete this review?')) return;
     
     try {
       setLoading(true);
-      await axios.delete(`${API_URL}/reviews/${review._id}`);
+      await axios.delete(`${API_URL}/api/reviews/${review._id}`);
       onDelete(review._id);
     } catch (error) {
       console.error('Error deleting review:', error);
@@ -188,7 +211,7 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   const handleUpdate = async () => {
     try {
       setLoading(true);
-      const response = await axios.put(`${API_URL}/reviews/${review._id}`, editForm);
+      const response = await axios.put(`${API_URL}/api/reviews/${review._id}`, editForm);
       if (response.data.success) {
         onUpdate();
         setIsEditing(false);
@@ -313,7 +336,7 @@ const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
   );
 };
 
-// CreateReviewForm Component
+// CreateReviewForm Component - FIXED: Using global API_URL
 const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
   const [formData, setFormData] = useState({
     bookName: '',
@@ -322,8 +345,6 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
     sentiment: 'positive'
   });
   const [loading, setLoading] = useState(false);
-
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -344,7 +365,7 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
         sentiment: formData.sentiment
       };
 
-      const response = await axios.post(`${API_URL}/reviews`, reviewData);
+      const response = await axios.post(`${API_URL}/api/reviews`, reviewData);
       
       if (response.data.success) {
         onReviewCreated(response.data.review);
@@ -448,9 +469,6 @@ const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
   );
 };
 
-// Import axios
-import axios from 'axios';
-
 const App = () => {
   // Authentication states
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -495,13 +513,22 @@ const App = () => {
   const [reviewForm, setReviewForm] = useState({ bookName: '', author: '', review: '', sentiment: 'positive' });
   const [recommendKeywords, setRecommendKeywords] = useState('');
   const [recommendations, setRecommendations] = useState([]);
+  
+  // ✅ AI streaming states
+  const [aiResponse, setAiResponse] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  
+  // ✅ Trending books states
+  const [trendingBooks, setTrendingBooks] = useState([]);
+  const [trendingLoading, setTrendingLoading] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [showBookModal, setShowBookModal] = useState(false);
+  
   const [readingGoal, setReadingGoal] = useState({ monthly: 0, books: [] });
   const [newBook, setNewBook] = useState('');
   
   // Selected post for detail view
   const [selectedPost, setSelectedPost] = useState(null);
-
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   // ✅ Check backend connection on startup (silently)
   useEffect(() => {
@@ -546,16 +573,52 @@ const App = () => {
       }
     }
 
-    // Load from backend immediately instead of localStorage
+    // Load from backend
     loadDonationsFromBackend();
     loadReviewsFromBackend();
   }, []);
+
+  // ✅ Fetch trending books on mount
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchTrendingBooks();
+    }
+  }, [isLoggedIn]);
+
+  // ✅ Function to fetch trending books
+  const fetchTrendingBooks = async () => {
+    setTrendingLoading(true);
+    let response = '';
+    
+    try {
+      await getTrendingBooks(
+        (token) => { response += token; },
+        () => {
+          // Parse the AI response to extract books
+          const books = parseAIBooksResponse(response);
+          setTrendingBooks(books.slice(0, 5)); // Top 5
+          setTrendingLoading(false);
+        }
+      );
+    } catch (error) {
+      console.error('Error fetching trending books:', error);
+      setTrendingLoading(false);
+      // Fallback to static data
+      setTrendingBooks([
+        { title: 'Atomic Habits', author: 'James Clear', description: 'Transform your life with tiny changes' },
+        { title: 'The Hobbit', author: 'J.R.R. Tolkien', description: 'Epic fantasy adventure' },
+        { title: 'Educated', author: 'Tara Westover', description: 'Powerful memoir of transformation' },
+        { title: '1984', author: 'George Orwell', description: 'Dystopian masterpiece' },
+        { title: 'The Alchemist', author: 'Paulo Coelho', description: 'Journey of self-discovery' }
+      ]);
+    }
+  };
 
   // ========== BOOK REVIEWS FUNCTIONS ==========
   const fetchReviews = async () => {
     try {
       setReviewsLoading(true);
-      const response = await axios.get(`${API_URL}/reviews`, {
+      const response = await axios.get(`${API_URL}/api/reviews`, {
         params: { userEmail: currentUser?.email || '' }
       });
 
@@ -579,7 +642,7 @@ const App = () => {
 
     try {
       setReviewsLoading(true);
-      const response = await axios.get(`${API_URL}/reviews/search`, {
+      const response = await axios.get(`${API_URL}/api/reviews/search`, {
         params: { 
           query: searchQuery,
           userEmail: currentUser?.email || ''
@@ -936,73 +999,89 @@ const App = () => {
     setLoading(false);
   };
 
-  // ========== RECOMMENDATION FUNCTIONS ==========
+  // ========== RECOMMENDATION FUNCTIONS - WITH AI STREAMING ==========
 
-  const handleRecommendation = () => {
+  const handleRecommendation = async () => {
     if (!recommendKeywords.trim()) {
       alert('Please enter what you want to read about');
       return;
     }
 
-    const keywords = recommendKeywords.toLowerCase().trim();
-    
-    const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
-      const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
-      return categoryText.includes(keywords) || 
-             category.books.some(book => 
-               book.title.toLowerCase().includes(keywords) || 
-               book.author.toLowerCase().includes(keywords)
-             );
-    });
+    // Clear previous results and start streaming
+    setRecommendations([]);
+    setAiResponse('');
+    setAiLoading(true);
 
-    if (matchingCategories.length > 0) {
-      const results = [];
-      matchingCategories.forEach(category => {
-        results.push({
-          type: 'category',
-          category: category.category,
-          emoji: category.emoji,
-          description: category.description,
-          books: category.books
-        });
+    try {
+      await getBookRecommendations(
+        recommendKeywords,
+        (token) => setAiResponse(prev => prev + token),  // stream tokens in
+        () => setAiLoading(false)                        // done streaming
+      );
+    } catch (error) {
+      console.error('AI recommendation error:', error);
+      setAiLoading(false);
+      
+      // Fallback to static logic if AI fails
+      const keywords = recommendKeywords.toLowerCase().trim();
+      const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
+        const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
+        return categoryText.includes(keywords) || 
+               category.books.some(book => 
+                 book.title.toLowerCase().includes(keywords) || 
+                 book.author.toLowerCase().includes(keywords)
+               );
       });
-      setRecommendations(results);
-    } else {
-      const allBooks = BOOK_RECOMMENDATIONS.flatMap(category => 
-        category.books.map(book => ({
-          ...book,
-          category: category.category,
-          emoji: category.emoji
-        }))
-      );
 
-      const filteredBooks = allBooks.filter(book => 
-        book.title.toLowerCase().includes(keywords) || 
-        book.author.toLowerCase().includes(keywords)
-      );
-
-      if (filteredBooks.length > 0) {
-        setRecommendations([
-          {
-            type: 'keyword',
-            keyword: keywords,
-            books: filteredBooks.slice(0, 10)
-          }
-        ]);
+      if (matchingCategories.length > 0) {
+        const results = [];
+        matchingCategories.forEach(category => {
+          results.push({
+            type: 'category',
+            category: category.category,
+            emoji: category.emoji,
+            description: category.description,
+            books: category.books
+          });
+        });
+        setRecommendations(results);
       } else {
-        setRecommendations([
-          {
-            type: 'popular',
-            title: 'Most Popular Books',
-            books: [
-              { title: 'Atomic Habits', author: 'James Clear', category: 'Motivational / Self-Help', rating: 4.8 },
-              { title: 'The Hobbit', author: 'J.R.R. Tolkien', category: 'Fantasy', rating: 4.7 },
-              { title: 'To Kill a Mockingbird', author: 'Harper Lee', category: 'Literary Fiction', rating: 4.8 },
-              { title: 'The Diary of a Young Girl', author: 'Anne Frank', category: 'Biography', rating: 4.8 },
-              { title: 'The Power of Now', author: 'Eckhart Tolle', category: 'Philosophy', rating: 4.3 }
-            ]
-          }
-        ]);
+        const allBooks = BOOK_RECOMMENDATIONS.flatMap(category => 
+          category.books.map(book => ({
+            ...book,
+            category: category.category,
+            emoji: category.emoji
+          }))
+        );
+
+        const filteredBooks = allBooks.filter(book => 
+          book.title.toLowerCase().includes(keywords) || 
+          book.author.toLowerCase().includes(keywords)
+        );
+
+        if (filteredBooks.length > 0) {
+          setRecommendations([
+            {
+              type: 'keyword',
+              keyword: keywords,
+              books: filteredBooks.slice(0, 10)
+            }
+          ]);
+        } else {
+          setRecommendations([
+            {
+              type: 'popular',
+              title: 'Most Popular Books',
+              books: [
+                { title: 'Atomic Habits', author: 'James Clear', category: 'Motivational / Self-Help', rating: 4.8 },
+                { title: 'The Hobbit', author: 'J.R.R. Tolkien', category: 'Fantasy', rating: 4.7 },
+                { title: 'To Kill a Mockingbird', author: 'Harper Lee', category: 'Literary Fiction', rating: 4.8 },
+                { title: 'The Diary of a Young Girl', author: 'Anne Frank', category: 'Biography', rating: 4.8 },
+                { title: 'The Power of Now', author: 'Eckhart Tolle', category: 'Philosophy', rating: 4.3 }
+              ]
+            }
+          ]);
+        }
       }
     }
   };
@@ -1276,76 +1355,314 @@ const App = () => {
         </div>
       </header>
 
-      {/* Home Page */}
+      {/* Home Page - NEW DESIGN */}
       {currentPage === 'home' && (
         <div className="max-w-7xl mx-auto px-6 py-12">
           {/* Hero Section */}
-          <div className="relative overflow-hidden rounded-3xl mb-12 text-white">
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-900/90 via-red-900/85 to-pink-900/90" />
-            <div className="relative z-10 p-12">
-              <div className="max-w-2xl">
-                <h2 className="text-5xl font-bold mb-4">Let's make reading a habit</h2>
-                <p className="text-xl text-orange-100 mb-8">
-                  Join our vibrant community of book lovers. Share stories, discover reviews, and find your next favorite book.
-                </p>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">
-                    <Users className="w-5 h-5" />
-                    <span>{donations.length + reviews.length}+ Stories</span>
-                  </div>
-                  <div className="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">
-                    <TrendingUp className="w-5 h-5" />
-                    <span>Growing Daily</span>
-                  </div>
+          <div className="relative overflow-hidden rounded-3xl mb-12 bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 text-white p-12">
+            <div className="relative z-10">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center">
+                  <BookOpen className="w-10 h-10 text-orange-500" />
+                </div>
+                <div>
+                  <h1 className="text-5xl font-bold">ReadCrew</h1>
+                  <p className="text-orange-100">Let's make reading a habit</p>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Feature Cards */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {[
-              { page: 'donation', gradient: 'from-blue-500 to-cyan-500', icon: Gift, title: 'Shared Stories', desc: 'Moments of reading, gifting, and sharing books' },
-              { page: 'reviews', gradient: 'from-purple-500 to-pink-500', icon: Star, title: 'Book Reviews', desc: 'Read and share honest book reviews' },
-              { page: 'recommend', gradient: 'from-amber-500 to-orange-500', icon: Sparkles, title: 'Recommendations', desc: 'Get personalized book suggestions' }
-            ].map(({ page, gradient, icon: Icon, title, desc }, idx) => (
-              <div
-                key={idx}
-                onClick={() => setCurrentPage(page)}
-                className="group relative overflow-hidden rounded-2xl cursor-pointer hover:shadow-2xl transform hover:scale-105 transition-all duration-300 h-64 bg-gradient-to-br from-gray-900 to-black"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-90 group-hover:opacity-95 transition`} />
-                <div className="relative z-10 p-8 h-full flex flex-col justify-end text-white">
-                  <Icon className="w-12 h-12 mb-4 group-hover:scale-110 transition-transform" />
-                  <h3 className="text-2xl font-bold mb-3">{title}</h3>
-                  <p className="text-white/90 mb-4">{desc}</p>
-                  <div className="flex items-center text-sm font-semibold">
-                    Explore Now
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Navigation Buttons */}
+          <div className="grid grid-cols-3 gap-4 mb-12">
+            <button
+              onClick={() => setCurrentPage('donation')}
+              className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition text-center border-2 border-transparent hover:border-blue-300"
+            >
+              <Gift className="w-10 h-10 text-blue-600 mx-auto mb-3" />
+              <h3 className="font-bold text-gray-900">Shared Stories</h3>
+            </button>
+            <button
+              onClick={() => setCurrentPage('reviews')}
+              className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition text-center border-2 border-transparent hover:border-purple-300"
+            >
+              <Star className="w-10 h-10 text-purple-600 mx-auto mb-3" />
+              <h3 className="font-bold text-gray-900">Book Reviews</h3>
+            </button>
+            <button
+              onClick={() => setCurrentPage('recommend')}
+              className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition text-center border-2 border-transparent hover:border-orange-300"
+            >
+              <Sparkles className="w-10 h-10 text-orange-600 mx-auto mb-3" />
+              <h3 className="font-bold text-gray-900">AI Recommendations</h3>
+            </button>
           </div>
 
-          {/* Stats */}
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { label: 'Stories Shared', value: donations.length, icon: Gift, gradient: 'from-blue-100 to-cyan-100', color: 'text-blue-600' },
-              { label: 'Reviews Written', value: reviews.length, icon: Star, gradient: 'from-purple-100 to-pink-100', color: 'text-purple-600' },
-              { label: 'Your Activity', value: userActivity.savedPosts.length + userActivity.likedPosts.length, icon: Heart, gradient: 'from-orange-100 to-red-100', color: 'text-orange-600' }
-            ].map(({ label, value, icon: Icon, gradient, color }, idx) => (
-              <div key={idx} className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 mb-1">{label}</p>
-                    <p className={`text-4xl font-bold ${color}`}>{value}</p>
+          {/* Top Trending Books Section */}
+          <div className="bg-white rounded-3xl shadow-xl p-8 mb-12 border border-gray-100">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-8 h-8 text-orange-600" />
+                <h2 className="text-3xl font-bold text-gray-900">Top Trending Books</h2>
+              </div>
+              <button
+                onClick={fetchTrendingBooks}
+                disabled={trendingLoading}
+                className="px-4 py-2 bg-orange-500 text-white rounded-xl hover:bg-orange-600 transition disabled:opacity-50 flex items-center gap-2"
+              >
+                {trendingLoading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Refresh
+                  </>
+                )}
+              </button>
+            </div>
+
+            {trendingLoading && trendingBooks.length === 0 ? (
+              <div className="space-y-4">
+                {[1, 2, 3, 4, 5].map((i) => (
+                  <div key={i} className="animate-pulse flex items-center gap-4 p-4 bg-gray-50 rounded-xl">
+                    <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center text-white font-bold">
+                      {i}
+                    </div>
+                    <div className="flex-1">
+                      <div className="h-4 bg-gray-300 rounded w-3/4 mb-2" />
+                      <div className="h-3 bg-gray-200 rounded w-1/2" />
+                    </div>
                   </div>
-                  <div className={`w-16 h-16 bg-gradient-to-br ${gradient} rounded-2xl flex items-center justify-center`}>
-                    <Icon className={`w-8 h-8 ${color}`} />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {trendingBooks.map((book, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setSelectedBook(book);
+                      setShowBookModal(true);
+                    }}
+                    className="w-full flex items-center gap-4 p-4 bg-gradient-to-r from-orange-50 to-red-50 hover:from-orange-100 hover:to-red-100 rounded-xl transition-all hover:shadow-md text-left group"
+                  >
+                    <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-lg shrink-0">
+                      {index + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="font-bold text-gray-900 text-lg group-hover:text-orange-600 transition truncate">
+                        {book.title}
+                      </h3>
+                      <p className="text-gray-600 text-sm">by {book.author}</p>
+                    </div>
+                    <Search className="w-5 h-5 text-gray-400 group-hover:text-orange-500 transition shrink-0" />
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <p className="text-sm text-gray-500 text-center mt-6">
+              <Sparkles className="w-4 h-4 inline mr-1" />
+              Powered by Groq AI · Updated in real-time
+            </p>
+          </div>
+
+          {/* Featured Stories Section */}
+          <div className="mb-12">
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center gap-2">
+              <Gift className="w-6 h-6 text-blue-600" />
+              Featured Stories
+            </h2>
+            {donations.length === 0 ? (
+              <div className="bg-white rounded-2xl p-12 text-center">
+                <Gift className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                <p className="text-gray-500">No stories yet. Be the first to share!</p>
+              </div>
+            ) : (
+              <div className="grid md:grid-cols-3 gap-6">
+                {donations.slice(0, 3).map((donation) => (
+                  <div
+                    key={donation._id}
+                    onClick={() => handleOpenPostDetail(donation)}
+                    className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition cursor-pointer group"
+                  >
+                    <div className="relative h-48 overflow-hidden">
+                      <img
+                        src={donation.image}
+                        alt={donation.bookName}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute bottom-4 left-4 right-4">
+                        <h3 className="text-white font-bold text-lg">{donation.bookName}</h3>
+                        <p className="text-white/80 text-sm">by {donation.userName}</p>
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <p className="text-gray-700 text-sm line-clamp-2">{donation.story}</p>
+                    </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* About Us Link Section */}
+          <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-3xl p-8 border border-orange-100">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-6">
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 bg-gradient-to-r from-orange-500 to-red-500 rounded-2xl flex items-center justify-center">
+                  <BookOpen className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">About ReadCrew</h2>
+                  <p className="text-gray-600">Discover our story and mission</p>
                 </div>
               </div>
-            ))}
+              <a
+                href="/about"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage('about');
+                }}
+                className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105 flex items-center gap-2"
+              >
+                <BookOpen className="w-5 h-5" />
+                Learn About Us
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* About Us Page */}
+      {currentPage === 'about' && (
+        <div className="max-w-4xl mx-auto px-6 py-12">
+          <button
+            onClick={() => setCurrentPage('home')}
+            className="mb-8 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold"
+          >
+            <ChevronLeft className="w-5 h-5" /> Back to Home
+          </button>
+
+          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
+            {/* Hero Section */}
+            <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 p-12 text-white">
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-20 h-20 bg-white rounded-2xl flex items-center justify-center">
+                  <BookOpen className="w-12 h-12 text-orange-500" />
+                </div>
+                <div>
+                  <h1 className="text-4xl font-bold">About ReadCrew</h1>
+                  <p className="text-orange-100 text-lg">Read. Reflect. Rise.</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-8 md:p-12">
+              <div className="prose prose-lg max-w-none">
+                <p className="text-xl text-gray-700 leading-relaxed mb-8">
+                  ReadCrew was born from a simple yet powerful belief — reading can transform lives.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-6">
+                  In a fast-moving digital world where attention is constantly divided, ReadCrew stands as a space that encourages people to slow down, reflect, and reconnect with the timeless habit of reading. We are a growing community committed to nurturing curiosity, critical thinking, empathy, and imagination through books.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-6">
+                  At ReadCrew, we believe that reading is not just a hobby — it is a lifelong skill that shapes perspectives, builds confidence, and expands possibilities. Whether it's fiction that deepens emotional intelligence, non-fiction that sharpens knowledge, or poetry that touches the soul, every page holds the power to change someone's life.
+                </p>
+
+                <h2 className="text-2xl font-bold text-gray-900 mt-10 mb-6">Our Mission</h2>
+                
+                <div className="grid md:grid-cols-2 gap-4 mb-8">
+                  {[
+                    "Inculcate a consistent reading habit",
+                    "Create a supportive and inspiring reading community",
+                    "Encourage meaningful discussions around books",
+                    "Make reading accessible, enjoyable, and rewarding"
+                  ].map((item, index) => (
+                    <div key={index} className="flex items-start gap-3 bg-orange-50 p-4 rounded-xl">
+                      <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold mt-0.5">
+                        {index + 1}
+                      </div>
+                      <p className="text-gray-700">{item}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <p className="text-gray-700 leading-relaxed mb-6">
+                  ReadCrew is not just a website — it is a movement towards mindful growth. We aim to bring together readers from different backgrounds who share one common goal: becoming better thinkers, better communicators, and better humans through the habit of reading.
+                </p>
+
+                <p className="text-gray-700 leading-relaxed mb-6">
+                  We are building a space where stories are shared, ideas are exchanged, and readers grow — together.
+                </p>
+
+                <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-8 rounded-2xl text-center mt-10">
+                  <h3 className="text-2xl font-bold mb-4">Join the Crew</h3>
+                  <p className="text-xl mb-6">Read. Reflect. Rise.</p>
+                  <button
+                    onClick={() => setCurrentPage('home')}
+                    className="px-8 py-3 bg-white text-orange-600 rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105"
+                  >
+                    Start Reading Today
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Book Detail Modal */}
+      {showBookModal && selectedBook && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-8">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-3xl font-bold text-gray-900 mb-2">{selectedBook.title}</h2>
+                <p className="text-xl text-gray-600">by {selectedBook.author}</p>
+              </div>
+              <button
+                onClick={() => setShowBookModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-2xl p-6 mb-6">
+              <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-orange-500" />
+                Why This Book?
+              </h3>
+              <p className="text-gray-700 leading-relaxed">{selectedBook.description}</p>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowBookModal(false);
+                  setRecommendKeywords(selectedBook.title);
+                  setCurrentPage('recommend');
+                  setTimeout(() => handleRecommendation(), 500);
+                }}
+                className="flex-1 bg-gradient-to-r from-orange-500 to-red-500 text-white py-3 px-6 rounded-xl font-semibold hover:shadow-lg transition"
+              >
+                Find Similar Books
+              </button>
+              <button
+                onClick={() => setShowBookModal(false)}
+                className="px-6 py-3 bg-gray-200 text-gray-700 rounded-xl font-semibold hover:bg-gray-300 transition"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1536,21 +1853,21 @@ const App = () => {
           </div>
 
           {/* Search and Actions */}
-          <div className="controls mb-8">
-            <div className="search-bar flex-1">
+          <div className="flex gap-3 items-center mb-8">
+            <div className="flex-1 flex gap-2">
               <input
                 type="text"
                 placeholder="Search by book, author, or user..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onKeyPress={handleSearchKeyPress}
-                className="flex-1 border-none px-4 py-3 outline-none rounded-xl"
+                className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
               />
               <button 
                 onClick={handleSearchReviews}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition"
+                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition font-medium"
               >
-                🔍 Search
+                <Search className="w-5 h-5" />
               </button>
               {searchQuery && (
                 <button 
@@ -1558,18 +1875,18 @@ const App = () => {
                     setSearchQuery('');
                     fetchReviews();
                   }}
-                  className="bg-red-500 text-white px-4 py-3 rounded-xl hover:bg-red-600 transition ml-2"
+                  className="bg-gray-500 text-white px-4 py-3 rounded-xl hover:bg-gray-600 transition"
                 >
-                  ✕ Clear
+                  Clear
                 </button>
               )}
             </div>
 
             <button 
-              className="create-review-btn bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition font-medium"
+              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition font-medium flex items-center gap-2"
               onClick={() => setShowCreateReviewForm(!showCreateReviewForm)}
             >
-              {showCreateReviewForm ? '✕ Cancel' : '✍️ Write Review'}
+              {showCreateReviewForm ? 'Cancel' : 'Write Review'}
             </button>
           </div>
 
@@ -1583,20 +1900,20 @@ const App = () => {
           )}
 
           {/* Reviews List */}
-          <div className="reviews-container mt-8">
+          <div className="mt-8">
             {reviewsLoading ? (
-              <div className="loading flex flex-col items-center justify-center py-20">
-                <div className="spinner w-12 h-12 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-4"></div>
+              <div className="flex flex-col items-center justify-center py-20">
+                <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-4"></div>
                 <p className="text-gray-600">Loading reviews...</p>
               </div>
             ) : filteredReviews.length === 0 ? (
-              <div className="no-reviews text-center py-20 bg-white rounded-2xl shadow-lg">
-                <p className="text-2xl text-gray-700 mb-2">📖 No reviews found</p>
+              <div className="text-center py-20 bg-white rounded-2xl shadow-lg">
+                <p className="text-2xl text-gray-700 mb-2">No reviews found</p>
                 {searchQuery && <p className="text-gray-500">Try a different search term</p>}
               </div>
             ) : (
               <>
-                <div className="reviews-count bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 px-4 py-3 rounded-xl mb-6">
+                <div className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 px-4 py-3 rounded-xl mb-6">
                   {filteredReviews.length} {filteredReviews.length === 1 ? 'review' : 'reviews'} found
                 </div>
                 {filteredReviews.map((review) => (
@@ -1623,7 +1940,7 @@ const App = () => {
 
           <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-12">
             <h1 className="text-4xl font-bold text-white mb-2">Book Recommendations</h1>
-            <p className="text-orange-100">Find your next favorite book from 24+ genres</p>
+            <p className="text-orange-100">AI-powered suggestions from 24+ genres</p>
           </div>
 
           <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
@@ -1639,48 +1956,99 @@ const App = () => {
                     onKeyPress={(e) => e.key === 'Enter' && handleRecommendation()}
                     className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
                     placeholder="fantasy, mystery, self-help, romance..."
+                    disabled={aiLoading}
                   />
                 </div>
                 <button
                   onClick={handleRecommendation}
-                  disabled={!recommendKeywords}
+                  disabled={!recommendKeywords || aiLoading}
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4"
                 >
-                  Get Recommendations
+                  {aiLoading ? 'Getting AI Suggestions...' : 'Get AI Recommendations'}
                 </button>
                 <button
                   onClick={handleBrowseCategories}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all"
+                  disabled={aiLoading}
+                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   Browse All Categories
                 </button>
               </div>
               
               <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6">
-                <h3 className="text-xl font-bold mb-4 text-gray-900">Search Tips:</h3>
+                <h3 className="text-xl font-bold mb-4 text-gray-900">AI Search Tips:</h3>
                 <ul className="space-y-2 text-gray-700">
                   <li className="flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Search by genre: "fantasy", "sci-fi", "romance"</span>
+                    <span>Ask about topics: "books about space exploration"</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Search by mood: "adventure", "mystery", "inspiration"</span>
+                    <span>Describe your mood: "lighthearted romance novels"</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Search by author: "Stephen King", "J.K. Rowling"</span>
+                    <span>Compare authors: "books similar to Stephen King"</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Click "Browse All Categories" to see all genres</span>
+                    <span>Powered by Groq Llama 3.3 · 70B</span>
                   </li>
                 </ul>
               </div>
             </div>
           </div>
 
-          {/* Recommendations Display */}
+          {/* AI Streaming Response */}
+          {(aiLoading || aiResponse) && (
+            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+              <div className="flex items-center gap-3 mb-6">
+                <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold text-gray-900">AI Recommendations</h2>
+                  <p className="text-sm text-gray-500">Powered by Groq · Llama 3.3</p>
+                </div>
+                {!aiLoading && (
+                  <button
+                    onClick={() => setAiResponse('')}
+                    className="ml-auto text-gray-400 hover:text-gray-600 transition"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 border border-orange-100 min-h-32">
+                {aiLoading && !aiResponse && (
+                  <div className="flex items-center gap-3 text-orange-600">
+                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    <span className="text-sm font-medium">Finding perfect books for you...</span>
+                  </div>
+                )}
+
+                <div
+                  className="text-gray-800 leading-relaxed text-base"
+                  dangerouslySetInnerHTML={{
+                    __html: aiResponse
+                      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-orange-700">$1</strong>')
+                      .replace(/\n\n/g, '</p><p class="mt-4">')
+                      .replace(/\n/g, '<br/>')
+                  }}
+                />
+
+                {/* Blinking cursor while streaming */}
+                {aiLoading && aiResponse && (
+                  <span className="inline-block w-0.5 h-5 bg-orange-500 animate-pulse ml-0.5 align-middle" />
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Static recommendations (fallback) */}
           {recommendations.length > 0 && (
             <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
               <div className="flex items-center justify-between mb-8">
@@ -1797,7 +2165,7 @@ const App = () => {
           )}
 
           {/* Quick Category Grid */}
-          {recommendations.length === 0 && (
+          {recommendations.length === 0 && !aiResponse && !aiLoading && (
             <div className="mt-8">
               <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Categories</h2>
               <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
@@ -2261,7 +2629,7 @@ const App = () => {
             </div>
             <div className="text-center md:text-right">
               <p className="text-gray-400">© {new Date().getFullYear()} ReadCrew Community</p>
-              <p className="text-gray-500 text-sm mt-1">Made with loves for book lovers</p>
+              <p className="text-gray-500 text-sm mt-1">Made with love for book lovers</p>
             </div>
           </div>
         </div>
