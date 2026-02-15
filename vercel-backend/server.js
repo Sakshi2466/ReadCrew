@@ -1,25 +1,26 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
-require('dotenv').config();
 
 const app = express();
 
-// CORS Configuration
+// ✅ FIXED CORS Configuration
 app.use(cors({
-  origin: [
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'https://readcrew.vercel.app',
-    'https://*.vercel.app'
-  ],
+  origin: '*', // Allow all origins for local development
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-  credentials: true
+  credentials: true,
+  exposedHeaders: ['Content-Type', 'Cache-Control', 'Connection']
 }));
+
+// Handle preflight requests
+app.options('*', cors());
 
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
+
+// ... rest of your server.js
 
 // ✅ ROOT ENDPOINT
 app.get('/', (req, res) => {
@@ -34,6 +35,7 @@ app.get('/', (req, res) => {
       reviews: '/api/reviews',
       otp: '/api/otp/send-otp',
       verify: '/api/otp/verify-otp'
+      
     }
   });
 });
@@ -71,12 +73,14 @@ const authRoutes = require('./routes/auth');
 const donationRoutes = require('./routes/donation');
 const reviewRoutes = require('./routes/review');
 const otpRoutes = require('./routes/otp');
+const recommendRoutes = require('./routes/recommend');
 
 // Mount routes
 app.use('/api/auth', authRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/otp', otpRoutes);
+app.use('/api/recommend', recommendRoutes);
 
 // 404 handler
 app.use('*', (req, res) => {

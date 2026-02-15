@@ -16,13 +16,15 @@
   "author": "Gunwanti Gaikwad",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "mongoose": "^8.0.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "groq-sdk": "^0.37.0",
     "jsonwebtoken": "^9.0.0",
-    "validator": "^13.11.0",
-    "bcryptjs": "^2.4.3"
+    "mongoose": "^8.23.0",
+    "nodemailer": "^8.0.1",
+    "validator": "^13.11.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
