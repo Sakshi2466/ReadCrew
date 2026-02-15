@@ -1605,7 +1605,7 @@ const App = () => {
 
                 <div className="bg-gradient-to-r from-orange-500 to-red-500 text-white p-8 rounded-2xl text-center mt-10">
                   <h3 className="text-2xl font-bold mb-4">Join the Crew</h3>
-                  <p className="text-xl mb-6">Read. Reflect. Rise.</p>
+                  <p className="text-xl mb-6">Share • Inspire • Discover</p>
                   <button
                     onClick={() => setCurrentPage('home')}
                     className="px-8 py-3 bg-white text-orange-600 rounded-xl font-semibold hover:shadow-lg transition transform hover:scale-105"
