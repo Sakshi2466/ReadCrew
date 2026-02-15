@@ -1703,7 +1703,7 @@ const App = () => {
             <h2 className="text-2xl font-bold mb-6 text-gray-900">Share Your Reading Journey</h2>
             <div className="grid md:grid-cols-2 gap-6">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Post Title *</label>
                 <input
                   type="text"
                   value={donationForm.bookName}
@@ -1738,7 +1738,7 @@ const App = () => {
                 )}
               </div>
               <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Your Story *</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Write Post *</label>
                 <textarea
                   value={donationForm.story}
                   onChange={(e) => setDonationForm({ ...donationForm, story: e.target.value })}
