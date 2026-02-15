@@ -839,8 +839,9 @@ const App = () => {
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('Image size should be less than 2MB');
+      // Check file size - increased to 10MB
+      if (file.size > 10 * 1024 * 1024) {
+        alert('Image size should be less than 10MB');
         return;
       }
       const reader = new FileReader();
@@ -852,8 +853,8 @@ const App = () => {
   };
 
   const handleDonationSubmit = async () => {
-    if (!donationForm.bookName || !donationForm.story || !donationForm.image) {
-      alert('Please fill all fields');
+    if (!donationForm.bookName || !donationForm.story) {
+      alert('Please fill all required fields');
       return;
     }
     
@@ -870,7 +871,7 @@ const App = () => {
         userEmail: currentUser.email,
         bookName: donationForm.bookName,
         story: donationForm.story,
-        image: donationForm.image,
+        image: donationForm.image, // This can be null (no image uploaded)
       };
       
       const result = await donationAPI.create(donationData);
@@ -1490,11 +1491,17 @@ const App = () => {
                     className="bg-white rounded-2xl overflow-hidden shadow-lg hover:shadow-2xl transition cursor-pointer group"
                   >
                     <div className="relative h-48 overflow-hidden">
-                      <img
-                        src={donation.image}
-                        alt={donation.bookName}
-                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      />
+                      {donation.image ? (
+                        <img
+                          src={donation.image}
+                          alt={donation.bookName}
+                          className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+                          <BookOpen className="w-16 h-16 text-blue-400" />
+                        </div>
+                      )}
                       <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                       <div className="absolute bottom-4 left-4 right-4">
                         <h3 className="text-white font-bold text-lg">{donation.bookName}</h3>
@@ -1691,7 +1698,7 @@ const App = () => {
             </button>
           </div>
 
-          {/* Upload Form */}
+          {/* Upload Form - Image is now optional */}
           <div className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-gray-100">
             <h2 className="text-2xl font-bold mb-6 text-gray-900">Share Your Reading Journey</h2>
             <div className="grid md:grid-cols-2 gap-6">
@@ -1706,7 +1713,7 @@ const App = () => {
                 />
               </div>
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Photo *</label>
+                <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Photo (Optional, max 10MB)</label>
                 <input
                   type="file"
                   accept="image/*"
@@ -1719,8 +1726,16 @@ const App = () => {
                   className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 cursor-pointer transition bg-gray-50 hover:bg-blue-50"
                 >
                   <Upload className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-600">Choose Image (max 2MB)</span>
+                  <span className="text-gray-600">{donationForm.image ? 'Change Image' : 'Choose Image (optional)'}</span>
                 </label>
+                {donationForm.image && (
+                  <button
+                    onClick={() => setDonationForm({ ...donationForm, image: null, imagePreview: null })}
+                    className="mt-2 text-sm text-red-600 hover:text-red-700"
+                  >
+                    Remove Image
+                  </button>
+                )}
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-semibold text-gray-700 mb-2">Your Story *</label>
@@ -1735,18 +1750,12 @@ const App = () => {
               {donationForm.imagePreview && (
                 <div className="md:col-span-2">
                   <img src={donationForm.imagePreview} alt="Preview" className="w-full h-64 object-cover rounded-xl shadow-lg" />
-                  <button
-                    onClick={() => setDonationForm({ ...donationForm, image: null, imagePreview: null })}
-                    className="mt-2 text-sm text-red-600 hover:text-red-700"
-                  >
-                    Remove Image
-                  </button>
                 </div>
               )}
               <div className="md:col-span-2">
                 <button
                   onClick={handleDonationSubmit}
-                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading}
+                  disabled={!donationForm.bookName || !donationForm.story || loading}
                   className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
                 >
                   {loading ? 'Sharing...' : 'Share My Story'}
@@ -1772,11 +1781,17 @@ const App = () => {
                   className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all cursor-pointer"
                 >
                   <div className="relative overflow-hidden h-48">
-                    <img 
-                      src={donation.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c'} 
-                      alt={donation.bookName} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
-                    />
+                    {donation.image ? (
+                      <img 
+                        src={donation.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c'} 
+                        alt={donation.bookName} 
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" 
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+                        <BookOpen className="w-16 h-16 text-blue-400" />
+                      </div>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
                     {donation.userEmail === currentUser?.email && (
                       <button
@@ -2388,7 +2403,13 @@ const App = () => {
                     >
                       <h3 className="font-bold text-lg mb-2">{donation.bookName}</h3>
                       <p className="text-sm text-gray-600 mb-3 line-clamp-2">{donation.story}</p>
-                      <img src={donation.image} alt={donation.bookName} className="w-full h-32 object-cover rounded-lg" />
+                      {donation.image ? (
+                        <img src={donation.image} alt={donation.bookName} className="w-full h-32 object-cover rounded-lg" />
+                      ) : (
+                        <div className="w-full h-32 bg-gradient-to-br from-blue-100 to-purple-100 rounded-lg flex items-center justify-center">
+                          <BookOpen className="w-12 h-12 text-blue-400" />
+                        </div>
+                      )}
                       <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
                         <span>by {donation.userName}</span>
                         <span className="text-blue-600 font-semibold">View Post →</span>
@@ -2436,7 +2457,13 @@ const App = () => {
                     >
                       <h3 className="font-bold text-lg mb-2">{donation.bookName}</h3>
                       <p className="text-sm text-gray-600 mb-3 line-clamp-2">{donation.story}</p>
-                      <img src={donation.image} alt={donation.bookName} className="w-full h-32 object-cover rounded-lg" />
+                      {donation.image ? (
+                        <img src={donation.image} alt={donation.bookName} className="w-full h-32 object-cover rounded-lg" />
+                      ) : (
+                        <div className="w-full h-32 bg-gradient-to-br from-pink-100 to-red-100 rounded-lg flex items-center justify-center">
+                          <BookOpen className="w-12 h-12 text-pink-400" />
+                        </div>
+                      )}
                       <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
                         <span>by {donation.userName}</span>
                         <span className="text-pink-600 font-semibold">View Post →</span>
@@ -2484,7 +2511,13 @@ const App = () => {
                     >
                       <h3 className="font-bold text-lg mb-2">{donation.bookName}</h3>
                       <p className="text-sm text-gray-600 mb-3 line-clamp-2">{donation.story}</p>
-                      <img src={donation.image} alt={donation.bookName} className="w-full h-32 object-cover rounded-lg" />
+                      {donation.image ? (
+                        <img src={donation.image} alt={donation.bookName} className="w-full h-32 object-cover rounded-lg" />
+                      ) : (
+                        <div className="w-full h-32 bg-gradient-to-br from-green-100 to-emerald-100 rounded-lg flex items-center justify-center">
+                          <BookOpen className="w-12 h-12 text-green-400" />
+                        </div>
+                      )}
                       <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
                         <span>by {donation.userName}</span>
                         <span className="text-green-600 font-semibold">View Post →</span>
@@ -2521,11 +2554,17 @@ const App = () => {
             <div className="p-6">
               {/* Image Section */}
               <div className="relative rounded-2xl overflow-hidden mb-6">
-                <img 
-                  src={selectedPost.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c'} 
-                  alt={selectedPost.bookName}
-                  className="w-full h-96 object-cover"
-                />
+                {selectedPost.image ? (
+                  <img 
+                    src={selectedPost.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c'} 
+                    alt={selectedPost.bookName}
+                    className="w-full h-96 object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-96 bg-gradient-to-br from-blue-100 to-purple-100 flex items-center justify-center">
+                    <BookOpen className="w-24 h-24 text-blue-400" />
+                  </div>
+                )}
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
                   <h1 className="text-3xl font-bold text-white mb-2">{selectedPost.bookName}</h1>
                   <p className="text-white/80">Shared by {selectedPost.userName}</p>
