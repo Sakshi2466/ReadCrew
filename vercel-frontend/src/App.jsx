@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
+import ReadCrewPage from './components/ReadCrewPage';
 
 // ✅ CORRECT IMPORT - Added getBookRecommendations
 import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations } from './services/api';
@@ -1323,7 +1324,7 @@ const App = () => {
               { name: 'Home', page: 'home', icon: BookOpen },
               { name: 'Shared Stories', page: 'donation', icon: Gift },
               { name: 'Book Reviews', page: 'reviews', icon: Star },
-              { name: 'Recommendations', page: 'recommend', icon: Sparkles }
+              { name: 'ReadCrew', page: 'readcrew', icon: Users } // CHANGED: Replaced Recommendations with ReadCrew
             ].map(({ name, page, icon: Icon }) => (
               <button
                 key={page}
@@ -1387,7 +1388,7 @@ const App = () => {
             {[
               { page: 'donation', gradient: 'from-blue-500 to-cyan-500', icon: Gift, title: 'Shared Stories', desc: 'Moments of reading, gifting, and sharing books' },
               { page: 'reviews', gradient: 'from-purple-500 to-pink-500', icon: Star, title: 'Book Reviews', desc: 'Read and share honest book reviews' },
-              { page: 'recommend', gradient: 'from-amber-500 to-orange-500', icon: Sparkles, title: 'Recommendations', desc: 'Get personalized book suggestions' }
+              { page: 'readcrew', gradient: 'from-amber-500 to-orange-500', icon: Users, title: 'ReadCrew', desc: 'Join reading crews and chat with fellow readers' } // CHANGED: Updated to ReadCrew
             ].map(({ page, gradient, icon: Icon, title, desc }, idx) => (
               <div
                 key={idx}
@@ -1701,7 +1702,7 @@ const App = () => {
         </div>
       )}
 
-      {/* Recommendations Page */}
+      {/* Recommendations Page - Kept for reference but hidden */}
       {currentPage === 'recommend' && (
         <div className="max-w-7xl mx-auto px-6 py-8">
           <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
@@ -1762,7 +1763,7 @@ const App = () => {
                   </li>
                   <li className="flex items-start gap-2">
                     <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Powered by Groq Llama 3.3 · 70B</span>
+                    <span>Powered by AI recommendation engine</span>
                   </li>
                 </ul>
               </div>
@@ -1778,7 +1779,7 @@ const App = () => {
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-gray-900">AI Recommendations</h2>
-                  <p className="text-sm text-gray-500">Powered by Groq · Llama 3.3</p>
+                  <p className="text-sm text-gray-500">Powered by AI recommendation engine</p>
                 </div>
                 {!aiLoading && (
                   <button
@@ -1956,6 +1957,14 @@ const App = () => {
             </div>
           )}
         </div>
+      )}
+
+      {/* ReadCrew Page - NEW */}
+      {currentPage === 'readcrew' && (
+        <ReadCrewPage 
+          currentUser={currentUser}
+          onBack={() => setCurrentPage('home')}
+        />
       )}
 
       {/* Profile Modal */}

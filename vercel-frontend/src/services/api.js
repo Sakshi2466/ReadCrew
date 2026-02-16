@@ -284,3 +284,63 @@ export const getTrendingBooks = async (onToken, onDone) => {
     throw error;
   }
 };
+// Book Crew API
+export const bookCrewAPI = {
+  getAll: async () => {
+    const response = await fetch(`${API_URL}/api/book-crews`);
+    if (!response.ok) throw new Error('Failed to fetch crews');
+    return response.json();
+  },
+  
+  getByBookName: async (bookName) => {
+    const response = await fetch(`${API_URL}/api/book-crews/book/${encodeURIComponent(bookName)}`);
+    if (!response.ok) throw new Error('Failed to fetch crew');
+    return response.json();
+  },
+  
+  join: async (crewData) => {
+    const response = await fetch(`${API_URL}/api/book-crews/join`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(crewData)
+    });
+    if (!response.ok) throw new Error('Failed to join crew');
+    return response.json();
+  },
+  
+  leave: async (bookName, userEmail) => {
+    const response = await fetch(`${API_URL}/api/book-crews/leave`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookName, userEmail })
+    });
+    if (!response.ok) throw new Error('Failed to leave crew');
+    return response.json();
+  },
+  
+  getMessages: async (bookName) => {
+    const response = await fetch(`${API_URL}/api/book-crews/messages/${encodeURIComponent(bookName)}`);
+    if (!response.ok) throw new Error('Failed to fetch messages');
+    return response.json();
+  },
+  
+  sendMessage: async (messageData) => {
+    const response = await fetch(`${API_URL}/api/book-crews/messages`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(messageData)
+    });
+    if (!response.ok) throw new Error('Failed to send message');
+    return response.json();
+  },
+  
+  updateStatus: async (bookName, userEmail, status) => {
+    const response = await fetch(`${API_URL}/api/book-crews/status`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ bookName, userEmail, status })
+    });
+    if (!response.ok) throw new Error('Failed to update status');
+    return response.json();
+  }
+};
