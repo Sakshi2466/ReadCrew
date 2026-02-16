@@ -4,8 +4,8 @@ const bookCrewSchema = new mongoose.Schema({
   bookName: {
     type: String,
     required: true,
-    unique: true,
-    trim: true
+    trim: true,
+    index: true // Add index
   },
   author: {
     type: String,
@@ -20,7 +20,6 @@ const bookCrewSchema = new mongoose.Schema({
     default: ''
   },
   members: [{
-    userId: String,
     userName: String,
     userEmail: String,
     joinedAt: {
@@ -41,6 +40,12 @@ const bookCrewSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   }
+});
+
+// Add compound index for unique book names (case-insensitive)
+bookCrewSchema.index({ bookName: 1 }, { 
+  unique: true,
+  collation: { locale: 'en', strength: 2 }
 });
 
 module.exports = mongoose.model('BookCrew', bookCrewSchema);

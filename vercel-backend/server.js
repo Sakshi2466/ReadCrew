@@ -91,6 +91,19 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/otp', otpRoutes);
 app.use('/api/recommend', recommendRoutes);
 app.use('/api/book-crews', bookCrewRoutes); // NEW
+// After other route imports
+const bookCrewRoutes = require('./routes/bookCrew');
+
+// Mount routes - make sure this is BEFORE the 404 handler
+app.use('/api/book-crews', bookCrewRoutes);
+
+// This should be AFTER all route definitions
+app.use('*', (req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route ${req.originalUrl} not found`
+  });
+});
 
 // Socket.IO for real-time chat
 const CrewMessage = require('./models/CrewMessage');
