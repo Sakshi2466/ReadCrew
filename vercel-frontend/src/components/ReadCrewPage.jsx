@@ -56,6 +56,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     });
     
     newSocket.on('new-message', (message) => {
+      console.log('📨 New message received:', message);
       setMessages(prev => [...prev, message]);
     });
     
@@ -67,6 +68,10 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     
     newSocket.on('user-stop-typing', (data) => {
       setTypingUsers(prev => prev.filter(u => u !== data.userName));
+    });
+    
+    newSocket.on('disconnect', () => {
+      console.log('❌ Socket disconnected');
     });
     
     return () => {
@@ -86,7 +91,10 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
 
   const loadCrews = async () => {
     try {
+      console.log('🔄 Loading crews...');
       const result = await bookCrewAPI.getAll();
+      console.log('📚 Crews loaded:', result);
+      
       if (result.success) {
         setAllCrews(result.crews);
         setMyCrews(result.crews.filter(c => 
@@ -94,7 +102,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
         ));
       }
     } catch (error) {
-      console.error('Error loading crews:', error);
+      console.error('❌ Error loading crews:', error);
     }
   };
 
@@ -114,12 +122,13 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
         (token) => { response += token; },
         () => {
           const books = parseAIBooksResponse(response);
+          console.log('📖 AI Suggestions:', books);
           setAiSuggestions(books.slice(0, 10));
           setAiLoading(false);
         }
       );
     } catch (error) {
-      console.error('AI suggestion error:', error);
+      console.error('❌ AI suggestion error:', error);
       setAiLoading(false);
       alert('Failed to get suggestions. Please try again.');
     }
@@ -127,42 +136,74 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
 
   const handleJoinCrew = async (book) => {
     try {
-      const result = await bookCrewAPI.join({
+      console.log('🚀 Joining crew:', book.title);
+      
+      const joinData = {
         bookName: book.title,
         author: book.author,
         userName: currentUser.name,
         userEmail: currentUser.email,
-        description: book.description
-      });
+        description: book.description || ''
+      };
+      
+      console.log('📤 Join request data:', joinData);
+      
+      const result = await bookCrewAPI.join(joinData);
+      
+      console.log('📥 Join result:', result);
 
       if (result.success) {
         alert(result.message);
         await loadCrews();
-        setView('crews');
+        
+        // If not already a member, automatically open the chat
+        if (!result.alreadyMember) {
+          const updatedCrews = await bookCrewAPI.getAll();
+          if (updatedCrews.success) {
+            const joinedCrew = updatedCrews.crews.find(c => 
+              c.bookName.toLowerCase() === book.title.toLowerCase()
+            );
+            
+            if (joinedCrew) {
+              handleOpenChat(joinedCrew);
+            } else {
+              setView('crews');
+            }
+          }
+        } else {
+          setView('crews');
+        }
+      } else {
+        alert(result.message || 'Failed to join crew');
       }
     } catch (error) {
-      console.error('Error joining crew:', error);
-      alert('Failed to join crew');
+      console.error('❌ Error joining crew:', error);
+      alert(`Failed to join crew: ${error.message}`);
     }
   };
 
   const handleOpenChat = async (crew) => {
+    console.log('💬 Opening chat for:', crew.bookName);
+    
     setSelectedCrew(crew);
     setView('chat');
     
     // Join socket room
-    if (socket) {
+    if (socket && socket.connected) {
       socket.emit('join-crew', crew.bookName);
+      console.log('🔌 Joined socket room:', crew.bookName);
     }
     
     // Load messages
     try {
       const result = await bookCrewAPI.getMessages(crew.bookName);
+      console.log('📬 Messages loaded:', result);
+      
       if (result.success) {
         setMessages(result.messages);
       }
     } catch (error) {
-      console.error('Error loading messages:', error);
+      console.error('❌ Error loading messages:', error);
     }
   };
 
@@ -170,9 +211,11 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     if (!confirm(`Are you sure you want to leave ${selectedCrew.bookName} Crew?`)) return;
     
     try {
+      console.log('👋 Leaving crew:', selectedCrew.bookName);
+      
       await bookCrewAPI.leave(selectedCrew.bookName, currentUser.email);
       
-      if (socket) {
+      if (socket && socket.connected) {
         socket.emit('leave-crew', selectedCrew.bookName);
       }
       
@@ -181,7 +224,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
       setView('crews');
       setSelectedCrew(null);
     } catch (error) {
-      console.error('Error leaving crew:', error);
+      console.error('❌ Error leaving crew:', error);
       alert('Failed to leave crew');
     }
   };
@@ -191,34 +234,46 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     
     if (!newMessage.trim()) return;
     
-    const message = {
+    const messageData = {
       bookName: selectedCrew.bookName,
       userName: currentUser.name,
       userEmail: currentUser.email,
       messageType: 'text',
-      content: newMessage,
-      createdAt: new Date().toISOString()
+      content: newMessage.trim()
     };
     
+    console.log('📤 Sending message:', messageData);
+    
     try {
-      const result = await bookCrewAPI.sendMessage(message);
+      const result = await bookCrewAPI.sendMessage(messageData);
       
-      if (result.success && socket) {
-        socket.emit('send-message', {
-          bookName: selectedCrew.bookName,
-          message: result.message
-        });
+      console.log('📥 Send result:', result);
+      
+      if (result.success) {
+        // Emit to socket for real-time delivery to others
+        if (socket && socket.connected) {
+          socket.emit('send-message', {
+            bookName: selectedCrew.bookName,
+            message: result.message
+          });
+          console.log('🔌 Message emitted to socket');
+        }
+        
+        // Add to local state immediately
+        setMessages(prev => [...prev, result.message]);
+        setNewMessage('');
+        handleStopTyping();
+      } else {
+        alert(result.message || 'Failed to send message');
       }
-      
-      setNewMessage('');
-      handleStopTyping();
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('❌ Error sending message:', error);
+      alert(`Failed to send message: ${error.message}`);
     }
   };
 
   const handleTyping = () => {
-    if (!isTyping && socket) {
+    if (!isTyping && socket && socket.connected && selectedCrew) {
       setIsTyping(true);
       socket.emit('typing', {
         bookName: selectedCrew.bookName,
@@ -231,7 +286,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
   };
 
   const handleStopTyping = () => {
-    if (isTyping && socket) {
+    if (isTyping && socket && socket.connected && selectedCrew) {
       setIsTyping(false);
       socket.emit('stop-typing', {
         bookName: selectedCrew.bookName,
@@ -249,9 +304,11 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
       return;
     }
     
+    console.log('📎 Uploading file:', file.name, file.type);
+    
     const reader = new FileReader();
     reader.onloadend = async () => {
-      const message = {
+      const messageData = {
         bookName: selectedCrew.bookName,
         userName: currentUser.name,
         userEmail: currentUser.email,
@@ -260,17 +317,28 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
         mediaUrl: reader.result
       };
       
+      console.log('📤 Sending media message');
+      
       try {
-        const result = await bookCrewAPI.sendMessage(message);
+        const result = await bookCrewAPI.sendMessage(messageData);
         
-        if (result.success && socket) {
-          socket.emit('send-message', {
-            bookName: selectedCrew.bookName,
-            message: result.message
-          });
+        console.log('📥 Media send result:', result);
+        
+        if (result.success) {
+          if (socket && socket.connected) {
+            socket.emit('send-message', {
+              bookName: selectedCrew.bookName,
+              message: result.message
+            });
+          }
+          
+          setMessages(prev => [...prev, result.message]);
+        } else {
+          alert(result.message || 'Failed to send media');
         }
       } catch (error) {
-        console.error('Error sending media:', error);
+        console.error('❌ Error sending media:', error);
+        alert('Failed to send media');
       }
     };
     
@@ -345,7 +413,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
                   key={index}
                   className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100"
                 >
-                  <div className="flex items-start justify-between gap-4">
+                  <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
                     <div className="flex-1">
                       <h4 className="text-xl font-bold text-gray-900 mb-2">{book.title}</h4>
                       <p className="text-sm text-gray-600 mb-3">by {book.author}</p>
@@ -353,7 +421,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
                     </div>
                     <button
                       onClick={() => handleJoinCrew(book)}
-                      className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition flex items-center gap-2 shrink-0"
+                      className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition flex items-center justify-center gap-2 shrink-0"
                     >
                       <UserPlus className="w-5 h-5" />
                       Join Crew
@@ -485,9 +553,12 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                if (socket) socket.emit('leave-crew', selectedCrew.bookName);
+                if (socket && socket.connected) {
+                  socket.emit('leave-crew', selectedCrew.bookName);
+                }
                 setView('crews');
                 setSelectedCrew(null);
+                setMessages([]);
               }}
               className="text-gray-600 hover:text-gray-900"
             >
@@ -508,62 +579,80 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
             className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition flex items-center gap-2"
           >
             <Leave className="w-4 h-4" />
-            Leave
+            <span className="hidden sm:inline">Leave</span>
           </button>
         </div>
 
         {/* Messages Area */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4">
-          {messages.map((msg, index) => {
-            const isOwn = msg.userEmail === currentUser.email;
-            
-            return (
-              <div
-                key={index}
-                className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-              >
-                <div className={`max-w-[70%] ${isOwn ? 'order-2' : 'order-1'}`}>
-                  {!isOwn && (
-                    <p className="text-xs text-gray-600 mb-1 px-3">{msg.userName}</p>
-                  )}
-                  
-                  <div
-                    className={`rounded-2xl px-4 py-3 ${
-                      isOwn
-                        ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
-                        : 'bg-white border border-gray-200'
-                    }`}
-                  >
-                    {msg.messageType === 'text' ? (
-                      <p className="whitespace-pre-wrap break-words">{msg.content}</p>
-                    ) : msg.messageType === 'image' ? (
-                      <div>
-                        <img
-                          src={msg.mediaUrl}
-                          alt={msg.content}
-                          className="rounded-lg max-w-full h-auto mb-2"
-                        />
-                        <p className="text-xs opacity-75">{msg.content}</p>
-                      </div>
-                    ) : msg.messageType === 'video' ? (
-                      <div>
-                        <video
-                          src={msg.mediaUrl}
-                          controls
-                          className="rounded-lg max-w-full h-auto mb-2"
-                        />
-                        <p className="text-xs opacity-75">{msg.content}</p>
-                      </div>
-                    ) : null}
+          {messages.length === 0 ? (
+            <div className="text-center py-12">
+              <MessageCircle className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">No messages yet. Start the conversation!</p>
+            </div>
+          ) : (
+            messages.map((msg, index) => {
+              const isOwn = msg.userEmail === currentUser.email;
+              const isBot = msg.userEmail === 'bot@readcrew.com';
+              
+              if (isBot) {
+                return (
+                  <div key={index} className="flex justify-center">
+                    <div className="bg-blue-100 text-blue-800 px-4 py-2 rounded-full text-sm max-w-md text-center">
+                      {msg.content}
+                    </div>
                   </div>
-                  
-                  <p className={`text-xs text-gray-500 mt-1 px-3 ${isOwn ? 'text-right' : 'text-left'}`}>
-                    {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
+                );
+              }
+              
+              return (
+                <div
+                  key={index}
+                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div className={`max-w-[70%] ${isOwn ? 'order-2' : 'order-1'}`}>
+                    {!isOwn && (
+                      <p className="text-xs text-gray-600 mb-1 px-3">{msg.userName}</p>
+                    )}
+                    
+                    <div
+                      className={`rounded-2xl px-4 py-3 ${
+                        isOwn
+                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+                          : 'bg-white border border-gray-200'
+                      }`}
+                    >
+                      {msg.messageType === 'text' ? (
+                        <p className="whitespace-pre-wrap break-words">{msg.content}</p>
+                      ) : msg.messageType === 'image' ? (
+                        <div>
+                          <img
+                            src={msg.mediaUrl}
+                            alt={msg.content}
+                            className="rounded-lg max-w-full h-auto mb-2"
+                          />
+                          <p className="text-xs opacity-75">{msg.content}</p>
+                        </div>
+                      ) : msg.messageType === 'video' ? (
+                        <div>
+                          <video
+                            src={msg.mediaUrl}
+                            controls
+                            className="rounded-lg max-w-full h-auto mb-2"
+                          />
+                          <p className="text-xs opacity-75">{msg.content}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                    
+                    <p className={`text-xs text-gray-500 mt-1 px-3 ${isOwn ? 'text-right' : 'text-left'}`}>
+                      {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
           
           {typingUsers.length > 0 && (
             <div className="text-sm text-gray-500 italic px-3">
@@ -589,6 +678,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
               type="button"
               onClick={() => fileInputRef.current?.click()}
               className="p-3 text-gray-600 hover:bg-gray-100 rounded-lg transition"
+              title="Send image or video"
             >
               <Image className="w-5 h-5" />
             </button>
@@ -615,6 +705,7 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
               type="submit"
               disabled={!newMessage.trim()}
               className="p-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:shadow-lg transition disabled:opacity-50"
+              title="Send message"
             >
               <Send className="w-5 h-5" />
             </button>
