@@ -1,9 +1,63 @@
-import React, { useState, useEffect } from 'react';
-import { BookOpen, Heart, Star, Sparkles, Menu, X, Upload, Search, ThumbsUp, ThumbsDown, Share2, Bookmark, ChevronLeft, LogOut, Users, TrendingUp, Trash2, Edit, Target, Plus, Check, ArrowLeft, Clock, Gift } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
+  Heart, MessageCircle, Bookmark, Share2, Star, Plus, ChevronRight,
+  X, Send, Image, ChevronLeft, LogOut, Camera, MoreHorizontal,
+  Flame, Sparkles, Trophy, Calendar, Lock, Eye, EyeOff, UserPlus,
+  Gift, ThumbsUp, ThumbsDown, Trash2, Edit, Target, Check, ArrowLeft,
+  Clock, TrendingUp, Menu, Upload
+} from 'lucide-react';
+
+// Import ReadCrewPage component
 import ReadCrewPage from './components/ReadCrewPage';
 
-// ✅ CORRECT IMPORT - Added getBookRecommendations
+// Import API functions
 import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations } from './services/api';
+import axios from 'axios';
+
+// ─── MOCK DATA ─────────────────────────────────────────────────────────────
+const MOCK_POSTS = [
+  {
+    id: 1, user: 'Aishwarya Rao', handle: '@readswithaish', avatar: 'AR',
+    book: 'Atomic Habits', time: '5h ago',
+    content: "Atomic Habits has totally changed the way I approach goals! Small, consistent actions really do add up. Loving the journey so far! 🌿 #habitbuilding",
+    likes: 120, comments: 18, shares: 1, saved: false, liked: false
+  },
+  {
+    id: 2, user: 'Amit', handle: '@amit_reads', avatar: 'AM',
+    book: 'Ikigai', time: '12h ago',
+    content: "Finding Ikigai has made me reflect deeply on my life purpose. Such an inspiring concept! 🌟🦋✨",
+    likes: 86, comments: 11, shares: 1, saved: false, liked: false
+  },
+  {
+    id: 3, user: 'Sakshi', handle: '@sakshi_books', avatar: 'SK',
+    book: "Man's Search for Meaning", time: '2d ago',
+    content: "Halfway through this powerful book and I'm so moved. 🌟 Viktor Frankl's insights on finding purpose in suffering are...",
+    likes: 94, comments: 7, shares: 2, saved: false, liked: false
+  }
+];
+
+const POPULAR_CREWS = [
+  { id: 1, name: 'Atomic Habits', author: 'James Clear', genre: 'Self Improvement', members: 1200, chats: 5, cover: '#C8956C' },
+  { id: 2, name: 'Fantasy Readers Guild', author: 'Various', genre: 'Fantasy', members: 920, chats: 8, cover: '#8B7355' },
+  { id: 3, name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 430, chats: 3, cover: '#A0826D' },
+];
+
+const SUGGESTED_BOOKS = [
+  { title: 'Deep Work', author: 'Cal Newport', color: '#2D2D2D' },
+  { title: 'Becoming', author: 'Michelle Obama', color: '#C4A882' },
+  { title: 'Sapiens', author: 'Yuval Harari', color: '#7B9EA6' },
+  { title: 'Atomic Habits', author: 'James Clear', color: '#E8A87C' },
+];
+
+const MOODS = [
+  { label: 'Inspired', emoji: '📕' },
+  { label: 'Emotional', emoji: '💧' },
+  { label: 'Thoughtful', emoji: '🌿' },
+  { label: 'Motivated', emoji: '🔥' },
+  { label: 'Escapism', emoji: '🔮' },
+  { label: 'Reflective', emoji: '✏️' },
+];
 
 // Book recommendations database
 const BOOK_RECOMMENDATIONS = [
@@ -158,528 +212,105 @@ const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
 const validateName = (name) => name && name.trim().length >= 2;
 
-// ReviewCard Component
-const ReviewCard = ({ review, currentUserEmail, onUpdate, onDelete }) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({
-    bookName: review.bookName,
-    author: review.author,
-    review: review.review,
-    sentiment: review.sentiment
-  });
-  const [loading, setLoading] = useState(false);
-
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-  const handleDelete = async () => {
-    if (!window.confirm('Are you sure you want to delete this review?')) return;
-    
-    try {
-      setLoading(true);
-      await axios.delete(`${API_URL}/reviews/${review._id}`);
-      onDelete(review._id);
-    } catch (error) {
-      console.error('Error deleting review:', error);
-      alert('Failed to delete review');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleUpdate = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.put(`${API_URL}/reviews/${review._id}`, editForm);
-      if (response.data.success) {
-        onUpdate();
-        setIsEditing(false);
-      }
-    } catch (error) {
-      console.error('Error updating review:', error);
-      alert('Failed to update review');
-    } finally {
-      setLoading(false);
-    }
-  };
-
+// ─── AVATAR COMPONENT ──────────────────────────────────────────────────────
+const Avatar = ({ initials, size = 'md', color = '#C8956C', src }) => {
+  const sizes = { xs: 'w-7 h-7 text-xs', sm: 'w-9 h-9 text-sm', md: 'w-11 h-11 text-base', lg: 'w-16 h-16 text-xl', xl: 'w-20 h-20 text-2xl' };
+  if (src) return <img src={src} alt={initials} className={`${sizes[size]} rounded-full object-cover`} />;
   return (
-    <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-6 hover:shadow-xl transition">
-      <div className="p-6">
-        <div className="flex justify-between items-start mb-4">
-          <div className="flex-1">
-            {isEditing ? (
-              <input
-                type="text"
-                value={editForm.bookName}
-                onChange={(e) => setEditForm({...editForm, bookName: e.target.value})}
-                className="text-xl font-bold mb-1 w-full px-3 py-2 border rounded-lg"
-                placeholder="Book Name"
-              />
-            ) : (
-              <h3 className="text-xl font-bold text-gray-900">{review.bookName}</h3>
-            )}
-            {isEditing ? (
-              <input
-                type="text"
-                value={editForm.author}
-                onChange={(e) => setEditForm({...editForm, author: e.target.value})}
-                className="text-gray-600 mb-2 w-full px-3 py-2 border rounded-lg"
-                placeholder="Author"
-              />
-            ) : (
-              <p className="text-gray-600 mb-2">by {review.author}</p>
-            )}
-          </div>
-          {review.userEmail === currentUserEmail && (
-            <div className="flex gap-2">
-              {isEditing ? (
-                <>
-                  <button 
-                    onClick={handleUpdate}
-                    disabled={loading}
-                    className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 disabled:opacity-50"
-                  >
-                    {loading ? 'Saving...' : 'Save'}
-                  </button>
-                  <button 
-                    onClick={() => setIsEditing(false)}
-                    className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400"
-                  >
-                    Cancel
-                  </button>
-                </>
-              ) : (
-                <>
-                  <button 
-                    onClick={() => setIsEditing(true)}
-                    className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg hover:bg-blue-200"
-                  >
-                    Edit
-                  </button>
-                  <button 
-                    onClick={handleDelete}
-                    disabled={loading}
-                    className="px-3 py-1 bg-red-100 text-red-600 rounded-lg hover:bg-red-200 disabled:opacity-50"
-                  >
-                    {loading ? 'Deleting...' : 'Delete'}
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-        </div>
+    <div className={`${sizes[size]} rounded-full flex items-center justify-center font-semibold text-white shrink-0`}
+      style={{ backgroundColor: color }}>
+      {initials?.slice(0, 2)}
+    </div>
+  );
+};
 
-        {isEditing ? (
-          <textarea
-            value={editForm.review}
-            onChange={(e) => setEditForm({...editForm, review: e.target.value})}
-            className="w-full px-3 py-2 border rounded-lg mb-3"
-            rows="3"
-            placeholder="Your review"
-          />
-        ) : (
-          <p className="text-gray-700 mb-4">{review.review}</p>
-        )}
+// ─── STAR RATING ───────────────────────────────────────────────────────────
+const StarRating = ({ rating = 0, onChange, size = 'sm' }) => {
+  const sz = size === 'sm' ? 'w-4 h-4' : 'w-6 h-6';
+  return (
+    <div className="flex gap-0.5">
+      {[1, 2, 3, 4, 5].map(i => (
+        <Star key={i} className={`${sz} ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} ${onChange ? 'cursor-pointer' : ''}`}
+          onClick={() => onChange?.(i)} />
+      ))}
+    </div>
+  );
+};
 
-        <div className="flex justify-between items-center pt-4 border-t border-gray-100">
-          <div className="flex items-center gap-2">
-            {isEditing ? (
-              <select
-                value={editForm.sentiment}
-                onChange={(e) => setEditForm({...editForm, sentiment: e.target.value})}
-                className="px-3 py-1 border rounded-lg"
-              >
-                <option value="positive">Positive</option>
-                <option value="negative">Negative</option>
-              </select>
+// ─── BOTTOM NAV ────────────────────────────────────────────────────────────
+const BottomNav = ({ active, setPage }) => {
+  const items = [
+    { id: 'home', icon: Home, label: 'Home' },
+    { id: 'explore', icon: Search, label: 'Explore' },
+    { id: 'post', icon: Edit3, label: 'Post' },
+    { id: 'crews', icon: Users, label: 'Crews' },
+    { id: 'profile', icon: User, label: 'Profile' },
+  ];
+  return (
+    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-[#EDE8E3] z-50 max-w-md mx-auto">
+      <div className="flex items-center justify-around py-2 px-2">
+        {items.map(({ id, icon: Icon, label }) => (
+          <button key={id} onClick={() => setPage(id)}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all ${active === id ? 'text-[#C8622A]' : 'text-[#9B8E84]'}`}>
+            {id === 'post' ? (
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center -mt-5 shadow-lg ${active === id ? 'bg-[#C8622A]' : 'bg-[#2D2419]'}`}>
+                <Icon className="w-5 h-5 text-white" />
+              </div>
             ) : (
-              <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                review.sentiment === 'positive' 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-red-100 text-red-800'
-              }`}>
-                {review.sentiment === 'positive' ? '👍 Positive' : '👎 Negative'}
-              </span>
+              <Icon className="w-5 h-5" strokeWidth={active === id ? 2.5 : 1.8} />
             )}
-            <span className="text-gray-500 text-sm">
-              Reviewed by {review.userName}
-            </span>
-          </div>
-          <span className="text-gray-400 text-sm">
-            {new Date(review.createdAt).toLocaleDateString()}
-          </span>
-        </div>
+            <span className={`text-[10px] font-medium ${id === 'post' ? 'mt-1' : ''}`}>{label}</span>
+          </button>
+        ))}
       </div>
-    </div>
+    </nav>
   );
 };
 
-// CreateReviewForm Component
-const CreateReviewForm = ({ currentUser, onReviewCreated, onCancel }) => {
-  const [formData, setFormData] = useState({
-    bookName: '',
-    author: '',
-    review: '',
-    sentiment: 'positive'
-  });
-  const [loading, setLoading] = useState(false);
-
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    if (!formData.bookName || !formData.author || !formData.review) {
-      alert('Please fill all fields');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const reviewData = {
-        userName: currentUser.name,
-        userEmail: currentUser.email,
-        bookName: formData.bookName,
-        author: formData.author,
-        review: formData.review,
-        sentiment: formData.sentiment
-      };
-
-      const response = await axios.post(`${API_URL}/reviews`, reviewData);
-      
-      if (response.data.success) {
-        onReviewCreated(response.data.review);
-        setFormData({ bookName: '', author: '', review: '', sentiment: 'positive' });
-      }
-    } catch (error) {
-      console.error('Error creating review:', error);
-      alert('Failed to create review');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="bg-white rounded-2xl shadow-xl p-8 mb-8 border border-gray-100">
-      <h2 className="text-2xl font-bold mb-6 text-gray-900">Write a New Review</h2>
-      <form onSubmit={handleSubmit}>
-        <div className="grid md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
-            <input
-              type="text"
-              value={formData.bookName}
-              onChange={(e) => setFormData({...formData, bookName: e.target.value})}
-              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
-              placeholder="Enter book name"
-              required
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-semibold text-gray-700 mb-2">Author *</label>
-            <input
-              type="text"
-              value={formData.author}
-              onChange={(e) => setFormData({...formData, author: e.target.value})}
-              className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
-              placeholder="Enter author name"
-              required
-            />
-          </div>
-        </div>
-        
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Your Review *</label>
-          <textarea
-            value={formData.review}
-            onChange={(e) => setFormData({...formData, review: e.target.value})}
-            className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none transition"
-            rows="4"
-            placeholder="Share your thoughts about the book..."
-            required
-          />
-        </div>
-        
-        <div className="mb-6">
-          <label className="block text-sm font-semibold text-gray-700 mb-2">Sentiment</label>
-          <div className="flex gap-3">
-            <button
-              type="button"
-              onClick={() => setFormData({...formData, sentiment: 'positive'})}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
-                formData.sentiment === 'positive'
-                  ? 'bg-gradient-to-r from-green-500 to-emerald-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <ThumbsUp className="w-4 h-4" /> Positive
-            </button>
-            <button
-              type="button"
-              onClick={() => setFormData({...formData, sentiment: 'negative'})}
-              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-semibold transition ${
-                formData.sentiment === 'negative'
-                  ? 'bg-gradient-to-r from-red-500 to-pink-500 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              <ThumbsDown className="w-4 h-4" /> Negative
-            </button>
-          </div>
-        </div>
-        
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={loading}
-            className="flex-1 bg-gradient-to-r from-purple-500 to-pink-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
-          >
-            {loading ? 'Posting Review...' : 'Post Review'}
-          </button>
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-8 py-4 bg-gray-200 text-gray-700 rounded-xl font-bold hover:bg-gray-300 transition"
-          >
-            Cancel
-          </button>
-        </div>
-      </form>
+// ─── TOP BAR ───────────────────────────────────────────────────────────────
+const TopBar = ({ user, setPage }) => (
+  <header className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center justify-between border-b border-[#EDE8E3]">
+    <div className="flex items-center gap-2">
+      <div className="w-7 h-7 bg-[#C8622A] rounded-lg flex items-center justify-center">
+        <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5} />
+      </div>
+      <span className="font-bold text-[#2D2419] text-lg" style={{ fontFamily: 'Georgia, serif' }}>ReadCrew</span>
     </div>
-  );
-};
+    <div className="flex items-center gap-3">
+      <button className="relative p-1">
+        <Bell className="w-5 h-5 text-[#6B5D52]" />
+        <span className="absolute top-0 right-0 w-2 h-2 bg-[#C8622A] rounded-full"></span>
+      </button>
+      <button onClick={() => setPage('profile')}>
+        <Avatar initials={user?.name?.slice(0, 2) || 'RC'} size="sm" color="#C8622A" />
+      </button>
+    </div>
+  </header>
+);
 
-// Import axios
-import axios from 'axios';
-
-const App = () => {
-  // Authentication states
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(false);
+// ─── LOGIN PAGE ─────────────────────────────────────────────────────────────
+const LoginPage = ({ onLogin, onSignup }) => {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [isLogin, setIsLogin] = useState(true);
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [showOTP, setShowOTP] = useState(false);
-  const [verificationData, setVerificationData] = useState({});
   const [otpInput, setOtpInput] = useState('');
-  const [loginForm, setLoginForm] = useState({ name: '', email: '', phone: '' });
+  const [loading, setLoading] = useState(false);
 
-  // App states
-  const [currentPage, setCurrentPage] = useState('home');
-  const [showProfile, setShowProfile] = useState(false);
-  const [showSavedPosts, setShowSavedPosts] = useState(false);
-  const [showLikedPosts, setShowLikedPosts] = useState(false);
-  const [showSharedPosts, setShowSharedPosts] = useState(false);
-  const [showGoalModal, setShowGoalModal] = useState(false);
-  const [showPostDetail, setShowPostDetail] = useState(false);
-  
-  // Book Reviews App states
-  const [reviews, setReviews] = useState([]);
-  const [reviewsLoading, setReviewsLoading] = useState(true);
-  const [showCreateReviewForm, setShowCreateReviewForm] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [notification, setNotification] = useState(null);
-  const [filteredReviews, setFilteredReviews] = useState([]);
-  
-  // Backend connection states
-  const [backendConnected, setBackendConnected] = useState(false);
-  const [backendChecking, setBackendChecking] = useState(true);
-  
-  // Data states
-  const [donations, setDonations] = useState([]);
-  const [userActivity, setUserActivity] = useState({
-    savedPosts: [],
-    likedPosts: [],
-    sharedPosts: []
-  });
-  
-  // Form states
-  const [donationForm, setDonationForm] = useState({ bookName: '', story: '', image: null, imagePreview: null });
-  const [reviewForm, setReviewForm] = useState({ bookName: '', author: '', review: '', sentiment: 'positive' });
-  const [recommendKeywords, setRecommendKeywords] = useState('');
-  const [recommendations, setRecommendations] = useState([]);
-  
-  // ✅ NEW: AI streaming states
-  const [aiResponse, setAiResponse] = useState('');
-  const [aiLoading, setAiLoading] = useState(false);
-  
-  const [readingGoal, setReadingGoal] = useState({ monthly: 0, books: [] });
-  const [newBook, setNewBook] = useState('');
-  
-  // Selected post for detail view
-  const [selectedPost, setSelectedPost] = useState(null);
-
-  const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
-
-  // ✅ Check backend connection on startup (silently)
-  useEffect(() => {
-    const checkConnection = async () => {
-      try {
-        const status = await checkBackendConnection();
-        setBackendConnected(status.connected);
-        setBackendChecking(false);
-      } catch (error) {
-        console.error('Error checking backend connection:', error);
-        setBackendConnected(false);
-        setBackendChecking(false);
-      }
-    };
-    
-    checkConnection();
-  }, []);
-
-  // Initialize data from localStorage on mount
-  useEffect(() => {
-    const user = localStorage.getItem('currentUser');
-    if (user) {
-      try {
-        const parsed = JSON.parse(user);
-        setCurrentUser(parsed);
-        setIsLoggedIn(true);
-        setReadingGoal(parsed.readingGoal || { monthly: 0, books: [] });
-        
-        // Load user activity
-        if (parsed?.email) {
-          try {
-            const saved = localStorage.getItem(`user_${parsed.email}_activity`);
-            if (saved) {
-              setUserActivity(JSON.parse(saved));
-            } else {
-              // Initialize empty activity
-              const initialActivity = { savedPosts: [], likedPosts: [], sharedPosts: [] };
-              localStorage.setItem(`user_${parsed.email}_activity`, JSON.stringify(initialActivity));
-              setUserActivity(initialActivity);
-            }
-          } catch (error) {
-            console.error('Error loading user activity:', error);
-          }
-        }
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-      }
-    }
-
-    // Load from backend
-    loadDonationsFromBackend();
-    loadReviewsFromBackend();
-  }, []);
-
-  // ========== BOOK REVIEWS FUNCTIONS ==========
-  const fetchReviews = async () => {
-    try {
-      setReviewsLoading(true);
-      const response = await axios.get(`${API_URL}/reviews`, {
-        params: { userEmail: currentUser?.email || '' }
-      });
-
-      if (response.data.success) {
-        setReviews(response.data.reviews);
-        setFilteredReviews(response.data.reviews);
-      }
-    } catch (error) {
-      console.error('Error fetching reviews:', error);
-      showNotification('Error loading reviews', 'error');
-    } finally {
-      setReviewsLoading(false);
-    }
-  };
-
-  const handleSearchReviews = async () => {
-    if (!searchQuery.trim()) {
-      fetchReviews();
-      return;
-    }
-
-    try {
-      setReviewsLoading(true);
-      const response = await axios.get(`${API_URL}/reviews/search`, {
-        params: { 
-          query: searchQuery,
-          userEmail: currentUser?.email || ''
-        }
-      });
-
-      if (response.data.success) {
-        setFilteredReviews(response.data.reviews);
-      }
-    } catch (error) {
-      console.error('Error searching reviews:', error);
-      showNotification('Error searching reviews', 'error');
-    } finally {
-      setReviewsLoading(false);
-    }
-  };
-
-  const handleReviewCreated = (newReview) => {
-    setReviews([newReview, ...reviews]);
-    setFilteredReviews([newReview, ...filteredReviews]);
-    setShowCreateReviewForm(false);
-    showNotification('Review posted successfully!', 'success');
-  };
-
-  const handleReviewDeleted = (deletedReviewId) => {
-    setReviews(reviews.filter(review => review._id !== deletedReviewId));
-    setFilteredReviews(filteredReviews.filter(review => review._id !== deletedReviewId));
-    showNotification('Review deleted successfully', 'success');
-  };
-
-  const showNotification = (message, type = 'info') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
-  };
-
-  const handleSearchKeyPress = (e) => {
-    if (e.key === 'Enter') {
-      handleSearchReviews();
-    }
-  };
-
-  // ========== DONATION FUNCTIONS ==========
-  const loadDonationsFromBackend = async () => {
-    try {
-      const result = await donationAPI.getAll();
-      
-      if (result.success && Array.isArray(result.donations)) {
-        setDonations(result.donations);
-      } else {
-        setDonations([]);
-      }
-    } catch (error) {
-      console.error('Backend connection failed:', error.message);
-      setDonations([]);
-    }
-  };
-
-  const loadReviewsFromBackend = async () => {
-    try {
-      const result = await reviewAPI.getAll();
-      
-      if (result.success && Array.isArray(result.reviews)) {
-        setReviews(result.reviews);
-        setFilteredReviews(result.reviews);
-      } else {
-        setReviews([]);
-        setFilteredReviews([]);
-      }
-    } catch (error) {
-      console.error('Backend connection failed:', error.message);
-      setReviews([]);
-      setFilteredReviews([]);
-    }
-  };
-
-  // ========== AUTHENTICATION FUNCTIONS ==========
-  
   const handleSendOTP = async () => {
-    if (!validateName(loginForm.name) || !validateEmail(loginForm.email) || !validatePhone(loginForm.phone)) {
+    if (!validateName(name) || !validateEmail(email) || !validatePhone(phone)) {
       alert('Please fill all fields correctly');
       return;
     }
     
     setLoading(true);
     try {
-      const result = await otpAPI.sendOTP(loginForm);
+      const result = await otpAPI.sendOTP({ name, email, phone });
       
       if (result.success) {
-        setVerificationData(loginForm);
         setShowOTP(true);
         alert('OTP sent to your email! Check your inbox.');
         if (result.otp) {
@@ -689,14 +320,10 @@ const App = () => {
         alert(result.message || 'Failed to send OTP');
       }
     } catch (error) {
-      console.error('Error sending OTP via API:', error);
-      
+      console.error('Error sending OTP:', error);
       // Fallback to mock OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       localStorage.setItem('devOTP', otp);
-      localStorage.setItem('devUser', JSON.stringify(loginForm));
-      
-      setVerificationData(loginForm);
       setShowOTP(true);
       alert(`Development mode OTP: ${otp}`);
     } finally {
@@ -712,75 +339,41 @@ const App = () => {
     
     setLoading(true);
     try {
-      const result = await otpAPI.verifyOTP({ email: verificationData.email, otp: otpInput });
+      const result = await otpAPI.verifyOTP({ email, otp: otpInput });
       
       if (result.success) {
         const userData = {
           id: Date.now().toString(),
-          name: verificationData.name,
-          email: verificationData.email,
-          phone: verificationData.phone,
+          name: name,
+          email: email,
+          phone: phone,
           isVerified: true,
           createdAt: new Date().toISOString(),
           readingGoal: { monthly: 0, books: [] }
         };
         
-        localStorage.setItem('currentUser', JSON.stringify(userData));
-        setCurrentUser(userData);
-        setIsLoggedIn(true);
+        onSignup(userData);
         setShowOTP(false);
-        setLoginForm({ name: '', email: '', phone: '' });
-        setOtpInput('');
-        alert('✅ Account verified! Welcome to ReadCrew!');
-        
-        // Initialize user activity
-        const initialActivity = { savedPosts: [], likedPosts: [], sharedPosts: [] };
-        localStorage.setItem(`user_${userData.email}_activity`, JSON.stringify(initialActivity));
-        setUserActivity(initialActivity);
-        
-        // Load data from backend
-        await loadDonationsFromBackend();
-        await loadReviewsFromBackend();
       } else {
         alert(`❌ ${result.message}`);
       }
     } catch (error) {
-      console.error('Error verifying OTP via API:', error);
-      
+      console.error('Error verifying OTP:', error);
       // Fallback to mock verification
       const devOTP = localStorage.getItem('devOTP');
-      const devUser = JSON.parse(localStorage.getItem('devUser') || '{}');
-      
-      if (devOTP && otpInput === devOTP && devUser.email === verificationData.email) {
+      if (devOTP && otpInput === devOTP) {
         const userData = {
           id: Date.now().toString(),
-          name: devUser.name,
-          email: devUser.email,
-          phone: devUser.phone,
+          name: name,
+          email: email,
+          phone: phone,
           isVerified: true,
           createdAt: new Date().toISOString(),
           readingGoal: { monthly: 0, books: [] }
         };
-        
-        localStorage.setItem('currentUser', JSON.stringify(userData));
-        setCurrentUser(userData);
-        setIsLoggedIn(true);
+        onSignup(userData);
         setShowOTP(false);
-        setLoginForm({ name: '', email: '', phone: '' });
-        setOtpInput('');
-        
-        // Initialize user activity
-        const initialActivity = { savedPosts: [], likedPosts: [], sharedPosts: [] };
-        localStorage.setItem(`user_${userData.email}_activity`, JSON.stringify(initialActivity));
-        setUserActivity(initialActivity);
-        
         localStorage.removeItem('devOTP');
-        localStorage.removeItem('devUser');
-        alert('✅ Account verified! Welcome to ReadCrew!');
-        
-        // Load data from backend
-        await loadDonationsFromBackend();
-        await loadReviewsFromBackend();
       } else {
         alert('❌ Invalid OTP');
       }
@@ -789,502 +382,666 @@ const App = () => {
     }
   };
 
-  const handleOpenPostDetail = (post) => {
-    console.log('Opening post:', post);
-    setSelectedPost(post);
-    setShowPostDetail(true);
-  };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert('Image size should be less than 2MB');
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setDonationForm(prev => ({ ...prev, image: reader.result, imagePreview: reader.result }));
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleDonationSubmit = async () => {
-    if (!donationForm.bookName || !donationForm.story || !donationForm.image) {
-      alert('Please fill all fields');
-      return;
-    }
-    
-    if (!isLoggedIn) {
-      alert('Please login to share a story');
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      const donationData = {
-        userName: currentUser.name,
-        userEmail: currentUser.email,
-        bookName: donationForm.bookName,
-        story: donationForm.story,
-        image: donationForm.image,
-      };
-      
-      const result = await donationAPI.create(donationData);
-      
-      if (result.success) {
-        await loadDonationsFromBackend();
-        setDonationForm({ bookName: '', story: '', image: null, imagePreview: null });
-        alert('✅ Story shared successfully! Everyone can now see it!');
-        setLoading(false);
-        return;
-      } else {
-        throw new Error(result.message || 'Failed to create donation');
-      }
-    } catch (error) {
-      console.error('Error submitting donation to backend:', error);
-    }
-    
-    alert('❌ Failed to share story. Please try again.');
-    setLoading(false);
-  };
-
-  const handleDeleteDonation = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this story?')) return;
-    
-    try {
-      await donationAPI.delete(id);
-      await loadDonationsFromBackend();
-      alert('Story deleted successfully');
-      if (showPostDetail) setShowPostDetail(false);
-    } catch (error) {
-      console.error('Error deleting donation:', error);
-      alert('Failed to delete story');
-    }
-  };
-
-  // ========== UPDATED LIKE FUNCTION ==========
-  const handleLikeDonation = async (id) => {
-    try {
-      // Optimistically update UI
-      setDonations(prevDonations => 
-        prevDonations.map(donation => 
-          donation._id === id 
-            ? { ...donation, likes: (donation.likes || 0) + (userActivity.likedPosts?.includes(id) ? -1 : 1) }
-            : donation
-        )
-      );
-
-      const result = await donationAPI.like(id);
-      
-      if (result.success) {
-        // Update user activity
-        if (currentUser?.email) {
-          const activityKey = `user_${currentUser.email}_activity`;
-          const saved = JSON.parse(localStorage.getItem(activityKey) || '{"savedPosts":[],"likedPosts":[],"sharedPosts":[]}');
-          
-          if (userActivity.likedPosts?.includes(id)) {
-            // Unlike
-            saved.likedPosts = saved.likedPosts.filter(postId => postId !== id);
-          } else {
-            // Like
-            if (!saved.likedPosts.includes(id)) {
-              saved.likedPosts.push(id);
-            }
-          }
-          
-          setUserActivity(saved);
-          localStorage.setItem(activityKey, JSON.stringify(saved));
-        }
-      } else {
-        // Revert on failure
-        await loadDonationsFromBackend();
-      }
-    } catch (error) {
-      console.error('Error liking donation:', error);
-      await loadDonationsFromBackend();
-    }
-  };
-
-  // ========== UPDATED SAVE FUNCTION ==========
-  const handleSaveDonation = async (id) => {
-    try {
-      // Optimistically update UI
-      setDonations(prevDonations => 
-        prevDonations.map(donation => 
-          donation._id === id 
-            ? { ...donation, saves: (donation.saves || 0) + (userActivity.savedPosts?.includes(id) ? -1 : 1) }
-            : donation
-        )
-      );
-
-      const result = await donationAPI.save(id);
-      
-      if (result.success) {
-        // Update user activity
-        if (currentUser?.email) {
-          const activityKey = `user_${currentUser.email}_activity`;
-          const saved = JSON.parse(localStorage.getItem(activityKey) || '{"savedPosts":[],"likedPosts":[],"sharedPosts":[]}');
-          
-          if (userActivity.savedPosts?.includes(id)) {
-            // Unsave
-            saved.savedPosts = saved.savedPosts.filter(postId => postId !== id);
-          } else {
-            // Save
-            if (!saved.savedPosts.includes(id)) {
-              saved.savedPosts.push(id);
-            }
-          }
-          
-          setUserActivity(saved);
-          localStorage.setItem(activityKey, JSON.stringify(saved));
-          alert('✅ Saved to your collection!');
-        }
-      } else {
-        // Revert on failure
-        await loadDonationsFromBackend();
-      }
-    } catch (error) {
-      console.error('Error saving donation:', error);
-      await loadDonationsFromBackend();
-    }
-  };
-
-  // ========== REVIEW SUBMIT FUNCTION ==========
-  const handleReviewSubmit = async () => {
-    if (!reviewForm.bookName || !reviewForm.author || !reviewForm.review) {
-      alert('Please fill all fields');
-      return;
-    }
-    
-    if (reviewForm.review.trim().length < 20) {
-      alert('Review must be at least 20 characters long');
-      return;
-    }
-    
-    if (!isLoggedIn) {
-      alert('Please login to post a review');
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      const reviewData = {
-        userName: currentUser.name,
-        userEmail: currentUser.email,
-        bookName: reviewForm.bookName,
-        author: reviewForm.author,
-        review: reviewForm.review,
-        sentiment: reviewForm.sentiment,
-        rating: 5
-      };
-      
-      const result = await reviewAPI.create(reviewData);
-      
-      if (result.success) {
-        await loadReviewsFromBackend();
-        setReviewForm({ bookName: '', author: '', review: '', sentiment: 'positive' });
-        alert('✅ Review posted successfully! Everyone can now see it!');
-        setLoading(false);
-        return;
-      } else {
-        throw new Error(result.message || 'Failed to create review');
-      }
-    } catch (error) {
-      console.error('Error submitting review:', error);
-      alert(`❌ Failed to post review: ${error.message}`);
-    }
-    
-    setLoading(false);
-  };
-
-  // ========== RECOMMENDATION FUNCTIONS ==========
-
-  const handleRecommendation = async () => {
-    if (!recommendKeywords.trim()) {
-      alert('Please enter what you want to read about');
-      return;
-    }
-
-    // Clear previous results and start streaming
-    setRecommendations([]);
-    setAiResponse('');
-    setAiLoading(true);
-
-    try {
-      await getBookRecommendations(
-        recommendKeywords,
-        (token) => setAiResponse(prev => prev + token),  // stream tokens in
-        () => setAiLoading(false)                        // done streaming
-      );
-    } catch (error) {
-      console.error('AI recommendation error:', error);
-      setAiLoading(false);
-      
-      // Fallback to old static logic if AI fails
-      const keywords = recommendKeywords.toLowerCase().trim();
-      const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
-        const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
-        return categoryText.includes(keywords) || 
-               category.books.some(book => 
-                 book.title.toLowerCase().includes(keywords) || 
-                 book.author.toLowerCase().includes(keywords)
-               );
-      });
-
-      if (matchingCategories.length > 0) {
-        const results = [];
-        matchingCategories.forEach(category => {
-          results.push({
-            type: 'category',
-            category: category.category,
-            emoji: category.emoji,
-            description: category.description,
-            books: category.books
-          });
-        });
-        setRecommendations(results);
-      } else {
-        const allBooks = BOOK_RECOMMENDATIONS.flatMap(category => 
-          category.books.map(book => ({
-            ...book,
-            category: category.category,
-            emoji: category.emoji
-          }))
-        );
-
-        const filteredBooks = allBooks.filter(book => 
-          book.title.toLowerCase().includes(keywords) || 
-          book.author.toLowerCase().includes(keywords)
-        );
-
-        if (filteredBooks.length > 0) {
-          setRecommendations([
-            {
-              type: 'keyword',
-              keyword: keywords,
-              books: filteredBooks.slice(0, 10)
-            }
-          ]);
-        } else {
-          setRecommendations([
-            {
-              type: 'popular',
-              title: 'Most Popular Books',
-              books: [
-                { title: 'Atomic Habits', author: 'James Clear', category: 'Motivational / Self-Help', rating: 4.8 },
-                { title: 'The Hobbit', author: 'J.R.R. Tolkien', category: 'Fantasy', rating: 4.7 },
-                { title: 'To Kill a Mockingbird', author: 'Harper Lee', category: 'Literary Fiction', rating: 4.8 },
-                { title: 'The Diary of a Young Girl', author: 'Anne Frank', category: 'Biography', rating: 4.8 },
-                { title: 'The Power of Now', author: 'Eckhart Tolle', category: 'Philosophy', rating: 4.3 }
-              ]
-            }
-          ]);
-        }
-      }
-    }
-  };
-
-  const handleBrowseCategories = () => {
-    setRecommendations(
-      BOOK_RECOMMENDATIONS.map(category => ({
-        type: 'category',
-        category: category.category,
-        emoji: category.emoji,
-        description: category.description,
-        books: category.books.slice(0, 3)
-      }))
-    );
-  };
-
-  // ========== READING GOAL FUNCTIONS ==========
-  
-  const handleUpdateGoal = () => {
-    if (!currentUser) return;
-    
-    const updatedUser = { ...currentUser, readingGoal };
-    setCurrentUser(updatedUser);
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    setShowGoalModal(false);
-    alert('✅ Reading goal updated!');
-  };
-
-  const handleAddBook = () => {
-    if (newBook.trim()) {
-      setReadingGoal(prev => ({
-        ...prev,
-        books: [...prev.books, { title: newBook.trim(), completed: false }]
-      }));
-      setNewBook('');
-    }
-  };
-
-  const handleToggleBook = (idx) => {
-    setReadingGoal(prev => ({
-      ...prev,
-      books: prev.books.map((b, i) => 
-        i === idx ? { ...b, completed: !b.completed } : b
-      )
-    }));
-  };
-
-  const handleShareDonation = (id) => {
-    if (currentUser?.email) {
-      const activityKey = `user_${currentUser.email}_activity`;
-      const saved = JSON.parse(localStorage.getItem(activityKey) || '{"savedPosts":[],"likedPosts":[],"sharedPosts":[]}');
-      if (!saved.sharedPosts) saved.sharedPosts = [];
-      if (!saved.sharedPosts.includes(id)) {
-        saved.sharedPosts.push(id);
-        setUserActivity(prev => ({ ...prev, sharedPosts: saved.sharedPosts }));
-        localStorage.setItem(activityKey, JSON.stringify(saved));
-        alert('✅ Post marked as shared!');
-      }
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('currentUser');
-    setCurrentUser(null);
-    setIsLoggedIn(false);
-    setCurrentPage('home');
-    alert('Logged out successfully');
-  };
-
-  // ========== RENDER: LOGIN PAGE ==========
-  if (!isLoggedIn) {
+  if (showOTP) {
     return (
-      <div className="min-h-screen relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-amber-50 via-orange-50 to-red-50">
-          <div className="absolute inset-0 opacity-30" style={{
-            backgroundImage: `url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z' fill='%23f97316' fill-opacity='0.15' fill-rule='evenodd'/%3E%3C/svg%3E")`
-          }} />
+      <div className="min-h-screen bg-[#FAF6F1] flex flex-col items-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-7 border border-[#EDE8E3] mt-20">
+          <h2 className="text-2xl font-bold text-[#2D2419] text-center mb-2">Verify OTP</h2>
+          <p className="text-center text-[#9B8E84] text-sm mb-6">Enter the code sent to {email}</p>
+          <input
+            type="text"
+            value={otpInput}
+            onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
+            className="w-full px-4 py-4 rounded-xl border-2 border-[#EDE8E3] focus:border-[#C8622A] focus:outline-none text-center text-3xl tracking-widest mb-6"
+            placeholder="000000"
+            maxLength="6"
+            autoFocus
+          />
+          <button
+            onClick={handleVerifyOTP}
+            disabled={loading || otpInput.length !== 6}
+            className="w-full py-4 bg-[#C8622A] text-white rounded-2xl font-semibold disabled:opacity-50"
+          >
+            {loading ? 'Verifying...' : 'Verify & Continue'}
+          </button>
+          <button
+            onClick={() => setShowOTP(false)}
+            className="w-full mt-4 text-[#9B8E84] hover:text-[#C8622A] flex items-center justify-center gap-2"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FAF6F1] flex flex-col items-center" style={{ fontFamily: "'Georgia', serif" }}>
+      {/* Illustration area */}
+      <div className="w-full max-w-md relative overflow-hidden" style={{ height: '280px' }}>
+        <div className="absolute inset-0 bg-gradient-to-b from-[#F5EDE3] to-[#FAF6F1]" />
+        <div className="absolute inset-0 flex items-center justify-center">
+          <svg viewBox="0 0 320 220" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+            {/* Background arch */}
+            <ellipse cx="160" cy="240" rx="170" ry="120" fill="#EDE0D0" opacity="0.5" />
+            {/* Books stack left */}
+            <rect x="20" y="160" width="35" height="8" rx="2" fill="#C8622A" />
+            <rect x="22" y="152" width="32" height="8" rx="2" fill="#8B5E3C" />
+            <rect x="18" y="144" width="38" height="8" rx="2" fill="#6B9A8B" />
+            <rect x="21" y="136" width="33" height="8" rx="2" fill="#C4A882" />
+            {/* Plant left */}
+            <ellipse cx="15" cy="148" rx="8" ry="6" fill="#7A9E7E" opacity="0.7" />
+            <ellipse cx="8" cy="140" rx="6" ry="5" fill="#5E8B62" opacity="0.6" />
+            {/* Person 1 - reading */}
+            <circle cx="95" cy="100" r="18" fill="#D4A574" />
+            <path d="M77 130 Q95 118 113 130 L113 170 Q95 162 77 170 Z" fill="#E8624A" />
+            {/* Book in hands */}
+            <rect x="80" y="140" width="30" height="22" rx="2" fill="#F5E6D0" />
+            <line x1="95" y1="140" x2="95" y2="162" stroke="#C4A882" strokeWidth="1" />
+            {/* Person 2 */}
+            <circle cx="155" cy="95" r="18" fill="#C8956C" />
+            <path d="M137 125 Q155 113 173 125 L173 168 Q155 160 137 168 Z" fill="#D4834A" />
+            <rect x="140" y="135" width="30" height="22" rx="2" fill="#E8A87C" />
+            <line x1="155" y1="135" x2="155" y2="157" stroke="#C4A882" strokeWidth="1" />
+            {/* Person 3 */}
+            <circle cx="215" cy="98" r="17" fill="#A87856" />
+            <path d="M198 128 Q215 116 232 128 L232 168 Q215 160 198 168 Z" fill="#6B8B6E" />
+            <rect x="200" y="138" width="30" height="22" rx="2" fill="#F0F0F0" />
+            <line x1="215" y1="138" x2="215" y2="160" stroke="#C4A882" strokeWidth="1" />
+            {/* Person 4 */}
+            <circle cx="272" cy="100" r="17" fill="#8B6252" />
+            {/* Curly hair */}
+            <path d="M255 85 Q265 72 275 78 Q285 72 290 82 Q295 90 288 95 Q285 80 272 83 Q258 80 255 85Z" fill="#2D1810" />
+            <path d="M255 128 Q272 116 289 128 L289 168 Q272 160 255 168 Z" fill="#C4A882" />
+            <rect x="258" y="138" width="30" height="22" rx="2" fill="#F0F0F0" />
+            <line x1="273" y1="138" x2="273" y2="160" stroke="#C4A882" strokeWidth="1" />
+            {/* Plant right */}
+            <ellipse cx="305" cy="148" rx="8" ry="6" fill="#7A9E7E" opacity="0.7" />
+            <rect x="300" y="148" width="10" height="18" rx="2" fill="#C4A882" />
+            {/* Sofa suggestion */}
+            <rect x="60" y="165" width="220" height="20" rx="8" fill="#D4C4B0" opacity="0.6" />
+          </svg>
+        </div>
+      </div>
+
+      {/* Logo */}
+      <div className="flex items-center gap-2 -mt-4 mb-1">
+        <div className="w-9 h-9 bg-[#C8622A] rounded-xl flex items-center justify-center shadow-md">
+          <BookOpen className="w-5 h-5 text-white" strokeWidth={2.5} />
+        </div>
+        <span className="text-3xl font-bold text-[#2D2419]" style={{ fontFamily: 'Georgia, serif' }}>ReadCrew</span>
+      </div>
+      <p className="text-[#9B8E84] text-sm mb-6">Read together, grow together.</p>
+
+      {/* Card */}
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl mx-4 p-7 border border-[#EDE8E3]">
+        <h2 className="text-2xl font-bold text-[#2D2419] text-center mb-6" style={{ fontFamily: 'Georgia, serif' }}>
+          {isLogin ? 'Log In' : 'Sign Up'}
+        </h2>
+
+        <div className="space-y-4">
+          {!isLogin && (
+            <div className="flex items-center gap-3 bg-[#FAF6F1] border border-[#EDE8E3] rounded-xl px-4 py-3.5">
+              <User className="w-5 h-5 text-[#9B8E84]" />
+              <input value={name} onChange={e => setName(e.target.value)}
+                className="flex-1 bg-transparent text-[#2D2419] placeholder-[#B8AEA8] outline-none text-sm"
+                placeholder="Full Name" />
+            </div>
+          )}
+          <div className="flex items-center gap-3 bg-[#FAF6F1] border border-[#EDE8E3] rounded-xl px-4 py-3.5">
+            <User className="w-5 h-5 text-[#9B8E84]" />
+            <input value={email} onChange={e => setEmail(e.target.value)}
+              className="flex-1 bg-transparent text-[#2D2419] placeholder-[#B8AEA8] outline-none text-sm"
+              placeholder="Email" />
+          </div>
+          {!isLogin && (
+            <div className="flex items-center gap-3 bg-[#FAF6F1] border border-[#EDE8E3] rounded-xl px-4 py-3.5">
+              <User className="w-5 h-5 text-[#9B8E84]" />
+              <input value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
+                className="flex-1 bg-transparent text-[#2D2419] placeholder-[#B8AEA8] outline-none text-sm"
+                placeholder="Phone Number" maxLength="10" />
+            </div>
+          )}
+          <div>
+            <div className="flex items-center gap-3 bg-[#FAF6F1] border border-[#EDE8E3] rounded-xl px-4 py-3.5">
+              <Lock className="w-5 h-5 text-[#9B8E84]" />
+              <input value={password} onChange={e => setPassword(e.target.value)}
+                type={showPass ? 'text' : 'password'}
+                className="flex-1 bg-transparent text-[#2D2419] placeholder-[#B8AEA8] outline-none text-sm"
+                placeholder="••••••••" />
+              <button onClick={() => setShowPass(!showPass)}>
+                {showPass ? <EyeOff className="w-4 h-4 text-[#9B8E84]" /> : <Eye className="w-4 h-4 text-[#9B8E84]" />}
+              </button>
+            </div>
+            {isLogin && (
+              <div className="text-right mt-1.5">
+                <button className="text-xs text-[#9B8E84] hover:text-[#C8622A]">Forgot password?</button>
+              </div>
+            )}
+          </div>
         </div>
 
-        <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl shadow-2xl overflow-hidden max-w-5xl w-full grid md:grid-cols-2">
-            <div className="bg-gradient-to-br from-orange-500 via-red-500 to-pink-500 p-12 text-white relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full -mr-32 -mt-32" />
-              <div className="absolute bottom-0 left-0 w-48 h-48 bg-white/10 rounded-full -ml-24 -mb-24" />
-              
-              <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-8">
-                  <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center shadow-lg">
-                    <BookOpen className="w-10 h-10 text-orange-500" />
+        <button onClick={() => {
+          if (isLogin) {
+            onLogin({ name: name || email.split('@')[0] || 'Reader', email: email || 'user@readcrew.com' });
+          } else {
+            handleSendOTP();
+          }
+        }}
+          className="w-full mt-5 py-4 bg-[#C8622A] text-white rounded-2xl font-semibold text-base hover:bg-[#B05520] transition shadow-md">
+          {loading ? 'Please wait...' : (isLogin ? 'Log In' : 'Sign Up')}
+        </button>
+
+        <div className="mt-4 space-y-3">
+          <button className="w-full py-3.5 border border-[#EDE8E3] rounded-2xl flex items-center justify-center gap-3 text-sm font-medium text-[#2D2419] hover:bg-[#FAF6F1] transition">
+            <svg className="w-5 h-5" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" /><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" /><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05" /><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" /></svg>
+            Continue with <strong>Google</strong>
+          </button>
+          <button className="w-full py-3.5 border border-[#EDE8E3] rounded-2xl flex items-center justify-center gap-3 text-sm font-medium text-[#2D2419] hover:bg-[#FAF6F1] transition">
+            <svg className="w-5 h-5" viewBox="0 0 24 24" fill="#1877F2"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" /></svg>
+            Continue with <strong>Facebook</strong>
+          </button>
+        </div>
+
+        <p className="text-center text-sm text-[#9B8E84] mt-5">
+          {isLogin ? "New to ReadCrew? " : "Already have an account? "}
+          <button onClick={() => setIsLogin(!isLogin)} className="text-[#C8622A] font-semibold hover:underline">
+            {isLogin ? 'Sign Up' : 'Log In'}
+          </button>
+        </p>
+      </div>
+      <div className="h-8" />
+    </div>
+  );
+};
+
+// ─── HOME PAGE ──────────────────────────────────────────────────────────────
+const HomePage = ({ user, posts, crews, suggestedBooks, setPage, donations, reviews }) => (
+  <div className="pb-24">
+    <TopBar user={user} setPage={setPage} />
+    <div className="px-4 py-4 space-y-5">
+      {/* Welcome */}
+      <div>
+        <h1 className="text-2xl font-bold text-[#2D2419]" style={{ fontFamily: 'Georgia, serif' }}>
+          Welcome, {user?.name?.split(' ')[0]}! 🌿
+        </h1>
+        <p className="text-[#9B8E84] text-sm mt-0.5">Read together, grow together.</p>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-3 gap-2">
+        {[
+          { label: 'Stories', value: donations?.length || 0, icon: Gift, color: 'text-blue-600' },
+          { label: 'Reviews', value: reviews?.length || 0, icon: Star, color: 'text-purple-600' },
+          { label: 'Crews', value: crews?.length || 3, icon: Users, color: 'text-orange-600' }
+        ].map(({ label, value, icon: Icon, color }, idx) => (
+          <div key={idx} className="bg-white rounded-xl p-3 shadow-sm border border-[#EDE8E3]">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[#9B8E84]">{label}</p>
+                <p className={`text-lg font-bold ${color}`}>{value}</p>
+              </div>
+              <Icon className={`w-5 h-5 ${color}`} />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Search + Create Crew */}
+      <div className="flex gap-2">
+        <div className="flex-1 flex items-center gap-2 bg-white border border-[#EDE8E3] rounded-xl px-3 py-2.5 shadow-sm">
+          <Search className="w-4 h-4 text-[#9B8E84]" />
+          <input className="flex-1 bg-transparent text-sm text-[#2D2419] placeholder-[#B8AEA8] outline-none"
+            placeholder="Search for books or crews..." />
+          <ChevronRight className="w-4 h-4 text-[#9B8E84]" />
+        </div>
+        <button onClick={() => setPage('crews')}
+          className="px-4 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold shadow-sm whitespace-nowrap">
+          Create Crew
+        </button>
+      </div>
+
+      {/* Reading illustration */}
+      <div className="bg-[#F5EDE3] rounded-2xl overflow-hidden" style={{ height: '140px' }}>
+        <svg viewBox="0 0 340 140" className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+          <rect width="340" height="140" fill="#F5EDE3" />
+          {/* Books stack */}
+          <rect x="15" y="90" width="40" height="7" rx="2" fill="#C8622A" opacity="0.8" />
+          <rect x="18" y="83" width="36" height="7" rx="2" fill="#8B5E3C" opacity="0.8" />
+          <rect x="12" y="76" width="44" height="7" rx="2" fill="#6B9A8B" opacity="0.8" />
+          {/* Person 1 */}
+          <circle cx="120" cy="62" r="15" fill="#D4A574" />
+          <path d="M105 85 Q120 76 135 85 L135 120 Q120 114 105 120 Z" fill="#E8A060" />
+          <rect x="108" y="92" width="24" height="18" rx="2" fill="#F5E6D0" />
+          <line x1="120" y1="92" x2="120" y2="110" stroke="#C4A882" strokeWidth="1" />
+          {/* Person 2 */}
+          <circle cx="185" cy="58" r="15" fill="#A87856" />
+          <path d="M170 81 Q185 72 200 81 L200 118 Q185 112 170 118 Z" fill="#D4834A" />
+          <rect x="172" y="88" width="26" height="18" rx="2" fill="#E8A87C" />
+          <line x1="185" y1="88" x2="185" y2="106" stroke="#C4A882" strokeWidth="1" />
+          {/* Person 3 */}
+          <circle cx="250" cy="60" r="14" fill="#8B6252" />
+          <path d="M236 83 Q250 74 264 83 L264 118 Q250 112 236 118 Z" fill="#6B8B6E" />
+          <rect x="238" y="90" width="24" height="17" rx="2" fill="#F0F0E8" />
+          <line x1="250" y1="90" x2="250" y2="107" stroke="#C4A882" strokeWidth="1" />
+          {/* Plants */}
+          <ellipse cx="305" cy="85" rx="12" ry="9" fill="#7A9E7E" opacity="0.7" />
+          <ellipse cx="318" cy="78" rx="9" ry="7" fill="#5E8B62" opacity="0.6" />
+          <rect x="310" y="92" width="8" height="25" rx="3" fill="#C4A882" />
+          {/* Floor */}
+          <rect x="0" y="118" width="340" height="22" rx="0" fill="#EDE0D0" opacity="0.5" />
+        </svg>
+      </div>
+
+      {/* Popular Crews */}
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <span className="text-xl">🔥</span>
+          <h2 className="text-lg font-bold text-[#2D2419]" style={{ fontFamily: 'Georgia, serif' }}>Popular Crews</h2>
+          <span className="text-xl">🔥</span>
+        </div>
+        <p className="text-xs text-[#9B8E84] mb-3">Join the hottest book clubs and reading groups.</p>
+        <div className="grid grid-cols-2 gap-3">
+          {crews.slice(0, 2).map(crew => (
+            <div key={crew.id} className="bg-white rounded-2xl overflow-hidden border border-[#EDE8E3] shadow-sm">
+              <div className="h-20 flex items-center justify-center" style={{ backgroundColor: crew.cover + '40' }}>
+                <div className="w-12 h-16 rounded-lg shadow-md flex items-center justify-center"
+                  style={{ backgroundColor: crew.cover }}>
+                  <BookOpen className="w-6 h-6 text-white" />
+                </div>
+              </div>
+              <div className="p-3">
+                <h3 className="font-bold text-[#2D2419] text-sm leading-tight">{crew.name}</h3>
+                <p className="text-xs text-[#9B8E84] mt-0.5">{crew.genre}</p>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-1 text-xs text-[#9B8E84]">
+                    <Users className="w-3 h-3" />
+                    <span>{crew.members >= 1000 ? `${(crew.members / 1000).toFixed(1)}K` : crew.members}</span>
                   </div>
-                  <div>
-                    <h1 className="text-4xl font-bold">ReadCrew</h1>
-                    <p className="text-orange-100">Share • Inspire • Discover</p>
+                  <div className="flex items-center gap-1 text-xs text-[#9B8E84]">
+                    <MessageCircle className="w-3 h-3" />
+                    <span>{crew.chats}</span>
                   </div>
                 </div>
+                <button onClick={() => setPage('crews')}
+                  className="w-full mt-2 py-1.5 bg-[#C8622A] text-white rounded-xl text-xs font-semibold">
+                  Join Crew
+                </button>
+              </div>
+            </div>
+          ))}
+          {/* Reading challenge card */}
+          <div className="col-span-2 bg-white rounded-2xl p-4 border border-[#EDE8E3] shadow-sm">
+            <h3 className="font-bold text-[#2D2419] text-sm mb-1">Your Reading Challenge</h3>
+            <p className="text-xs text-[#9B8E84]">You've read 5 out of 20 books for 2024</p>
+            <div className="mt-2 h-2 bg-[#F5EDE3] rounded-full overflow-hidden">
+              <div className="h-full w-1/4 bg-[#C8622A] rounded-full" />
+            </div>
+            <p className="text-xs text-[#7A9E7E] mt-1 font-medium">You're ahead of schedule!</p>
+            <div className="flex gap-2 mt-3">
+              {suggestedBooks.slice(0, 4).map((b, i) => (
+                <div key={i} className="w-10 h-14 rounded-lg shadow-sm flex items-end justify-center pb-1"
+                  style={{ backgroundColor: b.color }}>
+                  <span className="text-white text-[7px] text-center leading-tight px-0.5 font-medium">{b.title.slice(0, 6)}</span>
+                </div>
+              ))}
+            </div>
+            <button className="mt-2 text-xs text-[#C8622A] font-semibold">View All Books →</button>
+          </div>
+        </div>
+      </div>
 
-                <h2 className="text-3xl font-bold mb-4">Let's make reading a habit</h2>
-                <p className="text-orange-100 mb-8 leading-relaxed">
-                  Join thousands of book lovers sharing their reading journeys, discovering new favorites, and building a vibrant reading community.
-                </p>
+      {/* Upcoming Event */}
+      <div className="bg-white rounded-2xl p-4 border border-[#EDE8E3] shadow-sm">
+        <div className="flex items-center gap-2 mb-3">
+          <span>🔔</span>
+          <h2 className="font-bold text-[#2D2419] text-sm">Upcoming Live Event</h2>
+        </div>
+        <div className="flex gap-3">
+          <div className="w-12 h-16 rounded-lg bg-[#2D2D2D] flex items-center justify-center shadow-sm shrink-0">
+            <BookOpen className="w-6 h-6 text-[#E8A87C]" />
+          </div>
+          <div className="flex-1">
+            <h3 className="font-bold text-[#2D2419] text-sm">Atomic Habits Discussion</h3>
+            <p className="text-xs text-[#9B8E84] mt-0.5">Mon, Apr 29 at 7:00 PM</p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <Avatar initials="SK" size="xs" color="#C8622A" />
+              <span className="text-xs text-[#9B8E84]">Sakshi + 920 interested</span>
+            </div>
+          </div>
+        </div>
+        <div className="mt-3 flex items-center justify-between bg-[#FAF6F1] rounded-xl px-3 py-2">
+          <span className="text-xs font-medium text-[#2D2419]">In 3 days</span>
+          <ChevronRight className="w-4 h-4 text-[#9B8E84]" />
+        </div>
+      </div>
 
-                <div className="space-y-4">
-                  {[
-                    { icon: Gift, text: 'Share your reading stories' },
-                    { icon: Star, text: 'Read & write book reviews' },
-                    { icon: Sparkles, text: 'Get personalized recommendations' }
-                  ].map(({ icon: Icon, text }, idx) => (
-                    <div key={idx} className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                        <Icon className="w-5 h-5" />
-                      </div>
-                      <span>{text}</span>
-                    </div>
-                  ))}
+      {/* Suggested for you */}
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span>💡</span>
+            <h2 className="font-bold text-[#2D2419]" style={{ fontFamily: 'Georgia, serif' }}>Suggested For You</h2>
+            <span>🔥</span>
+          </div>
+          <button className="text-xs text-[#9B8E84] border border-[#EDE8E3] rounded-lg px-2 py-1">Browse All</button>
+        </div>
+        <p className="text-xs text-[#9B8E84] mb-3">Books you might enjoy, handpicked for you.</p>
+        <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide">
+          {suggestedBooks.map((b, i) => (
+            <div key={i} className="shrink-0 w-24">
+              <div className="w-24 h-32 rounded-xl shadow-md flex items-end justify-center pb-2"
+                style={{ backgroundColor: b.color }}>
+                <span className="text-white text-[9px] text-center px-1 font-medium leading-tight">{b.title}</span>
+              </div>
+              <p className="text-xs font-semibold text-[#2D2419] mt-1.5 leading-tight">{b.title}</p>
+              <p className="text-[10px] text-[#9B8E84]">{b.author}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+);
+
+// ─── EXPLORE (MOOD BASED) ───────────────────────────────────────────────────
+const ExplorePage = ({ user, setPage }) => {
+  const [selectedMood, setSelectedMood] = useState(null);
+  const [suggestion, setSuggestion] = useState(null);
+
+  const moodBooks = {
+    Reflective: { title: 'Tuesdays with Morrie', author: 'Mitch Albom', color: '#A0826D', desc: 'A touching story about life\'s most important lessons from a dying professor', reviews: '22k', rating: 4.5 },
+    Motivated: { title: 'Atomic Habits', author: 'James Clear', color: '#E8A87C', desc: 'Tiny changes, remarkable results. Build habits that stick.', reviews: '18k', rating: 4.8 },
+    Thoughtful: { title: 'Sapiens', author: 'Yuval Harari', color: '#7B9EA6', desc: 'A brief history of humankind that will reshape how you see the world.', reviews: '15k', rating: 4.6 },
+    Inspired: { title: 'Becoming', author: 'Michelle Obama', color: '#C4A882', desc: 'An intimate and powerful memoir by the former First Lady.', reviews: '20k', rating: 4.7 },
+    Emotional: { title: "The Kite Runner", author: 'Khaled Hosseini', color: '#C8622A', desc: 'A heart-wrenching story of friendship, betrayal and redemption.', reviews: '12k', rating: 4.5 },
+    Escapism: { title: 'The Name of the Wind', author: 'Patrick Rothfuss', color: '#6B8B6E', desc: 'An epic fantasy about a legendary magician and his extraordinary life.', reviews: '9k', rating: 4.7 },
+  };
+
+  const handleMood = (mood) => {
+    setSelectedMood(mood);
+    setSuggestion(moodBooks[mood] || moodBooks['Reflective']);
+  };
+
+  if (suggestion) {
+    return (
+      <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+        <TopBar user={user} setPage={setPage} />
+        <div className="px-4 py-6">
+          {/* Reading bot */}
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-full bg-[#F5EDE3] border-2 border-[#C8622A] flex items-center justify-center">
+              <BookOpen className="w-6 h-6 text-[#C8622A]" />
+            </div>
+            <div>
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold text-[#2D2419]">Reading Bot</span>
+                <div className="w-2 h-2 bg-green-400 rounded-full" />
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-2xl p-5 shadow-sm border border-[#EDE8E3]">
+            <p className="text-[#6B5D52] text-sm mb-4" style={{ fontFamily: 'Georgia, serif' }}>
+              Since you're feeling <strong>{selectedMood}</strong>, here's something beautiful for you...
+            </p>
+
+            <div className="flex gap-4 p-4 bg-[#FAF6F1] rounded-xl mb-4">
+              <div className="w-20 h-28 rounded-xl shadow-md flex items-center justify-center shrink-0"
+                style={{ backgroundColor: suggestion.color }}>
+                <BookOpen className="w-8 h-8 text-white" />
+              </div>
+              <div>
+                <span className="text-xs px-2 py-0.5 bg-[#C8622A]/10 text-[#C8622A] rounded-full font-medium">★ Inspiration</span>
+                <h3 className="font-bold text-[#2D2419] text-lg mt-1" style={{ fontFamily: 'Georgia, serif' }}>{suggestion.title}</h3>
+                <div className="flex items-center gap-1 mt-1">
+                  <Heart className="w-3 h-3 text-[#C8622A]" />
+                  <span className="text-xs text-[#9B8E84]">{suggestion.reviews} Reviews</span>
                 </div>
               </div>
             </div>
 
-            <div className="p-12">
-              {!showOTP ? (
-                <>
-                  <h2 className="text-3xl font-bold text-gray-800 mb-2">Welcome Back</h2>
-                  <p className="text-gray-600 mb-8">Enter your details to get started</p>
+            <p className="text-sm text-[#6B5D52] mb-5">{suggestion.desc}</p>
 
-                  <div className="space-y-5">
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Full Name *</label>
-                      <input
-                        type="text"
-                        value={loginForm.name}
-                        onChange={(e) => setLoginForm({ ...loginForm, name: e.target.value })}
-                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                        placeholder="Neha Sharma"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Email Address *</label>
-                      <input
-                        type="email"
-                        value={loginForm.email}
-                        onChange={(e) => setLoginForm({ ...loginForm, email: e.target.value })}
-                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                        placeholder="neha.sharma@example.com"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-gray-700 mb-2">Phone Number *</label>
-                      <input
-                        type="tel"
-                        value={loginForm.phone}
-                        onChange={(e) => setLoginForm({ ...loginForm, phone: e.target.value.replace(/\D/g, '').slice(0, 10) })}
-                        className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                        placeholder="9876543210"
-                        maxLength="10"
-                      />
-                    </div>
+            <button className="w-full py-2.5 border border-[#EDE8E3] rounded-xl text-sm font-medium text-[#2D2419] mb-3 hover:bg-[#FAF6F1]">
+              ✦ View Reviews
+            </button>
+            <button onClick={() => setPage('crews')}
+              className="w-full py-3 bg-[#C8622A] text-white rounded-xl font-semibold text-sm mb-3">
+              Join Crew
+            </button>
+            <button onClick={() => setPage('crews')}
+              className="w-full py-2.5 border border-[#EDE8E3] rounded-xl text-sm font-medium text-[#2D2419] hover:bg-[#FAF6F1]">
+              Start New Crew
+            </button>
+          </div>
 
-                    <button
-                      onClick={handleSendOTP}
-                      disabled={loading || !validateName(loginForm.name) || !validateEmail(loginForm.email) || !validatePhone(loginForm.phone)}
-                      className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all transform hover:scale-[1.02] disabled:opacity-50"
-                    >
-                      {loading ? 'Sending OTP...' : 'Get Started →'}
-                    </button>
-                    
-                    <div className="text-center text-sm text-gray-500 mt-4">
-                      <p>Note: Check console for OTP if email doesn't work</p>
-                    </div>
+          <button onClick={() => setSuggestion(null)} className="mt-4 flex items-center gap-1 text-sm text-[#9B8E84]">
+            <ChevronLeft className="w-4 h-4" /> Choose different mood
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+      <TopBar user={user} setPage={setPage} />
+      <div className="px-4 py-6">
+        <h1 className="text-2xl font-bold text-[#2D2419] mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+          Hi {user?.name?.split(' ')[0]} 🌿
+        </h1>
+        <p className="text-[#9B8E84] text-sm mb-6">What feels right today?</p>
+
+        <div className="space-y-3 mb-8">
+          {MOODS.map(({ label, emoji }) => (
+            <button key={label} onClick={() => handleMood(label)}
+              className={`w-full flex items-center gap-4 p-4 rounded-2xl border transition-all text-left ${selectedMood === label ? 'bg-[#C8622A]/10 border-[#C8622A]' : 'bg-white border-[#EDE8E3] hover:border-[#C8622A]/40'}`}>
+              <span className="text-2xl">{emoji}</span>
+              <span className="font-medium text-[#2D2419]">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <button onClick={() => handleMood('Reflective')}
+          className="w-full py-4 bg-[#C8622A] text-white rounded-2xl font-semibold flex items-center justify-center gap-2 shadow-md">
+          <Sparkles className="w-5 h-5" />
+          Let AI Suggest ▾
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── POST PAGE ──────────────────────────────────────────────────────────────
+const PostPage = ({ user, onPost, setPage }) => {
+  const [content, setContent] = useState('');
+  const [bookName, setBookName] = useState('');
+  const [isPublic, setIsPublic] = useState(true);
+  const [image, setImage] = useState(null);
+  const fileRef = useRef();
+
+  return (
+    <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+      <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center justify-between border-b border-[#EDE8E3]">
+        <button onClick={() => setPage('home')}><ChevronLeft className="w-6 h-6 text-[#6B5D52]" /></button>
+        <span className="font-semibold text-[#2D2419]">Post</span>
+        <button className="p-1.5 border border-[#EDE8E3] rounded-xl bg-white">
+          <Bookmark className="w-5 h-5 text-[#6B5D52]" />
+        </button>
+      </div>
+
+      <div className="px-4 py-4">
+        <div className="flex gap-3">
+          <Avatar initials={user?.name?.slice(0, 2)} size="md" color="#C8622A" />
+          <div className="flex-1">
+            {/* Book selector */}
+            <div className="flex items-center gap-2 bg-white border border-[#EDE8E3] rounded-xl px-3 py-2 mb-3">
+              <div className="w-5 h-5 bg-[#C8622A]/20 rounded flex items-center justify-center">
+                <BookOpen className="w-3 h-3 text-[#C8622A]" />
+              </div>
+              <input value={bookName} onChange={e => setBookName(e.target.value)}
+                className="flex-1 text-sm text-[#2D2419] placeholder-[#B8AEA8] outline-none bg-transparent"
+                placeholder="Man's Search for..." />
+            </div>
+
+            <textarea value={content} onChange={e => setContent(e.target.value)}
+              className="w-full bg-transparent text-[#2D2419] placeholder-[#B8AEA8] outline-none text-sm resize-none leading-relaxed"
+              placeholder="Write about your reading experience..." rows={5} />
+          </div>
+        </div>
+
+        {/* Book card preview */}
+        {bookName && (
+          <div className="mt-4 bg-white rounded-2xl p-4 border border-[#EDE8E3] flex gap-3 items-start">
+            <div className="w-12 h-16 rounded-lg bg-[#C8622A]/20 flex items-center justify-center shrink-0">
+              <BookOpen className="w-6 h-6 text-[#C8622A]" />
+            </div>
+            <div className="flex-1">
+              <p className="font-semibold text-[#2D2419] text-sm">{bookName}</p>
+              <p className="text-xs text-[#9B8E84]">by Author</p>
+            </div>
+            <button onClick={() => setBookName('')}><X className="w-4 h-4 text-[#9B8E84]" /></button>
+          </div>
+        )}
+
+        {/* Image preview */}
+        {image && (
+          <div className="mt-3 relative">
+            <img src={image} alt="upload" className="w-full h-40 object-cover rounded-xl" />
+            <button onClick={() => setImage(null)}
+              className="absolute top-2 right-2 bg-black/50 rounded-full p-1">
+              <X className="w-4 h-4 text-white" />
+            </button>
+          </div>
+        )}
+
+        {/* Visibility toggle */}
+        <div className="mt-4 flex gap-3">
+          {['Public', 'Private'].map(v => (
+            <button key={v} onClick={() => setIsPublic(v === 'Public')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium border transition ${isPublic === (v === 'Public') ? 'bg-[#C8622A]/10 border-[#C8622A] text-[#C8622A]' : 'border-[#EDE8E3] text-[#9B8E84]'}`}>
+              {v === 'Private' && <Lock className="w-3 h-3" />}
+              {v}
+            </button>
+          ))}
+        </div>
+
+        {/* Attach photo */}
+        <input ref={fileRef} type="file" accept="image/*" className="hidden"
+          onChange={e => { const f = e.target.files[0]; if (f) { const r = new FileReader(); r.onload = ev => setImage(ev.target.result); r.readAsDataURL(f); } }} />
+        <button onClick={() => fileRef.current?.click()}
+          className="mt-4 flex items-center gap-2 text-sm text-[#6B5D52] border border-[#EDE8E3] bg-white rounded-xl px-4 py-2.5 w-full justify-center">
+          <Camera className="w-4 h-4" /> Attach Photo
+        </button>
+      </div>
+
+      {/* Post button */}
+      <div className="fixed bottom-20 left-0 right-0 max-w-md mx-auto px-4">
+        <button
+          onClick={() => { if (content.trim()) { onPost({ content, bookName, image, isPublic }); setPage('home'); } }}
+          disabled={!content.trim()}
+          className="w-full py-4 bg-[#C8622A] text-white rounded-2xl font-bold text-base shadow-lg disabled:opacity-50">
+          Post
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── CREWS PAGE ─────────────────────────────────────────────────────────────
+const CrewsPage = ({ user, crews, setPage }) => {
+  const [view, setView] = useState('list'); // 'list', 'chat', 'bookpage'
+  const [selectedCrew, setSelectedCrew] = useState(null);
+  const [messages, setMessages] = useState([
+    { id: 1, user: 'Aman', text: 'The part where Morrie says "Once you learn how to die, you learn how to live" really hit me. Such a pow...', time: '10:20 AM', initials: 'AM', color: '#7B9EA6' },
+    { id: 2, user: 'Vikram', text: 'A life-changing book. Makes you appreciate the simple...', time: '10:22 AM', initials: 'VK', color: '#8B5E3C' },
+    { id: 3, user: 'Deepika', text: "Mitch Albom's writing is so touching. I cried and felt inspired at the time.", time: '10:25 AM', initials: 'DP', color: '#C8956C' },
+  ]);
+  const [newMsg, setNewMsg] = useState('');
+  const endRef = useRef();
+
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+
+  if (view === 'chat' && selectedCrew) {
+    return (
+      <div className="h-screen flex flex-col bg-[#FAF6F1]">
+        {/* Chat header */}
+        <div className="bg-white border-b border-[#EDE8E3] px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+          <button onClick={() => setView('bookpage')} className="text-[#6B5D52]">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div className="flex items-center gap-2 flex-1 mx-3">
+            <div className="w-8 h-8 rounded-lg shadow-sm flex items-center justify-center"
+              style={{ backgroundColor: selectedCrew.cover }}>
+              <BookOpen className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <p className="font-semibold text-[#2D2419] text-sm">Crew Chat Room</p>
+            </div>
+          </div>
+          <button><MoreHorizontal className="w-5 h-5 text-[#9B8E84]" /></button>
+        </div>
+
+        {/* Book banner in chat */}
+        <div className="bg-white px-4 py-3 border-b border-[#EDE8E3]">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-14 rounded-lg shadow-sm flex items-center justify-center"
+              style={{ backgroundColor: selectedCrew.cover }}>
+              <BookOpen className="w-5 h-5 text-white" />
+            </div>
+            <div>
+              <p className="font-bold text-[#2D2419] text-sm">{selectedCrew.name}</p>
+              <p className="text-xs text-[#9B8E84]">{selectedCrew.members >= 1000 ? `${(selectedCrew.members / 1000).toFixed(1)}K` : selectedCrew.members} Members</p>
+            </div>
+            <button className="ml-auto flex items-center gap-1.5 text-xs text-[#C8622A] border border-[#C8622A]/30 rounded-xl px-3 py-1.5">
+              <UserPlus className="w-3 h-3" /> Invite Friends
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+          {messages.map(msg => {
+            const isOwn = msg.user === user?.name;
+            return (
+              <div key={msg.id} className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                {!isOwn && <Avatar initials={msg.initials} size="sm" color={msg.color} />}
+                <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'} flex flex-col`}>
+                  {!isOwn && <p className="text-xs text-[#9B8E84] mb-1 px-1">{msg.user}</p>}
+                  <div className={`rounded-2xl px-3.5 py-2.5 ${isOwn ? 'bg-[#C8622A] text-white' : 'bg-white border border-[#EDE8E3] text-[#2D2419]'}`}>
+                    <p className="text-sm leading-relaxed">{msg.text}</p>
                   </div>
-                </>
-              ) : (
-                <>
-                  <h2 className="text-3xl font-bold text-gray-800 mb-2">Verify OTP</h2>
-                  <p className="text-gray-600 mb-8">Enter the code sent to {verificationData.email}</p>
+                  <p className="text-[10px] text-[#B8AEA8] mt-1 px-1">{msg.time}</p>
+                </div>
+              </div>
+            );
+          })}
+          <div ref={endRef} />
+        </div>
 
-                  <input
-                    type="text"
-                    value={otpInput}
-                    onChange={(e) => setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6))}
-                    className="w-full px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none text-center text-3xl tracking-widest mb-6"
-                    placeholder="000000"
-                    maxLength="6"
-                    autoFocus
-                  />
-
-                  <button
-                    onClick={handleVerifyOTP}
-                    disabled={loading || otpInput.length !== 6}
-                    className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
-                  >
-                    {loading ? 'Verifying...' : 'Verify & Continue'}
-                  </button>
-
-                  <button
-                    onClick={() => { setShowOTP(false); setOtpInput(''); }}
-                    className="w-full mt-4 text-gray-600 hover:text-gray-800 flex items-center justify-center gap-2"
-                  >
-                    <ArrowLeft className="w-4 h-4" /> Back to Sign Up
-                  </button>
-                </>
-              )}
+        {/* Input */}
+        <div className="bg-white border-t border-[#EDE8E3] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
+            <div className="flex-1 flex items-center gap-2 bg-[#FAF6F1] border border-[#EDE8E3] rounded-2xl px-3 py-2.5">
+              <input value={newMsg} onChange={e => setNewMsg(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && newMsg.trim()) {
+                    setMessages(prev => [...prev, { id: Date.now(), user: user.name, text: newMsg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), initials: user.name.slice(0, 2), color: '#C8622A' }]);
+                    setNewMsg('');
+                  }
+                }}
+                className="flex-1 bg-transparent text-sm text-[#2D2419] placeholder-[#B8AEA8] outline-none"
+                placeholder="Ask ReadCrew AI..." />
+              <button onClick={() => {
+                if (newMsg.trim()) {
+                  setMessages(prev => [...prev, { id: Date.now(), user: user.name, text: newMsg, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), initials: user.name.slice(0, 2), color: '#C8622A' }]);
+                  setNewMsg('');
+                }
+              }}>
+                <Send className="w-4 h-4 text-[#C8622A]" />
+              </button>
             </div>
           </div>
         </div>
@@ -1292,1200 +1049,440 @@ const App = () => {
     );
   }
 
-  // ========== RENDER: MAIN APP ==========
+  if (view === 'bookpage' && selectedCrew) {
+    const reviews = [
+      { user: 'Aman', initials: 'AM', color: '#7B9EA6', text: 'Profound and heartwarming. Made me reflect on what truly matters!', time: '2h ago' },
+      { user: 'Deepika', initials: 'DP', color: '#C8956C', text: "Mitch Albom's writing is so touching. I cried and felt inspired at the time.", time: '5h ago' },
+      { user: 'Vikram', initials: 'VK', color: '#8B5E3C', text: 'A life-changing book. Makes you appreciate the simple.', time: '1d ago' },
+    ];
+    return (
+      <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+        <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center gap-3 border-b border-[#EDE8E3]">
+          <button onClick={() => setView('list')}><ChevronLeft className="w-6 h-6 text-[#6B5D52]" /></button>
+          <span className="font-semibold text-[#2D2419]">{selectedCrew.name}</span>
+          <button className="ml-auto"><Bookmark className="w-5 h-5 text-[#9B8E84]" /></button>
+        </div>
+
+        <div className="px-4 py-4">
+          {/* Book info */}
+          <span className="text-xs px-2.5 py-1 bg-[#F5EDE3] text-[#C8622A] rounded-full font-medium">{selectedCrew.genre}</span>
+          <div className="flex gap-4 mt-3">
+            <div className="w-24 h-32 rounded-xl shadow-lg flex items-center justify-center shrink-0"
+              style={{ backgroundColor: selectedCrew.cover }}>
+              <BookOpen className="w-10 h-10 text-white" />
+            </div>
+            <div>
+              <h2 className="font-bold text-[#2D2419] text-xl" style={{ fontFamily: 'Georgia, serif' }}>{selectedCrew.name}</h2>
+              <p className="text-sm text-[#9B8E84] mt-1">{selectedCrew.author}</p>
+              <div className="flex items-center gap-1.5 mt-2">
+                <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                <span className="text-sm font-bold text-[#2D2419]">3dk</span>
+                <span className="text-xs text-[#9B8E84]">Bviews</span>
+              </div>
+              <StarRating rating={4} />
+              <div className="flex items-center gap-1 mt-1">
+                <Heart className="w-3 h-3 text-[#C8622A]" />
+                <span className="text-xs text-[#9B8E84]">22k Reviews</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex gap-4 mt-5 border-b border-[#EDE8E3] pb-0">
+            {['Reviews', 'Crew Chat', 'About', 'Similar'].map((tab, i) => (
+              <button key={tab} onClick={() => tab === 'Crew Chat' && setView('chat')}
+                className={`text-sm pb-2.5 font-medium border-b-2 ${i === 0 ? 'text-[#C8622A] border-[#C8622A]' : 'text-[#9B8E84] border-transparent'}`}>
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* Reviews */}
+          <div className="mt-4 flex items-center gap-2 mb-4">
+            <span className="text-3xl font-bold text-[#2D2419]">4.5</span>
+            <div>
+              <StarRating rating={4} />
+              <p className="text-xs text-[#9B8E84]">22k Reviews →</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            {reviews.map((r, i) => (
+              <div key={i} className="flex gap-3">
+                <Avatar initials={r.initials} size="sm" color={r.color} />
+                <div className="flex-1 bg-white rounded-2xl p-3 border border-[#EDE8E3]">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold text-[#2D2419] text-sm">{r.user}</span>
+                    <button><MoreHorizontal className="w-4 h-4 text-[#B8AEA8]" /></button>
+                  </div>
+                  <p className="text-xs text-[#6B5D52] leading-relaxed">{r.text}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Message input at bottom */}
+          <div className="mt-4 flex items-center gap-2 bg-white border border-[#EDE8E3] rounded-2xl px-3 py-2.5">
+            <Avatar initials={user?.name?.slice(0, 2)} size="xs" color="#C8622A" />
+            <input className="flex-1 bg-transparent text-sm text-[#2D2419] placeholder-[#B8AEA8] outline-none"
+              placeholder="Write a message..." onClick={() => setView('chat')} readOnly />
+            <Send className="w-4 h-4 text-[#9B8E84]" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Notification */}
-      {notification && (
-        <div className={`fixed top-4 right-4 px-6 py-3 rounded-xl font-medium text-white shadow-lg z-50 ${
-          notification.type === 'success' ? 'bg-green-500' :
-          notification.type === 'error' ? 'bg-red-500' :
-          'bg-blue-500'
-        }`}>
-          {notification.message}
+    <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+      <TopBar user={user} setPage={setPage} />
+      <div className="px-4 py-4">
+        <h1 className="text-2xl font-bold text-[#2D2419] mb-4" style={{ fontFamily: 'Georgia, serif' }}>Reading Crews</h1>
+
+        <div className="flex items-center gap-2 bg-white border border-[#EDE8E3] rounded-xl px-3 py-2.5 mb-5">
+          <Search className="w-4 h-4 text-[#9B8E84]" />
+          <input className="flex-1 bg-transparent text-sm text-[#2D2419] placeholder-[#B8AEA8] outline-none"
+            placeholder="Search crews..." />
         </div>
-      )}
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-white shadow-sm border-b border-gray-100">
-        <div className="max-w-7xl mx-auto px-6 h-20 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center shadow-lg">
-              <BookOpen className="w-7 h-7 text-white" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">ReadCrew</h1>
-              <p className="text-xs text-gray-500">Let's make reading a habit</p>
-            </div>
-          </div>
-
-          <nav className="hidden md:flex items-center gap-1">
-            {[
-              { name: 'Home', page: 'home', icon: BookOpen },
-              { name: 'Shared Stories', page: 'donation', icon: Gift },
-              { name: 'Book Reviews', page: 'reviews', icon: Star },
-              { name: 'ReadCrew', page: 'readcrew', icon: Users } // CHANGED: Replaced Recommendations with ReadCrew
-            ].map(({ name, page, icon: Icon }) => (
-              <button
-                key={page}
-                onClick={() => setCurrentPage(page)}
-                className={`px-4 py-2 rounded-xl font-medium transition-all ${
-                  currentPage === page
-                    ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white shadow-lg'
-                    : 'text-gray-600 hover:bg-gray-100'
-                }`}
-              >
-                <span className="flex items-center gap-2">
-                  <Icon className="w-4 h-4" />
-                  {name}
-                </span>
-              </button>
-            ))}
-          </nav>
-
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowProfile(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-orange-100 to-red-100 hover:from-orange-200 hover:to-red-200 rounded-xl transition"
-            >
-              <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                {currentUser?.name?.charAt(0)}
-              </div>
-              <span className="hidden md:block font-medium text-gray-700">{currentUser?.name}</span>
-            </button>
-          </div>
-        </div>
-      </header>
-
-      {/* Home Page */}
-      {currentPage === 'home' && (
-        <div className="max-w-7xl mx-auto px-6 py-12">
-          {/* Hero Section */}
-          <div className="relative overflow-hidden rounded-3xl mb-12 text-white">
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-900/90 via-red-900/85 to-pink-900/90" />
-            <div className="relative z-10 p-12">
-              <div className="max-w-2xl">
-                <h2 className="text-5xl font-bold mb-4">Let's make reading a habit</h2>
-                <p className="text-xl text-orange-100 mb-8">
-                  Join our vibrant community of book lovers. Share stories, discover reviews, and find your next favorite book.
-                </p>
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">
-                    <Users className="w-5 h-5" />
-                    <span>{donations.length + reviews.length}+ Stories</span>
+        <div className="space-y-4">
+          {crews.map(crew => (
+            <div key={crew.id} className="bg-white rounded-2xl overflow-hidden border border-[#EDE8E3] shadow-sm"
+              onClick={() => { setSelectedCrew(crew); setView('bookpage'); }}>
+              <div className="h-28 relative" style={{ backgroundColor: crew.cover + '30' }}>
+                <div className="absolute inset-0 flex items-center px-4 gap-4">
+                  <div className="w-16 h-22 rounded-xl shadow-md flex items-center justify-center"
+                    style={{ backgroundColor: crew.cover, height: '88px', width: '64px' }}>
+                    <BookOpen className="w-7 h-7 text-white" />
                   </div>
-                  <div className="flex items-center gap-2 bg-white/20 backdrop-blur px-4 py-2 rounded-full">
-                    <TrendingUp className="w-5 h-5" />
-                    <span>Growing Daily</span>
+                  <div>
+                    <p className="font-bold text-[#2D2419]">{crew.name}</p>
+                    <p className="text-xs text-[#9B8E84]">by {crew.author}</p>
+                    <span className="text-xs px-2 py-0.5 bg-white/70 text-[#C8622A] rounded-full font-medium mt-1 inline-block">{crew.genre}</span>
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-
-          {/* Feature Cards */}
-          <div className="grid md:grid-cols-3 gap-6 mb-12">
-            {[
-              { page: 'donation', gradient: 'from-blue-500 to-cyan-500', icon: Gift, title: 'Shared Stories', desc: 'Moments of reading, gifting, and sharing books' },
-              { page: 'reviews', gradient: 'from-purple-500 to-pink-500', icon: Star, title: 'Book Reviews', desc: 'Read and share honest book reviews' },
-              { page: 'readcrew', gradient: 'from-amber-500 to-orange-500', icon: Users, title: 'ReadCrew', desc: 'Join reading crews and chat with fellow readers' } // CHANGED: Updated to ReadCrew
-            ].map(({ page, gradient, icon: Icon, title, desc }, idx) => (
-              <div
-                key={idx}
-                onClick={() => setCurrentPage(page)}
-                className="group relative overflow-hidden rounded-2xl cursor-pointer hover:shadow-2xl transform hover:scale-105 transition-all duration-300 h-64 bg-gradient-to-br from-gray-900 to-black"
-              >
-                <div className={`absolute inset-0 bg-gradient-to-br ${gradient} opacity-90 group-hover:opacity-95 transition`} />
-                <div className="relative z-10 p-8 h-full flex flex-col justify-end text-white">
-                  <Icon className="w-12 h-12 mb-4 group-hover:scale-110 transition-transform" />
-                  <h3 className="text-2xl font-bold mb-3">{title}</h3>
-                  <p className="text-white/90 mb-4">{desc}</p>
-                  <div className="flex items-center text-sm font-semibold">
-                    Explore Now
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Stats */}
-          <div className="grid md:grid-cols-3 gap-6">
-            {[
-              { label: 'Stories Shared', value: donations.length, icon: Gift, gradient: 'from-blue-100 to-cyan-100', color: 'text-blue-600' },
-              { label: 'Reviews Written', value: reviews.length, icon: Star, gradient: 'from-purple-100 to-pink-100', color: 'text-purple-600' },
-              { label: 'Your Activity', value: userActivity.savedPosts.length + userActivity.likedPosts.length, icon: Heart, gradient: 'from-orange-100 to-red-100', color: 'text-orange-600' }
-            ].map(({ label, value, icon: Icon, gradient, color }, idx) => (
-              <div key={idx} className="bg-white rounded-2xl p-6 shadow-lg hover:shadow-xl transition">
+              <div className="px-4 py-3">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-gray-500 mb-1">{label}</p>
-                    <p className={`text-4xl font-bold ${color}`}>{value}</p>
+                  <div className="flex items-center gap-1 text-sm text-[#9B8E84]">
+                    <Users className="w-4 h-4" />
+                    <span>{crew.members >= 1000 ? `${(crew.members / 1000).toFixed(1)}K` : crew.members} Members</span>
                   </div>
-                  <div className={`w-16 h-16 bg-gradient-to-br ${gradient} rounded-2xl flex items-center justify-center`}>
-                    <Icon className={`w-8 h-8 ${color}`} />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Shared Stories Page */}
-      {currentPage === 'donation' && (
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <button
-            onClick={() => setCurrentPage('home')}
-            className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold"
-          >
-            <ChevronLeft className="w-5 h-5" /> Back to Home
-          </button>
-
-          <div className="flex justify-between items-center mb-8">
-            <div>
-              <h1 className="text-4xl font-bold text-gray-900 mb-2">Shared Stories</h1>
-              <p className="text-gray-600">Moments of reading, gifting, donating, and sharing books</p>
-            </div>
-            <button
-              onClick={() => setShowSavedPosts(true)}
-              className="px-6 py-3 bg-gradient-to-r from-blue-500 to-cyan-500 text-white rounded-xl font-semibold shadow-lg hover:shadow-xl transition flex items-center gap-2"
-            >
-              <Bookmark className="w-5 h-5" />
-              Saved ({userActivity.savedPosts?.length || 0})
-            </button>
-          </div>
-
-          {/* Upload Form */}
-          <div className="bg-white rounded-2xl shadow-xl p-8 mb-12 border border-gray-100">
-            <h2 className="text-2xl font-bold mb-6 text-gray-900">Share Your Reading Journey</h2>
-            <div className="grid md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Book Name *</label>
-                <input
-                  type="text"
-                  value={donationForm.bookName}
-                  onChange={(e) => setDonationForm({ ...donationForm, bookName: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition"
-                  placeholder="Enter book name"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Upload Photo *</label>
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  id="image-upload"
-                />
-                <label
-                  htmlFor="image-upload"
-                  className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 cursor-pointer transition bg-gray-50 hover:bg-blue-50"
-                >
-                  <Upload className="w-5 h-5 text-gray-400" />
-                  <span className="text-gray-600">Choose Image (max 2MB)</span>
-                </label>
-              </div>
-              <div className="md:col-span-2">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Your Story *</label>
-                <textarea
-                  value={donationForm.story}
-                  onChange={(e) => setDonationForm({ ...donationForm, story: e.target.value })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none transition"
-                  rows="4"
-                  placeholder="Share the special moment..."
-                />
-              </div>
-              {donationForm.imagePreview && (
-                <div className="md:col-span-2">
-                  <img src={donationForm.imagePreview} alt="Preview" className="w-full h-64 object-cover rounded-xl shadow-lg" />
-                  <button
-                    onClick={() => setDonationForm({ ...donationForm, image: null, imagePreview: null })}
-                    className="mt-2 text-sm text-red-600 hover:text-red-700"
-                  >
-                    Remove Image
-                  </button>
-                </div>
-              )}
-              <div className="md:col-span-2">
-                <button
-                  onClick={handleDonationSubmit}
-                  disabled={!donationForm.bookName || !donationForm.story || !donationForm.image || loading}
-                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
-                >
-                  {loading ? 'Sharing...' : 'Share My Story'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* Stories Grid */}
-          <h2 className="text-2xl font-bold mb-6 text-gray-900">Community Stories</h2>
-          {donations.length === 0 ? (
-            <div className="text-center py-20 bg-white rounded-2xl">
-              <Gift className="w-20 h-20 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">No stories yet. Be the first to share!</p>
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {donations.map(donation => (
-                <div 
-                  key={donation._id} 
-                  id={`post-${donation._id}`}
-                  onClick={() => {
-                    console.log('Opening post:', donation);
-                    setSelectedPost(donation);
-                    setShowPostDetail(true);
-                  }}
-                  className="group bg-white rounded-2xl shadow-lg overflow-hidden hover:shadow-2xl transition-all cursor-pointer"
-                >
-                  <div className="relative overflow-hidden h-48">
-                    <img 
-                      src={donation.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'} 
-                      alt={donation.bookName} 
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                      onError={(e) => {
-                        e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
-                      }}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
-                    {donation.userEmail === currentUser?.email && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteDonation(donation._id);
-                        }}
-                        className="absolute top-3 right-3 w-10 h-10 bg-red-500 hover:bg-red-600 rounded-full flex items-center justify-center text-white shadow-lg transition"
-                      >
-                        <Trash2 className="w-5 h-5" />
-                      </button>
-                    )}
-                    <div className="absolute bottom-4 left-4 right-4">
-                      <h3 className="text-white font-bold text-xl mb-1">{donation.bookName}</h3>
-                      <p className="text-white/80 text-sm">by {donation.userName}</p>
-                    </div>
-                  </div>
-                  <div className="p-5">
-                    <p className="text-gray-700 line-clamp-3 mb-4">{donation.story}</p>
-                    <div className="flex items-center justify-between pt-4 border-t border-gray-100">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleLikeDonation(donation._id);
-                        }}
-                        className={`flex items-center gap-2 transition ${
-                          userActivity.likedPosts?.includes(donation._id) ? 'text-pink-600' : 'text-gray-400 hover:text-pink-600'
-                        }`}
-                      >
-                        <Heart className={`w-5 h-5 ${userActivity.likedPosts?.includes(donation._id) ? 'fill-current' : ''}`} />
-                        <span className="font-semibold">{donation.likes || 0}</span>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleSaveDonation(donation._id);
-                        }}
-                        className={`flex items-center gap-2 transition ${
-                          userActivity.savedPosts?.includes(donation._id) ? 'text-blue-600' : 'text-gray-400 hover:text-blue-600'
-                        }`}
-                      >
-                        <Bookmark className={`w-5 h-5 ${userActivity.savedPosts?.includes(donation._id) ? 'fill-current' : ''}`} />
-                        <span className="font-semibold">{donation.saves || 0}</span>
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleShareDonation(donation._id);
-                        }}
-                        className="flex items-center gap-2 text-gray-400 hover:text-green-600 transition"
-                      >
-                        <Share2 className="w-5 h-5" />
-                      </button>
-                      <span className="text-sm text-gray-500">{new Date(donation.createdAt).toLocaleDateString()}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Book Reviews Page */}
-      {currentPage === 'reviews' && (
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
-            <ChevronLeft className="w-5 h-5" /> Back to Home
-          </button>
-
-          <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-purple-900 to-pink-900 p-12">
-            <h1 className="text-4xl font-bold text-white mb-2">Book Reviews</h1>
-            <p className="text-purple-100">Discover what others are reading</p>
-          </div>
-
-          {/* Search and Actions */}
-          <div className="flex flex-wrap gap-4 mb-8">
-            <div className="flex-1 flex gap-2">
-              <input
-                type="text"
-                placeholder="Search by book, author, or user..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                onKeyPress={handleSearchKeyPress}
-                className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
-              />
-              <button 
-                onClick={handleSearchReviews}
-                className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition"
-              >
-                Search
-              </button>
-              {searchQuery && (
-                <button 
-                  onClick={() => {
-                    setSearchQuery('');
-                    fetchReviews();
-                  }}
-                  className="bg-red-500 text-white px-4 py-3 rounded-xl hover:bg-red-600 transition"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
-
-            <button 
-              className="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-6 py-3 rounded-xl hover:shadow-lg transition font-medium"
-              onClick={() => setShowCreateReviewForm(!showCreateReviewForm)}
-            >
-              {showCreateReviewForm ? 'Cancel' : 'Write Review'}
-            </button>
-          </div>
-
-          {/* Create Review Form */}
-          {showCreateReviewForm && (
-            <CreateReviewForm
-              currentUser={currentUser}
-              onReviewCreated={handleReviewCreated}
-              onCancel={() => setShowCreateReviewForm(false)}
-            />
-          )}
-
-          {/* Reviews List */}
-          <div className="mt-8">
-            {reviewsLoading ? (
-              <div className="flex flex-col items-center justify-center py-20">
-                <div className="w-12 h-12 border-4 border-purple-200 border-t-purple-500 rounded-full animate-spin mb-4"></div>
-                <p className="text-gray-600">Loading reviews...</p>
-              </div>
-            ) : filteredReviews.length === 0 ? (
-              <div className="text-center py-20 bg-white rounded-2xl shadow-lg">
-                <p className="text-2xl text-gray-700 mb-2">📖 No reviews found</p>
-                {searchQuery && <p className="text-gray-500">Try a different search term</p>}
-              </div>
-            ) : (
-              <>
-                <div className="bg-gradient-to-r from-purple-100 to-pink-100 text-purple-800 px-4 py-3 rounded-xl mb-6">
-                  {filteredReviews.length} {filteredReviews.length === 1 ? 'review' : 'reviews'} found
-                </div>
-                {filteredReviews.map((review) => (
-                  <ReviewCard
-                    key={review._id}
-                    review={review}
-                    currentUserEmail={currentUser?.email}
-                    onUpdate={fetchReviews}
-                    onDelete={handleReviewDeleted}
-                  />
-                ))}
-              </>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Recommendations Page - Kept for reference but hidden */}
-      {currentPage === 'recommend' && (
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <button onClick={() => setCurrentPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
-            <ChevronLeft className="w-5 h-5" /> Back to Home
-          </button>
-
-          <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-12">
-            <h1 className="text-4xl font-bold text-white mb-2">Book Recommendations</h1>
-            <p className="text-orange-100">AI-powered suggestions from 24+ genres</p>
-          </div>
-
-          <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
-            <h2 className="text-2xl font-bold mb-6 text-gray-900">Find Your Next Read</h2>
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <div className="relative mb-6">
-                  <Sparkles className="absolute left-4 top-4 text-orange-500" />
-                  <input
-                    type="text"
-                    value={recommendKeywords}
-                    onChange={(e) => setRecommendKeywords(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleRecommendation()}
-                    className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                    placeholder="fantasy, mystery, self-help, romance..."
-                    disabled={aiLoading}
-                  />
-                </div>
-                <button
-                  onClick={handleRecommendation}
-                  disabled={!recommendKeywords || aiLoading}
-                  className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4"
-                >
-                  {aiLoading ? 'Getting AI Suggestions...' : 'Get AI Recommendations'}
-                </button>
-                <button
-                  onClick={handleBrowseCategories}
-                  disabled={aiLoading}
-                  className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50"
-                >
-                  Browse All Categories
-                </button>
-              </div>
-              
-              <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6">
-                <h3 className="text-xl font-bold mb-4 text-gray-900">AI Search Tips:</h3>
-                <ul className="space-y-2 text-gray-700">
-                  <li className="flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Ask about topics: "books about space exploration"</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Describe your mood: "lighthearted romance novels"</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Compare authors: "books similar to Stephen King"</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <Sparkles className="w-4 h-4 text-orange-500 mt-1" />
-                    <span>Powered by AI recommendation engine</span>
-                  </li>
-                </ul>
-              </div>
-            </div>
-          </div>
-
-          {/* AI Streaming Response */}
-          {(aiLoading || aiResponse) && (
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
-                  <Sparkles className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h2 className="text-2xl font-bold text-gray-900">AI Recommendations</h2>
-                  <p className="text-sm text-gray-500">Powered by AI recommendation engine</p>
-                </div>
-                {!aiLoading && (
-                  <button
-                    onClick={() => setAiResponse('')}
-                    className="ml-auto text-gray-400 hover:text-gray-600 transition"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-
-              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-xl p-6 border border-orange-100 min-h-32">
-                {aiLoading && !aiResponse && (
-                  <div className="flex items-center gap-3 text-orange-600">
-                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <div className="w-2 h-2 bg-orange-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                    <span className="text-sm font-medium">Finding perfect books for you...</span>
-                  </div>
-                )}
-
-                <div
-                  className="text-gray-800 leading-relaxed text-base"
-                  dangerouslySetInnerHTML={{
-                    __html: aiResponse
-                      .replace(/\*\*(.*?)\*\*/g, '<strong class="text-orange-700">$1</strong>')
-                      .replace(/\n\n/g, '</p><p class="mt-4">')
-                      .replace(/\n/g, '<br/>')
-                  }}
-                />
-
-                {/* Blinking cursor while streaming */}
-                {aiLoading && aiResponse && (
-                  <span className="inline-block w-0.5 h-5 bg-orange-500 animate-pulse ml-0.5 align-middle" />
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Old static recommendations (fallback) */}
-          {recommendations.length > 0 && (
-            <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-              <div className="flex items-center justify-between mb-8">
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {recommendations[0].type === 'category' ? 'Recommended Categories' : 
-                   recommendations[0].type === 'keyword' ? `Results for "${recommendations[0].keyword}"` : 
-                   'Popular Recommendations'}
-                </h2>
-                <button
-                  onClick={() => setRecommendations([])}
-                  className="text-gray-500 hover:text-gray-700"
-                >
-                  Clear Results
-                </button>
-              </div>
-
-              <div className="space-y-8">
-                {recommendations.map((rec, idx) => (
-                  <div key={idx} className="border border-gray-200 rounded-2xl overflow-hidden">
-                    {rec.type === 'category' ? (
-                      <div>
-                        <div className="bg-gradient-to-r from-orange-100 to-red-100 p-6">
-                          <div className="flex items-center gap-3">
-                            <span className="text-2xl">{rec.emoji}</span>
-                            <div>
-                              <h3 className="text-xl font-bold text-gray-900">{rec.category}</h3>
-                              <p className="text-gray-600">{rec.description}</p>
-                            </div>
-                          </div>
-                        </div>
-                        <div className="p-6">
-                          <h4 className="font-semibold text-gray-700 mb-4">Recommended Books:</h4>
-                          <div className="grid md:grid-cols-2 gap-4">
-                            {rec.books.map((book, bookIdx) => (
-                              <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
-                                <div className="flex justify-between items-start mb-2">
-                                  <div>
-                                    <h5 className="font-bold text-gray-900">{book.title}</h5>
-                                    <p className="text-sm text-gray-600">by {book.author}</p>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                    <span className="text-sm font-semibold">{book.rating}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : rec.type === 'keyword' ? (
-                      <div>
-                        <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-6">
-                          <h3 className="text-xl font-bold text-gray-900">Books matching "{rec.keyword}"</h3>
-                        </div>
-                        <div className="p-6">
-                          <div className="grid md:grid-cols-2 gap-4">
-                            {rec.books.map((book, bookIdx) => (
-                              <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
-                                <div className="flex justify-between items-start mb-2">
-                                  <div>
-                                    <h5 className="font-bold text-gray-900">{book.title}</h5>
-                                    <p className="text-sm text-gray-600">by {book.author}</p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                                        {book.category}
-                                      </span>
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                    <span className="text-sm font-semibold">{book.rating}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="bg-gradient-to-r from-green-100 to-teal-100 p-6">
-                          <h3 className="text-xl font-bold text-gray-900">{rec.title}</h3>
-                        </div>
-                        <div className="p-6">
-                          <div className="grid md:grid-cols-2 gap-4">
-                            {rec.books.map((book, bookIdx) => (
-                              <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
-                                <div className="flex justify-between items-start mb-2">
-                                  <div>
-                                    <h5 className="font-bold text-gray-900">{book.title}</h5>
-                                    <p className="text-sm text-gray-600">by {book.author}</p>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                                        {book.category}
-                                      </span>
-                                    </p>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                    <span className="text-sm font-semibold">{book.rating}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Quick Category Grid */}
-          {recommendations.length === 0 && !aiResponse && !aiLoading && (
-            <div className="mt-8">
-              <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Categories</h2>
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-                {BOOK_RECOMMENDATIONS.slice(0, 12).map(category => (
-                  <button
-                    key={category.id}
-                    onClick={() => {
-                      setRecommendKeywords(category.category.toLowerCase());
-                      setTimeout(() => handleRecommendation(), 100);
-                    }}
-                    className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition text-center border border-gray-200 hover:border-orange-300"
-                  >
-                    <div className="text-2xl mb-2">{category.emoji}</div>
-                    <p className="text-sm font-medium text-gray-700 truncate">{category.category}</p>
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ReadCrew Page - NEW */}
-      {currentPage === 'readcrew' && (
-        <ReadCrewPage 
-          currentUser={currentUser}
-          onBack={() => setCurrentPage('home')}
-        />
-      )}
-
-      {/* Profile Modal */}
-      {showProfile && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowProfile(false);
-        }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b bg-gradient-to-r from-orange-500 to-red-500 text-white sticky top-0">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-orange-500 text-2xl font-bold">
-                    {currentUser?.name?.charAt(0)}
-                  </div>
-                  <div>
-                    <h2 className="text-2xl font-bold">{currentUser?.name}</h2>
-                    <p className="text-orange-100">{currentUser?.email}</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowProfile(false)} className="text-white hover:text-orange-100 p-2">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            
-            <div className="p-6">
-              {/* Reading Goal Section */}
-              <div className="mb-6 bg-gradient-to-r from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-100">
-                <div className="flex justify-between items-center mb-4">
-                  <div className="flex items-center gap-2">
-                    <Target className="w-6 h-6 text-blue-600" />
-                    <h3 className="text-xl font-bold text-gray-900">Reading Goal</h3>
-                  </div>
-                  <button
-                    onClick={() => setShowGoalModal(true)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition flex items-center gap-2"
-                  >
-                    <Edit className="w-4 h-4" /> Edit Goal
-                  </button>
-                </div>
-                <p className="text-gray-700">
-                  <span className="text-3xl font-bold text-blue-600">{readingGoal.monthly}</span> books this month
-                </p>
-                <div className="mt-4">
-                  <p className="text-sm font-semibold text-gray-700 mb-2">Books to Read:</p>
-                  {readingGoal.books.length === 0 ? (
-                    <p className="text-gray-500 text-sm">No books added yet</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {readingGoal.books.map((book, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-sm">
-                          <button
-                            onClick={() => handleToggleBook(idx)}
-                            className={`w-5 h-5 rounded flex items-center justify-center ${book.completed ? 'bg-green-500' : 'bg-gray-200'}`}
-                          >
-                            {book.completed && <Check className="w-3 h-3 text-white" />}
-                          </button>
-                          <span className={book.completed ? 'line-through text-gray-500' : 'text-gray-700'}>{book.title}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-4 mb-6">
-                <button
-                  onClick={() => { setShowProfile(false); setShowLikedPosts(true); }}
-                  className="bg-gradient-to-br from-pink-50 to-white p-4 rounded-xl border border-pink-100 hover:border-pink-300 transition cursor-pointer text-center"
-                >
-                  <Heart className="w-8 h-8 text-pink-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-gray-900">{userActivity.likedPosts?.length || 0}</p>
-                  <p className="text-sm text-gray-600">Liked</p>
-                </button>
-                <button
-                  onClick={() => { setShowProfile(false); setShowSavedPosts(true); }}
-                  className="bg-gradient-to-br from-blue-50 to-white p-4 rounded-xl border border-blue-100 hover:border-blue-300 transition cursor-pointer text-center"
-                >
-                  <Bookmark className="w-8 h-8 text-blue-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-gray-900">{userActivity.savedPosts?.length || 0}</p>
-                  <p className="text-sm text-gray-600">Saved</p>
-                </button>
-                <button
-                  onClick={() => { setShowProfile(false); setShowSharedPosts(true); }}
-                  className="bg-gradient-to-br from-green-50 to-white p-4 rounded-xl border border-green-100 hover:border-green-300 transition cursor-pointer text-center"
-                >
-                  <Share2 className="w-8 h-8 text-green-600 mx-auto mb-2" />
-                  <p className="text-2xl font-bold text-gray-900">{userActivity.sharedPosts?.length || 0}</p>
-                  <p className="text-sm text-gray-600">Shared</p>
-                </button>
-              </div>
-              
-              <button
-                onClick={handleLogout}
-                className="w-full bg-gradient-to-r from-red-500 to-pink-500 text-white py-3 rounded-xl font-semibold hover:shadow-xl transition flex items-center justify-center gap-2"
-              >
-                <LogOut className="w-5 h-5" /> Logout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Goal Modal */}
-      {showGoalModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowGoalModal(false);
-        }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
-            <h2 className="text-2xl font-bold mb-6">Set Reading Goal</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold mb-2">Books to read this month</label>
-                <input
-                  type="number"
-                  value={readingGoal.monthly}
-                  onChange={(e) => setReadingGoal({ ...readingGoal, monthly: parseInt(e.target.value) || 0 })}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
-                  min="0"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold mb-2">Books you want to read</label>
-                <div className="flex gap-2 mb-3">
-                  <input
-                    type="text"
-                    value={newBook}
-                    onChange={(e) => setNewBook(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleAddBook()}
-                    className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-blue-500 focus:outline-none"
-                    placeholder="Add a book..."
-                  />
-                  <button
-                    onClick={handleAddBook}
-                    className="px-4 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700"
-                  >
-                    <Plus className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {readingGoal.books.map((book, idx) => (
-                    <div key={idx} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                      <button
-                        onClick={() => handleToggleBook(idx)}
-                        className={`w-6 h-6 rounded flex items-center justify-center ${book.completed ? 'bg-green-500' : 'bg-gray-200'}`}
-                      >
-                        {book.completed && <Check className="w-4 h-4 text-white" />}
-                      </button>
-                      <span className={`flex-1 ${book.completed ? 'line-through text-gray-500' : ''}`}>{book.title}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              <div className="flex gap-3">
-                <button
-                  onClick={() => setShowGoalModal(false)}
-                  className="flex-1 px-4 py-3 bg-gray-200 text-gray-700 rounded-xl hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateGoal}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-xl hover:shadow-lg"
-                >
-                  Save Goal
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Saved Posts Modal */}
-      {showSavedPosts && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowSavedPosts(false);
-        }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b bg-gradient-to-r from-blue-500 to-cyan-500 text-white sticky top-0">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <Bookmark className="w-8 h-8" />
-                  <div>
-                    <h2 className="text-2xl font-bold">Saved Posts</h2>
-                    <p className="text-blue-100">{donations.filter(d => userActivity.savedPosts?.includes(d._id)).length} posts saved</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowSavedPosts(false)} className="text-white hover:text-blue-100 p-2">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {donations.filter(d => userActivity.savedPosts?.includes(d._id)).length === 0 ? (
-                <div className="text-center py-12">
-                  <Bookmark className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No saved posts yet</p>
-                  <p className="text-sm text-gray-400 mt-2">Click the bookmark icon on any post to save it</p>
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {donations.filter(d => userActivity.savedPosts?.includes(d._id)).map(donation => (
-                    <div 
-                      key={donation._id} 
-                      className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-4 border border-blue-100 hover:border-blue-300 transition cursor-pointer" 
-                      onClick={() => { 
-                        setShowSavedPosts(false); 
-                        setSelectedPost(donation);
-                        setShowPostDetail(true);
-                      }}
-                    >
-                      <div className="flex gap-3">
-                        <img 
-                          src={donation.image} 
-                          alt={donation.bookName} 
-                          className="w-20 h-20 object-cover rounded-lg"
-                          onError={(e) => {
-                            e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
-                          }}
-                        />
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg mb-1">{donation.bookName}</h3>
-                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{donation.story}</p>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>by {donation.userName}</span>
-                            <span className="text-blue-600 font-semibold">View →</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Liked Posts Modal */}
-      {showLikedPosts && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowLikedPosts(false);
-        }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b bg-gradient-to-r from-pink-500 to-red-500 text-white sticky top-0">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <Heart className="w-8 h-8" />
-                  <div>
-                    <h2 className="text-2xl font-bold">Liked Posts</h2>
-                    <p className="text-pink-100">{donations.filter(d => userActivity.likedPosts?.includes(d._id)).length} posts liked</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowLikedPosts(false)} className="text-white hover:text-pink-100 p-2">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {donations.filter(d => userActivity.likedPosts?.includes(d._id)).length === 0 ? (
-                <div className="text-center py-12">
-                  <Heart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No liked posts yet</p>
-                  <p className="text-sm text-gray-400 mt-2">Click the heart icon on any post to like it</p>
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {donations.filter(d => userActivity.likedPosts?.includes(d._id)).map(donation => (
-                    <div 
-                      key={donation._id} 
-                      className="bg-gradient-to-br from-pink-50 to-white rounded-xl p-4 border border-pink-100 hover:border-pink-300 transition cursor-pointer" 
-                      onClick={() => { 
-                        setShowLikedPosts(false); 
-                        setSelectedPost(donation);
-                        setShowPostDetail(true);
-                      }}
-                    >
-                      <div className="flex gap-3">
-                        <img 
-                          src={donation.image} 
-                          alt={donation.bookName} 
-                          className="w-20 h-20 object-cover rounded-lg"
-                          onError={(e) => {
-                            e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
-                          }}
-                        />
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg mb-1">{donation.bookName}</h3>
-                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{donation.story}</p>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>by {donation.userName}</span>
-                            <span className="text-pink-600 font-semibold">View →</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Shared Posts Modal */}
-      {showSharedPosts && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowSharedPosts(false);
-        }}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b bg-gradient-to-r from-green-500 to-emerald-500 text-white sticky top-0">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-3">
-                  <Share2 className="w-8 h-8" />
-                  <div>
-                    <h2 className="text-2xl font-bold">Shared Posts</h2>
-                    <p className="text-green-100">{donations.filter(d => userActivity.sharedPosts?.includes(d._id)).length} posts shared</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowSharedPosts(false)} className="text-white hover:text-green-100 p-2">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-            </div>
-            <div className="p-6">
-              {donations.filter(d => userActivity.sharedPosts?.includes(d._id)).length === 0 ? (
-                <div className="text-center py-12">
-                  <Share2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No shared posts yet</p>
-                  <p className="text-sm text-gray-400 mt-2">Click the share icon on any post to mark it as shared</p>
-                </div>
-              ) : (
-                <div className="grid md:grid-cols-2 gap-6">
-                  {donations.filter(d => userActivity.sharedPosts?.includes(d._id)).map(donation => (
-                    <div 
-                      key={donation._id} 
-                      className="bg-gradient-to-br from-green-50 to-white rounded-xl p-4 border border-green-100 hover:border-green-300 transition cursor-pointer" 
-                      onClick={() => { 
-                        setShowSharedPosts(false); 
-                        setSelectedPost(donation);
-                        setShowPostDetail(true);
-                      }}
-                    >
-                      <div className="flex gap-3">
-                        <img 
-                          src={donation.image} 
-                          alt={donation.bookName} 
-                          className="w-20 h-20 object-cover rounded-lg"
-                          onError={(e) => {
-                            e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
-                          }}
-                        />
-                        <div className="flex-1">
-                          <h3 className="font-bold text-lg mb-1">{donation.bookName}</h3>
-                          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{donation.story}</p>
-                          <div className="flex items-center justify-between text-xs text-gray-500">
-                            <span>by {donation.userName}</span>
-                            <span className="text-green-600 font-semibold">View →</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Post Detail Modal - FIXED */}
-      {showPostDetail && selectedPost && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100]" onClick={(e) => {
-          if (e.target === e.currentTarget) setShowPostDetail(false);
-        }}>
-          <div className="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
-            <div className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
-              <button
-                onClick={() => setShowPostDetail(false)}
-                className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-              >
-                <ArrowLeft className="w-5 h-5" />
-                Back
-              </button>
-              <button
-                onClick={() => setShowPostDetail(false)}
-                className="p-2 hover:bg-gray-100 rounded-full"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-6">
-              {/* Image Section */}
-              <div className="relative rounded-2xl overflow-hidden mb-6">
-                <img 
-                  src={selectedPost.image || 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80'} 
-                  alt={selectedPost.bookName}
-                  className="w-full h-96 object-cover"
-                  onError={(e) => {
-                    e.target.src = 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=800&q=80';
-                  }}
-                />
-                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-6">
-                  <h1 className="text-3xl font-bold text-white mb-2">{selectedPost.bookName}</h1>
-                  <p className="text-white/80">Shared by {selectedPost.userName}</p>
-                </div>
-                
-                {selectedPost.userEmail === currentUser?.email && (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (window.confirm('Are you sure you want to delete this story?')) {
-                        handleDeleteDonation(selectedPost._id);
-                        setShowPostDetail(false);
-                      }
-                    }}
-                    className="absolute top-4 right-4 bg-red-500 hover:bg-red-600 text-white p-3 rounded-full shadow-lg"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
-                )}
-              </div>
-              
-              {/* Story Content */}
-              <div className="mb-8">
-                <h2 className="text-2xl font-bold mb-4 text-gray-900">The Story</h2>
-                <div className="bg-gray-50 rounded-xl p-6">
-                  <p className="text-gray-700 text-lg leading-relaxed whitespace-pre-line">
-                    {selectedPost.story}
-                  </p>
-                </div>
-              </div>
-              
-              {/* Stats and Actions */}
-              <div className="flex items-center justify-between border-t border-gray-200 pt-6">
-                <div className="flex items-center gap-2 text-gray-500">
-                  <Clock className="w-4 h-4" />
-                  <span>{new Date(selectedPost.createdAt).toLocaleDateString('en-US', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric'
-                  })}</span>
-                </div>
-                
-                <div className="flex items-center gap-4">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLikeDonation(selectedPost._id);
-                    }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                      userActivity.likedPosts?.includes(selectedPost._id) 
-                        ? 'bg-pink-50 text-pink-600 border border-pink-200'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Heart className={`w-5 h-5 ${userActivity.likedPosts?.includes(selectedPost._id) ? 'fill-current' : ''}`} />
-                    <span className="font-semibold">{selectedPost.likes || 0}</span>
-                  </button>
-                  
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleSaveDonation(selectedPost._id);
-                    }}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-lg transition ${
-                      userActivity.savedPosts?.includes(selectedPost._id)
-                        ? 'bg-blue-50 text-blue-600 border border-blue-200'
-                        : 'text-gray-600 hover:bg-gray-100'
-                    }`}
-                  >
-                    <Bookmark className={`w-5 h-5 ${userActivity.savedPosts?.includes(selectedPost._id) ? 'fill-current' : ''}`} />
-                    <span className="font-semibold">{selectedPost.saves || 0}</span>
-                  </button>
-                  
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleShareDonation(selectedPost._id);
-                      if (navigator.share) {
-                        navigator.share({
-                          title: `Check out this story about ${selectedPost.bookName}`,
-                          text: selectedPost.story.substring(0, 100) + '...',
-                          url: window.location.href,
-                        }).catch(() => {});
-                      }
-                    }}
-                    className="flex items-center gap-2 px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-                  >
-                    <Share2 className="w-5 h-5" />
+                  <button onClick={e => { e.stopPropagation(); setSelectedCrew(crew); setView('bookpage'); }}
+                    className="px-5 py-2 bg-[#C8622A] text-white rounded-xl text-sm font-semibold">
+                    Join Crew
                   </button>
                 </div>
               </div>
             </div>
-          </div>
+          ))}
         </div>
-      )}
-
-      {/* Footer */}
-      <footer className="bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 text-white py-12 mt-20">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex flex-col md:flex-row justify-between items-center">
-            <div className="flex items-center gap-3 mb-6 md:mb-0">
-              <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-500 rounded-xl flex items-center justify-center">
-                <BookOpen className="w-7 h-7 text-white" />
-              </div>
-              <div>
-                <h3 className="text-2xl font-bold">ReadCrew</h3>
-                <p className="text-gray-400">Let's make reading a habit</p>
-              </div>
-            </div>
-            <div className="text-center md:text-right">
-              <p className="text-gray-400">© {new Date().getFullYear()} ReadCrew Community</p>
-              <p className="text-gray-500 text-sm mt-1">Made with loves for book lovers</p>
-            </div>
-          </div>
-        </div>
-      </footer>
+      </div>
     </div>
   );
 };
 
-export default App;
+// ─── PROFILE PAGE ─────────────────────────────────────────────────────────
+const ProfilePage = ({ user, posts, setPage, onLogout }) => {
+  const [activeTab, setActiveTab] = useState('Posts');
+  const tabs = ['Posts', 'Reviews', 'Crews', 'Saved'];
+  const myPosts = posts.filter(p => p.user === user?.name);
+
+  return (
+    <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+      <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center justify-between border-b border-[#EDE8E3]">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-[#C8622A] rounded-md flex items-center justify-center">
+            <BookOpen className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="font-bold text-[#2D2419]" style={{ fontFamily: 'Georgia, serif' }}>ReadCrew</span>
+        </div>
+        <button onClick={onLogout} className="p-2 hover:bg-[#F5EDE3] rounded-xl transition">
+          <Settings className="w-5 h-5 text-[#6B5D52]" />
+        </button>
+      </div>
+
+      <div className="px-4 py-5">
+        {/* Profile header */}
+        <div className="flex items-start gap-4 mb-4">
+          <div className="relative">
+            <Avatar initials={user?.name?.slice(0, 2)} size="xl" color="#C8622A" />
+            <button className="absolute bottom-0 right-0 w-6 h-6 bg-[#C8622A] rounded-full flex items-center justify-center border-2 border-white">
+              <Camera className="w-3 h-3 text-white" />
+            </button>
+          </div>
+          <div className="flex-1">
+            <h2 className="text-xl font-bold text-[#2D2419]" style={{ fontFamily: 'Georgia, serif' }}>{user?.name}</h2>
+            <p className="text-sm text-[#9B8E84]">@{user?.name?.toLowerCase().replace(' ', '')}</p>
+            <p className="text-sm text-[#6B5D52] mt-1 italic">"Books that change how I think."</p>
+            <button className="mt-2 px-5 py-1.5 border border-[#C8622A]/40 text-[#C8622A] rounded-xl text-sm font-medium flex items-center gap-1">
+              Edit Profile <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-0 bg-white rounded-2xl border border-[#EDE8E3] overflow-hidden mb-5">
+          {[
+            { label: 'Books', val: 48 },
+            { label: 'Reviews', val: 32 },
+            { label: 'Posts', val: myPosts.length || 76 },
+            { label: 'Crews', val: 5 },
+          ].map(({ label, val }, i) => (
+            <div key={label} className={`py-3 text-center ${i < 3 ? 'border-r border-[#EDE8E3]' : ''}`}>
+              <p className="text-xl font-bold text-[#2D2419]">{val}</p>
+              <p className="text-xs text-[#9B8E84]">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-[#EDE8E3] mb-4">
+          {tabs.map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              className={`flex-1 text-sm pb-2.5 font-medium border-b-2 transition ${activeTab === tab ? 'text-[#C8622A] border-[#C8622A]' : 'text-[#9B8E84] border-transparent'}`}>
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        {/* Posts */}
+        {activeTab === 'Posts' && (
+          <div className="space-y-4">
+            {(myPosts.length > 0 ? myPosts : MOCK_POSTS.slice(0, 2)).map(post => (
+              <div key={post.id} className="bg-white rounded-2xl p-4 border border-[#EDE8E3] shadow-sm">
+                <div className="flex items-start gap-3 mb-3">
+                  <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="font-semibold text-[#2D2419] text-sm">{user?.name}</p>
+                        <div className="flex items-center gap-1 mt-0.5">
+                          <BookOpen className="w-3 h-3 text-[#C8622A]" />
+                          <p className="text-xs text-[#9B8E84]">{post.book || post.bookName}</p>
+                        </div>
+                      </div>
+                      <button><MoreHorizontal className="w-4 h-4 text-[#B8AEA8]" /></button>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-sm text-[#2D2419] leading-relaxed">{post.content}</p>
+                <div className="flex items-center gap-4 mt-3 pt-3 border-t border-[#EDE8E3]">
+                  <div className="flex items-center gap-1 text-xs text-[#9B8E84]">
+                    <Heart className="w-4 h-4" /> {post.likes}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-[#9B8E84]">
+                    <MessageCircle className="w-4 h-4" /> {post.comments}
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-[#9B8E84]">
+                    <Share2 className="w-4 h-4" /> {post.shares}
+                  </div>
+                  <div className="ml-auto">
+                    <Bookmark className="w-4 h-4 text-[#9B8E84]" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab !== 'Posts' && (
+          <div className="text-center py-12">
+            <BookOpen className="w-12 h-12 text-[#EDE8E3] mx-auto mb-3" />
+            <p className="text-[#9B8E84] text-sm">No {activeTab.toLowerCase()} yet</p>
+          </div>
+        )}
+
+        <button onClick={onLogout}
+          className="mt-6 w-full py-3 border border-red-200 text-red-500 rounded-2xl text-sm font-medium flex items-center justify-center gap-2 hover:bg-red-50">
+          <LogOut className="w-4 h-4" /> Sign Out
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// ─── SHARED STORIES FEED ───────────────────────────────────────────────────
+const FeedPage = ({ user, posts, setPosts, setPage }) => {
+  const toggleLike = (id) => {
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, liked: !p.liked, likes: p.liked ? p.likes - 1 : p.likes + 1 } : p));
+  };
+  const toggleSave = (id) => {
+    setPosts(prev => prev.map(p => p.id === id ? { ...p, saved: !p.saved } : p));
+  };
+
+  return (
+    <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+      <TopBar user={user} setPage={setPage} />
+      <div className="px-4 py-4">
+        {/* Post input bar */}
+        <div className="bg-white rounded-2xl border border-[#EDE8E3] px-4 py-3 flex items-center gap-3 mb-5 shadow-sm">
+          <div className="w-8 h-8 bg-[#C8622A]/20 rounded-xl flex items-center justify-center">
+            <BookOpen className="w-4 h-4 text-[#C8622A]" />
+          </div>
+          <input className="flex-1 bg-transparent text-sm text-[#2D2419] placeholder-[#B8AEA8] outline-none"
+            placeholder="Write a post..."
+            onClick={() => setPage('post')} readOnly />
+          <Avatar initials={user?.name?.slice(0, 2)} size="xs" color="#C8622A" />
+        </div>
+
+        {/* Book filter pill */}
+        <div className="flex items-center gap-2 bg-white border border-[#EDE8E3] rounded-xl px-3 py-2.5 mb-5 shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-[#2D2D2D] flex items-center justify-center">
+            <BookOpen className="w-4 h-4 text-[#E8A87C]" />
+          </div>
+          <span className="text-sm font-medium text-[#2D2419]">Man's Search For Meaning</span>
+          <ChevronRight className="w-4 h-4 text-[#9B8E84] ml-auto" />
+        </div>
+
+        {/* Posts */}
+        <div className="space-y-4">
+          {posts.map(post => (
+            <div key={post.id} className="bg-white rounded-2xl p-4 border border-[#EDE8E3] shadow-sm">
+              <div className="flex items-start gap-3 mb-3">
+                <Avatar initials={post.avatar} size="sm" color={post.id === 1 ? '#C8622A' : post.id === 2 ? '#7B9EA6' : '#8B5E3C'} />
+                <div className="flex-1">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-semibold text-[#2D2419] text-sm">{post.user}</p>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-[#9B8E84]">{post.time}</span>
+                        <span className="text-xs text-[#B8AEA8]">·</span>
+                        <div className="flex items-center gap-0.5">
+                          <BookOpen className="w-3 h-3 text-[#C8622A]" />
+                          <span className="text-xs text-[#9B8E84]">{post.book}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button><MoreHorizontal className="w-4 h-4 text-[#B8AEA8]" /></button>
+                  </div>
+                </div>
+              </div>
+              <p className="text-sm text-[#2D2419] leading-relaxed mb-3">{post.content}</p>
+              <div className="flex items-center gap-4 pt-3 border-t border-[#EDE8E3]">
+                <button onClick={() => toggleLike(post.id)} className="flex items-center gap-1.5 text-xs text-[#9B8E84]">
+                  <Heart className={`w-4 h-4 ${post.liked ? 'fill-red-500 text-red-500' : ''}`} />
+                  <span>{post.likes}</span>
+                </button>
+                <button className="flex items-center gap-1.5 text-xs text-[#9B8E84]">
+                  <MessageCircle className="w-4 h-4" />
+                  <span>{post.comments}</span>
+                </button>
+                <button className="flex items-center gap-1.5 text-xs text-[#9B8E84]">
+                  <Share2 className="w-4 h-4" />
+                  <span>{post.shares}</span>
+                </button>
+                <button onClick={() => toggleSave(post.id)} className="ml-auto">
+                  <Bookmark className={`w-4 h-4 ${post.saved ? 'fill-[#C8622A] text-[#C8622A]' : 'text-[#9B8E84]'}`} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Message input */}
+        <div className="fixed bottom-[72px] left-0 right-0 max-w-md mx-auto bg-white border-t border-[#EDE8E3] px-4 py-2.5">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 bg-[#C8622A]/20 rounded-full flex items-center justify-center">
+              <BookOpen className="w-3.5 h-3.5 text-[#C8622A]" />
+            </div>
+            <div className="flex-1 bg-[#FAF6F1] border border-[#EDE8E3] rounded-2xl px-3 py-2 flex items-center gap-2">
+              <input className="flex-1 bg-transparent text-xs text-[#2D2419] placeholder-[#B8AEA8] outline-none"
+                placeholder="write a message..." />
+              <Send className="w-3.5 h-3.5 text-[#C8622A]" />
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── MAIN APP ───────────────────────────────────────────────────────────────
+export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+  const [currentPage, setCurrentPage] = useState('home');
+  const [posts, setPosts] = useState(MOCK_POSTS);
+  const [crews] = useState(POPULAR_CREWS);
+  
+  // Additional states from the other app
+  const [donations, setDonations] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [notification, setNotification] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = (userData) => {
+    setCurrentUser(userData);
+    setIsLoggedIn(true);
+    setCurrentPage('home');
+  };
+
+  const handlePost = (postData) => {
+    const newPost = {
+      id: Date.now(),
+      user: currentUser.name,
+      handle: '@' + currentUser.name.toLowerCase().replace(' ', ''),
+      avatar: currentUser.name.slice(0, 2).toUpperCase(),
+      book: postData.bookName || 'General',
+      time: 'Just now',
+      content: postData.content,
+      image: postData.image,
+      likes: 0, comments: 0, shares: 0,
+      saved: false, liked: false
+    };
+    setPosts(prev => [newPost, ...prev]);
+  };
+
+  if (!isLoggedIn) {
+    return (
+      <div className="min-h-screen bg-[#FAF6F1]">
+        <div className="max-w-md mx-auto">
+          <LoginPage onLogin={handleLogin} onSignup={handleLogin} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-[#FAF6F1]">
+      <div className="max-w-md mx-auto relative">
+        {currentPage === 'home' && (
+          <HomePage 
+            user={currentUser} 
+            posts={posts} 
+            crews={crews}
+            donations={donations}
+            reviews={reviews}
+            suggestedBooks={SUGGESTED_BOOKS} 
+            setPage={setCurrentPage} 
+          />
+        )}
+        {currentPage === 'explore' && (
+          <ExplorePage user={currentUser} setPage={setCurrentPage} />
+        )}
+        {currentPage === 'post' && (
+          <PostPage user={currentUser} onPost={handlePost} setPage={setCurrentPage} />
+        )}
+        {currentPage === 'crews' && (
+          <CrewsPage user={currentUser} crews={crews} setPage={setCurrentPage} />
+        )}
+        {currentPage === 'feed' && (
+          <FeedPage user={currentUser} posts={posts} setPosts={setPosts} setPage={setCurrentPage} />
+        )}
+        {currentPage === 'profile' && (
+          <ProfilePage user={currentUser} posts={posts} setPage={setCurrentPage}
+            onLogout={() => { setIsLoggedIn(false); setCurrentUser(null); setCurrentPage('home'); }} />
+        )}
+        {/* ReadCrew Page - NEW */}
+        {currentPage === 'readcrew' && (
+          <ReadCrewPage 
+            currentUser={currentUser}
+            onBack={() => setCurrentPage('home')}
+          />
+        )}
+        <BottomNav active={currentPage} setPage={setCurrentPage} />
+      </div>
+    </div>
+  );
+}
