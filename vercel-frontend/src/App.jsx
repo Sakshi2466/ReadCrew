@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
+import { 
   BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
   Heart, MessageCircle, Bookmark, Share2, Star, Plus, ChevronRight,
   X, Send, Image, ChevronLeft, LogOut, Camera, MoreHorizontal,
-  Sparkles, Lock, Eye, EyeOff, UserPlus,
-  Gift, ThumbsUp, ThumbsDown, Trash2, Edit, Target, Check, ArrowLeft,
-  Clock, TrendingUp, Menu, Upload, Calendar, Award, MessageSquare,
-  Globe, ChevronDown, Filter, Play, Pause, Volume2, Mic, Paperclip
+  Sparkles, Lock, Eye, EyeOff, UserPlus, Gift, ThumbsUp, ThumbsDown, 
+  Trash2, Edit, Target, Check, ArrowLeft, Clock, TrendingUp, Menu, Upload,
+  Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause, 
+  Volume2, Mic, Paperclip, Mail, Phone  // ← Added Mail and Phone
 } from 'lucide-react';
-
 // Import API functions
 import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, chatAPI, crewAPI, userAPI } from './services/api';
 import axios from 'axios';

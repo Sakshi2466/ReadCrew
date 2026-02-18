@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, MessageCircle, Send, Image, Video, BookOpen, Sparkles, ChevronLeft, Search, UserPlus, LogOut as Leave, Clock, Check, Book, Star, Heart, Share2, MoreHorizontal } from 'lucide-react';
+import { Users, MessageCircle, Send, Image, BookOpen, Sparkles, ChevronLeft, Search, UserPlus, LogOut as Leave, Star, MoreHorizontal } from 'lucide-react';
 import io from 'socket.io-client';
 import { bookCrewAPI, getBookRecommendations } from '../services/api';
 
