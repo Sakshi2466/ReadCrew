@@ -1,77 +1,76 @@
-// backend/models/User.js
 const mongoose = require('mongoose');
-const validator = require('validator');
-const bcrypt = require('bcryptjs');
 
-const UserSchema = new mongoose.Schema({
+const userSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: [true, 'Please provide a name'],
-    minlength: 2,
-    maxlength: 50
+    required: true,
+    trim: true
   },
   email: {
     type: String,
-    required: [true, 'Please provide an email'],
+    required: true,
     unique: true,
     lowercase: true,
-    validate: [validator.isEmail, 'Please provide a valid email']
+    trim: true
   },
   phone: {
     type: String,
-    required: [true, 'Please provide a phone number'],
-    validate: {
-      validator: function(v) {
-        return /^[6-9]\d{9}$/.test(v);
-      },
-      message: 'Please provide a valid 10-digit phone number'
-    }
-  },
-  password: {
-    type: String,
-    required: [true, 'Please provide a password'],
-    minlength: 6
-  },
-  // OTP Verification Fields
-  otp: {
-    type: String,
-    default: null
-  },
-  otpExpires: {
-    type: Date,
-    default: null
+    default: ''
   },
   isVerified: {
     type: Boolean,
     default: false
   },
-  lastLogin: {
-    type: Date,
-    default: null
+  readingGoals: {
+    yearly: {
+      type: Number,
+      default: 0
+    },
+    monthly: {
+      type: Number,
+      default: 0
+    },
+    booksRead: [{
+      bookName: String,
+      author: String,
+      completedAt: Date
+    }],
+    currentStreak: {
+      type: Number,
+      default: 0
+    }
+  },
+  stats: {
+    totalPosts: {
+      type: Number,
+      default: 0
+    },
+    totalReviews: {
+      type: Number,
+      default: 0
+    },
+    totalCrews: {
+      type: Number,
+      default: 0
+    }
   },
   createdAt: {
+    type: Date,
+    default: Date.now
+  },
+  lastActive: {
     type: Date,
     default: Date.now
   }
 });
 
-// Hash password before saving (if modified)
-UserSchema.pre('save', async function(next) {
-  // Only hash if password is modified (not during OTP updates)
-  if (!this.isModified('password')) return next();
-  
-  try {
-    const salt = await bcrypt.genSalt(10);
-    this.password = await bcrypt.hash(this.password, salt);
-    next();
-  } catch (error) {
-    next(error);
-  }
+// Index for faster lookups
+userSchema.index({ email: 1 });
+
+// Update lastActive on save
+userSchema.pre('save', function(next) {
+  this.lastActive = new Date();
+  next();
 });
 
-// Compare password method
-UserSchema.methods.comparePassword = async function(candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
-};
-
-module.exports = mongoose.model('User', UserSchema);
+module.exports = mongoose.model('User', userSchema);

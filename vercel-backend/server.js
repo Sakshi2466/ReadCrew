@@ -20,7 +20,7 @@ const io = socketIO(server, {
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
   credentials: true,
   exposedHeaders: ['Content-Type', 'Cache-Control', 'Connection']
 }));
@@ -37,13 +37,15 @@ app.get('/', (req, res) => {
     version: '2.0.0',
     timestamp: new Date().toISOString(),
     groqConfigured: !!process.env.GROQ_API_KEY,
+    socketIOEnabled: true,
     endpoints: {
       health: '/api/health',
       donations: '/api/donations',
       reviews: '/api/reviews',
       otp: '/api/otp/send-otp',
       recommend: '/api/recommend',
-      bookCrews: '/api/book-crews' // NEW
+      bookCrews: '/api/book-crews',
+      users: '/api/users'
     }
   });
 });
@@ -82,28 +84,17 @@ const donationRoutes = require('./routes/donation');
 const reviewRoutes = require('./routes/review');
 const otpRoutes = require('./routes/otp');
 const recommendRoutes = require('./routes/recommend');
-const bookCrewRoutes = require('./routes/bookCrew'); // NEW
+const bookCrewRoutes = require('./routes/bookCrew');
+const userRoutes = require('./routes/user');
 
-// Mount routes
+// Mount routes ONCE (no duplicates!)
 app.use('/api/auth', authRoutes);
 app.use('/api/donations', donationRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/otp', otpRoutes);
 app.use('/api/recommend', recommendRoutes);
-app.use('/api/book-crews', bookCrewRoutes); // NEW
-// After other route imports
-const bookCrewRoutes = require('./routes/bookCrew');
-
-// Mount routes - make sure this is BEFORE the 404 handler
 app.use('/api/book-crews', bookCrewRoutes);
-
-// This should be AFTER all route definitions
-app.use('*', (req, res) => {
-  res.status(404).json({
-    success: false,
-    message: `Route ${req.originalUrl} not found`
-  });
-});
+app.use('/api/users', userRoutes);
 
 // Socket.IO for real-time chat
 const CrewMessage = require('./models/CrewMessage');
@@ -114,14 +105,14 @@ io.on('connection', (socket) => {
   // Join a book crew room
   socket.on('join-crew', (bookName) => {
     socket.join(bookName);
-    console.log(`📚 User joined crew: ${bookName}`);
+    console.log(`📚 User ${socket.id} joined crew: ${bookName}`);
     socket.to(bookName).emit('user-joined', { bookName });
   });
   
   // Leave a book crew room
   socket.on('leave-crew', (bookName) => {
     socket.leave(bookName);
-    console.log(`📚 User left crew: ${bookName}`);
+    console.log(`📚 User ${socket.id} left crew: ${bookName}`);
   });
   
   // Send message
@@ -131,7 +122,7 @@ io.on('connection', (socket) => {
     // Broadcast to all users in the crew
     io.to(bookName).emit('new-message', message);
     
-    console.log(`💬 Message in ${bookName}:`, message.content);
+    console.log(`💬 Message in ${bookName}:`, message.content?.slice(0, 50));
   });
   
   // Typing indicator
@@ -154,7 +145,7 @@ io.on('connection', (socket) => {
   });
 });
 
-// 404 handler
+// 404 handler - MUST BE LAST
 app.use('*', (req, res) => {
   res.status(404).json({
     success: false,
@@ -167,8 +158,9 @@ const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   console.log(`💬 Socket.IO enabled for real-time chat`);
-  console.log(`🌐 CORS enabled`);
+  console.log(`🌐 CORS enabled for all origins`);
   console.log(`📌 Groq AI: ${process.env.GROQ_API_KEY ? '✅ Configured' : '❌ Not configured'}`);
+  console.log(`📊 MongoDB: ${mongoose.connection.readyState === 1 ? '✅ Connected' : '⏳ Connecting...'}`);
 });
 
 module.exports = app;
