@@ -948,7 +948,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   );
 };
 
-// ─── EXPLORE WITH GROQ AI CHAT ─────────────────────────────────────────────
+// ─── FIXED EXPLORE PAGE WITH WORKING INPUT ─────────────────────────────────
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [messages, setMessages] = useState([
     {
@@ -984,55 +984,53 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const queryText = inputMessage;
     setInputMessage('');
     setIsLoading(true);
 
     try {
-      // Call Groq API for book recommendations
-      let aiResponse = '';
-      let books = [];
-
-      // Use the AI chat API
-      await aiChatAPI.streamResponse(
-        inputMessage,
-        (token) => { aiResponse += token; },
-        () => {
-          // Parse the response to extract book data
-          books = parseBookRecommendations(aiResponse);
-          setSuggestedBooks(books);
-
-          const aiMessage = {
-            id: Date.now() + 1,
-            type: 'ai',
-            content: aiResponse,
-            books: books,
-            timestamp: new Date()
-          };
-
-          setMessages(prev => [...prev, aiMessage]);
-          setIsLoading(false);
-        },
-        user.id
+      console.log('🤖 Sending to AI:', queryText);
+      
+      const response = await axios.post(
+        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommend/ai`,
+        { query: queryText }
       );
-    } catch (error) {
-      console.error('Error getting AI response:', error);
 
-      // Fallback to mock response
-      setTimeout(() => {
-        const mockBooks = getMockRecommendations(inputMessage);
-        setSuggestedBooks(mockBooks);
+      if (response.data.success) {
+        const books = response.data.recommendations || [];
+        setSuggestedBooks(books);
 
         const aiMessage = {
           id: Date.now() + 1,
           type: 'ai',
-          content: getMockResponse(inputMessage),
-          books: mockBooks,
+          content: response.data.isAI 
+            ? `Great! I found some amazing books for you based on "${queryText}":`
+            : `Here are some book recommendations for "${queryText}":`,
+          books: books,
           timestamp: new Date()
         };
 
         setMessages(prev => [...prev, aiMessage]);
-        setIsLoading(false);
-      }, 1500);
+      } else {
+        throw new Error('Failed to get recommendations');
+      }
+    } catch (error) {
+      console.error('❌ Error getting AI response:', error);
+
+      const mockBooks = getMockRecommendations(queryText);
+      setSuggestedBooks(mockBooks);
+
+      const aiMessage = {
+        id: Date.now() + 1,
+        type: 'ai',
+        content: getMockResponse(queryText),
+        books: mockBooks,
+        timestamp: new Date()
+      };
+
+      setMessages(prev => [...prev, aiMessage]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1078,34 +1076,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     }
   };
 
-  const parseBookRecommendations = (response) => {
-    // Simple parsing - in production you'd have a more sophisticated parser
-    const lines = response.split('\n');
-    const books = [];
-
-    lines.forEach(line => {
-      if (line.includes('title:') || line.includes('Title:')) {
-        const title = line.split(':')[1]?.trim() || 'Unknown';
-        books.push({
-          id: books.length + 1,
-          title: title,
-          author: 'Author',
-          rating: 4.5,
-          genre: 'General',
-          description: 'A recommended book',
-          cover: '#C8622A',
-          pages: 300,
-          published: '2024'
-        });
-      }
-    });
-
-    return books.length > 0 ? books : getMockRecommendations('');
-  };
-
   const handleJoinCrew = (book) => {
-    // Check if crew exists, if not, prompt to create
-    const crewExists = false; // In real app, check database
+    const crewExists = false;
 
     if (crewExists) {
       setPage('crews');
@@ -1340,32 +1312,39 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area - Always visible at bottom */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3">
+      {/* FIXED INPUT AREA - Always visible at bottom */}
+      <div className="bg-white border-t border-gray-200 px-4 py-3 pb-safe">
         <div className="flex items-center gap-2">
           <button className="p-2 hover:bg-gray-100 rounded-full transition">
             <Paperclip className="w-5 h-5 text-gray-500" />
           </button>
-          <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2">
+          <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2.5">
             <input
+              type="text"
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendMessage();
+                }
+              }}
               className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
               placeholder="Ask for book recommendations..."
               disabled={isLoading}
+              autoFocus
             />
             <button
               onClick={handleSendMessage}
               disabled={!inputMessage.trim() || isLoading}
-              className="p-1 disabled:opacity-50"
+              className="p-1.5 disabled:opacity-50 transition hover:scale-110 active:scale-95"
             >
-              <Send className="w-5 h-5 text-orange-500" />
+              <Send className={`w-5 h-5 ${!inputMessage.trim() || isLoading ? 'text-gray-400' : 'text-orange-500'}`} />
             </button>
           </div>
         </div>
         <p className="text-xs text-gray-400 mt-2 text-center">
-          Ask me about any genre, mood, or book you're looking for!
+          💡 Try: "fantasy books with magic" or "self-help for productivity"
         </p>
       </div>
     </div>
@@ -1519,7 +1498,7 @@ const PostPage = ({ user, onPost, setPage }) => {
   );
 };
 
-// ─── CREWS PAGE WITH REAL-TIME CHAT ─────────────────────────────────────────
+// ─── FIXED CREWS PAGE WITH WORKING CHAT INPUT ───────────────────────────────
 const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   const [view, setView] = useState('list'); // 'list', 'chat', 'bookpage', 'about', 'similar'
   const [selectedCrew, setSelectedCrew] = useState(null);
@@ -1845,26 +1824,33 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area - Only show if joined */}
+        {/* FIXED INPUT AREA - Only show if joined */}
         {hasJoined && (
-          <div className="bg-white border-t border-gray-200 px-4 py-3">
+          <div className="bg-white border-t border-gray-200 px-4 py-3 pb-safe">
             <div className="flex items-center gap-2">
               <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
-              <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2">
+              <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2.5">
                 <input
+                  type="text"
                   value={newMessage}
                   onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                  onKeyDown={handleTyping}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSendMessage();
+                    }
+                    handleTyping();
+                  }}
                   className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                   placeholder="Type a message..."
+                  autoFocus
                 />
                 <button
                   onClick={handleSendMessage}
                   disabled={!newMessage.trim()}
-                  className="p-1 disabled:opacity-50"
+                  className="p-1.5 disabled:opacity-50 transition hover:scale-110 active:scale-95"
                 >
-                  <Send className="w-5 h-5 text-orange-500" />
+                  <Send className={`w-5 h-5 ${!newMessage.trim() ? 'text-gray-400' : 'text-orange-500'}`} />
                 </button>
               </div>
             </div>
@@ -2458,7 +2444,7 @@ const RecommendationsPage = ({ user, setPage }) => {
     try {
       console.log('🤖 Requesting AI recommendations for:', recommendKeywords);
 
-      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/recommend/ai`, {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommend/ai`, {
         query: recommendKeywords
       });
 
