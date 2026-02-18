@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
+import {
   BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
   Heart, MessageCircle, Bookmark, Share2, Star, Plus, ChevronRight,
   X, Send, Image, ChevronLeft, LogOut, Camera, MoreHorizontal,
-  Sparkles, Lock, Eye, EyeOff, UserPlus, Gift, ThumbsUp, ThumbsDown, 
+  Sparkles, Lock, Eye, EyeOff, UserPlus, Gift, ThumbsUp, ThumbsDown,
   Trash2, Edit, Target, Check, ArrowLeft, Clock, TrendingUp, Menu, Upload,
-  Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause, 
+  Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause,
   Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink
 } from 'lucide-react';
 
@@ -18,16 +18,164 @@ const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
 const validateName = (name) => name && name.trim().length >= 2;
 
+// Book recommendations database
+const BOOK_RECOMMENDATIONS = [
+  {
+    id: 1,
+    category: 'Fantasy',
+    emoji: '📚',
+    description: 'Imaginative worlds, magic, mythical creatures',
+    books: [
+      { title: 'The Hobbit', author: 'J.R.R. Tolkien', rating: 4.7 },
+      { title: 'Harry Potter Series', author: 'J.K. Rowling', rating: 4.8 },
+      { title: 'The Name of the Wind', author: 'Patrick Rothfuss', rating: 4.5 },
+      { title: 'A Song of Ice and Fire', author: 'George R.R. Martin', rating: 4.6 }
+    ]
+  },
+  {
+    id: 2,
+    category: 'Science Fiction',
+    emoji: '🚀',
+    description: 'Future tech, space exploration, aliens',
+    books: [
+      { title: 'Dune', author: 'Frank Herbert', rating: 4.5 },
+      { title: '1984', author: 'George Orwell', rating: 4.4 },
+      { title: 'The Martian', author: 'Andy Weir', rating: 4.7 },
+      { title: 'Foundation', author: 'Isaac Asimov', rating: 4.3 }
+    ]
+  },
+  {
+    id: 3,
+    category: 'Mystery/Thriller',
+    emoji: '🔍',
+    description: 'Suspense, crime solving, plot twists',
+    books: [
+      { title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.2 },
+      { title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.1 },
+      { title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5 },
+      { title: 'The Da Vinci Code', author: 'Dan Brown', rating: 4.0 }
+    ]
+  },
+  {
+    id: 4,
+    category: 'Romance',
+    emoji: '❤️',
+    description: 'Love stories, relationships, emotional journeys',
+    books: [
+      { title: 'Pride and Prejudice', author: 'Jane Austen', rating: 4.8 },
+      { title: 'The Notebook', author: 'Nicholas Sparks', rating: 4.3 },
+      { title: 'Normal People', author: 'Sally Rooney', rating: 4.0 },
+      { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', rating: 4.6 }
+    ]
+  },
+  {
+    id: 5,
+    category: 'Biography/Autobiography',
+    emoji: '📖',
+    description: 'Real-life stories, memoirs, historical figures',
+    books: [
+      { title: 'The Diary of a Young Girl', author: 'Anne Frank', rating: 4.8 },
+      { title: 'Becoming', author: 'Michelle Obama', rating: 4.8 },
+      { title: 'Educated', author: 'Tara Westover', rating: 4.7 },
+      { title: 'Steve Jobs', author: 'Walter Isaacson', rating: 4.6 }
+    ]
+  },
+  {
+    id: 6,
+    category: 'Self-Help/Motivational',
+    emoji: '💪',
+    description: 'Personal growth, productivity, mindset',
+    books: [
+      { title: 'Atomic Habits', author: 'James Clear', rating: 4.8 },
+      { title: 'The 7 Habits of Highly Effective People', author: 'Stephen R. Covey', rating: 4.7 },
+      { title: 'The Power of Now', author: 'Eckhart Tolle', rating: 4.3 },
+      { title: 'Think and Grow Rich', author: 'Napoleon Hill', rating: 4.2 }
+    ]
+  },
+  {
+    id: 7,
+    category: 'Historical Fiction',
+    emoji: '🏛️',
+    description: 'Historical events, period settings',
+    books: [
+      { title: 'The Book Thief', author: 'Markus Zusak', rating: 4.7 },
+      { title: 'All the Light We Cannot See', author: 'Anthony Doerr', rating: 4.6 },
+      { title: 'The Nightingale', author: 'Kristen Hannah', rating: 4.8 },
+      { title: 'Wolf Hall', author: 'Hilary Mantel', rating: 4.5 }
+    ]
+  },
+  {
+    id: 8,
+    category: 'Horror',
+    emoji: '👻',
+    description: 'Fear, supernatural, psychological terror',
+    books: [
+      { title: 'It', author: 'Stephen King', rating: 4.6 },
+      { title: 'Dracula', author: 'Bram Stoker', rating: 4.2 },
+      { title: 'The Shining', author: 'Stephen King', rating: 4.7 },
+      { title: 'Frankenstein', author: 'Mary Shelley', rating: 4.1 }
+    ]
+  },
+  {
+    id: 9,
+    category: 'Literary Fiction',
+    emoji: '✍️',
+    description: 'Character-driven, artistic prose, social commentary',
+    books: [
+      { title: 'To Kill a Mockingbird', author: 'Harper Lee', rating: 4.8 },
+      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', rating: 4.3 },
+      { title: 'Beloved', author: 'Toni Morrison', rating: 4.4 },
+      { title: 'The Catcher in the Rye', author: 'J.D. Salinger', rating: 4.1 }
+    ]
+  },
+  {
+    id: 10,
+    category: 'Young Adult',
+    emoji: '🌟',
+    description: 'Teen protagonists, coming-of-age',
+    books: [
+      { title: 'The Fault in Our Stars', author: 'John Green', rating: 4.7 },
+      { title: 'The Hunger Games', author: 'Suzanne Collins', rating: 4.7 },
+      { title: 'Divergent', author: 'Veronica Roth', rating: 4.2 },
+      { title: 'Twilight', author: 'Stephenie Meyer', rating: 3.8 }
+    ]
+  },
+  {
+    id: 11,
+    category: 'Adventure',
+    emoji: '🗺️',
+    description: 'Exploration, survival, action',
+    books: [
+      { title: 'The Lord of the Rings', author: 'J.R.R. Tolkien', rating: 4.9 },
+      { title: 'Treasure Island', author: 'Robert Louis Stevenson', rating: 4.0 },
+      { title: 'Life of Pi', author: 'Yann Martel', rating: 4.2 },
+      { title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.3 }
+    ]
+  },
+  {
+    id: 12,
+    category: 'Philosophy',
+    emoji: '🤔',
+    description: 'Existential questions, ethics, consciousness',
+    books: [
+      { title: 'Meditations', author: 'Marcus Aurelius', rating: 4.5 },
+      { title: 'Thus Spoke Zarathustra', author: 'Friedrich Nietzsche', rating: 4.0 },
+      { title: 'The Republic', author: 'Plato', rating: 4.2 },
+      { title: 'Sophie\'s World', author: 'Jostein Gaarder', rating: 4.3 }
+    ]
+  }
+];
+
 // ─── AVATAR COMPONENT ──────────────────────────────────────────────────────
 const Avatar = ({ initials, size = 'md', color = '#C8622A', src, online }) => {
-  const sizes = { 
-    xs: 'w-7 h-7 text-xs', 
-    sm: 'w-9 h-9 text-sm', 
-    md: 'w-11 h-11 text-base', 
-    lg: 'w-16 h-16 text-xl', 
-    xl: 'w-20 h-20 text-2xl' 
+  const sizes = {
+    xs: 'w-7 h-7 text-xs',
+    sm: 'w-9 h-9 text-sm',
+    md: 'w-11 h-11 text-base',
+    lg: 'w-16 h-16 text-xl',
+    xl: 'w-20 h-20 text-2xl'
   };
-  
+
   return (
     <div className="relative shrink-0">
       {src ? (
@@ -49,10 +197,10 @@ const StarRating = ({ rating = 0, onChange, size = 'sm' }) => {
   return (
     <div className="flex gap-0.5">
       {[1, 2, 3, 4, 5].map(i => (
-        <Star 
-          key={i} 
+        <Star
+          key={i}
           className={`${sz} ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} ${onChange ? 'cursor-pointer hover:scale-110 transition' : ''}`}
-          onClick={() => onChange?.(i)} 
+          onClick={() => onChange?.(i)}
         />
       ))}
     </div>
@@ -63,7 +211,7 @@ const StarRating = ({ rating = 0, onChange, size = 'sm' }) => {
 const LoadingSpinner = ({ size = 'md', color = 'orange' }) => {
   const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
   const colors = { orange: 'border-orange-500', blue: 'border-blue-500', purple: 'border-purple-500' };
-  
+
   return (
     <div className={`${sizes[size]} border-4 border-t-transparent ${colors[color]} rounded-full animate-spin`}></div>
   );
@@ -83,8 +231,8 @@ const BottomNav = ({ active, setPage, unreadCount = 0 }) => {
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 max-w-md mx-auto shadow-lg">
       <div className="flex items-center justify-around py-2 px-2">
         {items.map(({ id, icon: Icon, label }) => (
-          <button 
-            key={id} 
+          <button
+            key={id}
             onClick={() => setPage(id)}
             className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${
               active === id ? 'text-[#C8622A]' : 'text-gray-400 hover:text-gray-600'
@@ -160,7 +308,7 @@ const LoginPage = ({ onLogin }) => {
       alert('Please fill all fields correctly');
       return;
     }
-    
+
     setLoading(true);
     try {
       const result = await otpAPI.sendOTP({ name, email, phone });
@@ -184,11 +332,11 @@ const LoginPage = ({ onLogin }) => {
       alert('Enter 6-digit OTP');
       return;
     }
-    
+
     setLoading(true);
     try {
       const result = await otpAPI.verifyOTP({ email, otp: otpInput });
-      
+
       if (result.success) {
         const userData = {
           id: Date.now().toString(),
@@ -201,12 +349,12 @@ const LoginPage = ({ onLogin }) => {
           stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
           joinedCrews: []
         };
-        
+
         // Save to localStorage
         localStorage.setItem('currentUser', JSON.stringify(userData));
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
         localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
-        
+
         onLogin(userData);
         setShowOTP(false);
       } else {
@@ -304,14 +452,14 @@ const LoginPage = ({ onLogin }) => {
             <>
               <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
                 <User className="w-5 h-5 text-gray-400" />
-                <input 
-                  value={name} 
+                <input
+                  value={name}
                   onChange={e => setName(e.target.value)}
                   className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                  placeholder="Full Name" 
+                  placeholder="Full Name"
                 />
               </div>
-              
+
               {/* Reading Goals during signup */}
               <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
@@ -345,39 +493,39 @@ const LoginPage = ({ onLogin }) => {
               </div>
             </>
           )}
-          
+
           <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
             <Mail className="w-5 h-5 text-gray-400" />
-            <input 
-              value={email} 
+            <input
+              value={email}
               onChange={e => setEmail(e.target.value)}
               className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-              placeholder="Email" 
+              placeholder="Email"
             />
           </div>
-          
+
           {!isLogin && (
             <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
               <Phone className="w-5 h-5 text-gray-400" />
-              <input 
-                value={phone} 
+              <input
+                value={phone}
                 onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
                 className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                placeholder="Phone Number" 
-                maxLength="10" 
+                placeholder="Phone Number"
+                maxLength="10"
               />
             </div>
           )}
-          
+
           <div>
             <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
               <Lock className="w-5 h-5 text-gray-400" />
-              <input 
-                value={password} 
+              <input
+                value={password}
                 onChange={e => setPassword(e.target.value)}
                 type={showPass ? 'text' : 'password'}
                 className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                placeholder="Password" 
+                placeholder="Password"
               />
               <button onClick={() => setShowPass(!showPass)}>
                 {showPass ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
@@ -386,7 +534,7 @@ const LoginPage = ({ onLogin }) => {
           </div>
         </div>
 
-        <button 
+        <button
           onClick={() => {
             if (isLogin) {
               // Mock login - in real app, verify with backend
@@ -476,7 +624,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     // Simple parsing - in production you'd have a more sophisticated parser
     const lines = response.split('\n');
     const books = [];
-    
+
     lines.forEach(line => {
       if (line.includes('title:') || line.includes('Title:')) {
         // Extract book info
@@ -495,7 +643,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
         });
       }
     });
-    
+
     return books.length > 0 ? books : [];
   };
 
@@ -505,7 +653,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       ...(donations || []).map(d => ({ ...d, type: 'donation', timestamp: new Date(d.createdAt) })),
       ...(posts || []).map(p => ({ ...p, type: 'post', timestamp: new Date(p.createdAt || Date.now()) }))
     ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
-    
+
     setFeedPosts(feed);
   };
 
@@ -522,7 +670,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
         await donationAPI.like(postId);
       }
       // Update UI optimistically
-      setFeedPosts(prev => prev.map(p => 
+      setFeedPosts(prev => prev.map(p =>
         p._id === postId ? { ...p, likes: (p.likes || 0) + 1, liked: true } : p
       ));
     } catch (error) {
@@ -543,7 +691,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
       <TopBar user={user} setPage={setPage} title="Home" />
-      
+
       <div className="px-4 py-4 space-y-5">
         {/* Welcome Card - Shows differently based on whether user has goals */}
         {!hasReadingGoal ? (
@@ -553,7 +701,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               <h2 className="text-xl font-bold">Welcome, {user?.name?.split(' ')[0]}! 🌱</h2>
             </div>
             <p className="text-green-100 text-sm">Read together, grow together. Set your reading goals to track progress!</p>
-            <button 
+            <button
               onClick={() => setPage('profile')}
               className="mt-3 px-4 py-2 bg-white text-green-600 rounded-xl text-sm font-semibold"
             >
@@ -569,7 +717,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               </div>
               <Avatar initials={user?.name?.slice(0, 2)} size="md" color="white" />
             </div>
-            
+
             {/* Reading Progress */}
             <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm">
               <div className="flex items-center justify-between text-sm mb-2">
@@ -577,7 +725,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                 <span className="font-semibold">{user?.stats?.booksRead || 0}/{user?.readingGoal?.yearly || 20} books</span>
               </div>
               <div className="h-2 bg-white/30 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-white rounded-full transition-all duration-500"
                   style={{ width: `${readingProgress}%` }}
                 />
@@ -598,8 +746,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
             { label: 'Posts', value: user?.stats?.postsCreated || 0, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100', tab: 'posts' },
             { label: 'Crews', value: user?.stats?.crewsJoined || 0, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100', tab: 'crews' }
           ].map(({ label, value, icon: Icon, color, bg, tab }, idx) => (
-            <button 
-              key={idx} 
+            <button
+              key={idx}
               onClick={() => handleTabChange(tab)}
               className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 hover:shadow-md transition text-left"
             >
@@ -613,7 +761,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
         </div>
 
         {/* Create Post Button */}
-        <button 
+        <button
           onClick={() => setPage('post')}
           className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md transition"
         >
@@ -660,21 +808,21 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                       </div>
                     </div>
                   </div>
-                  
+
                   {post.image && (
-                    <img 
-                      src={post.image} 
-                      alt={post.bookName} 
+                    <img
+                      src={post.image}
+                      alt={post.bookName}
                       className="w-full h-48 object-cover rounded-xl mb-3"
                     />
                   )}
-                  
+
                   <p className="text-sm text-gray-700 leading-relaxed mb-3">
                     {post.story || post.content}
                   </p>
-                  
+
                   <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
-                    <button 
+                    <button
                       onClick={() => handleLikePost(post._id, post.type)}
                       className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
                     >
@@ -713,8 +861,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           ) : (
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {trendingBooks.map((book, i) => (
-                <div 
-                  key={i} 
+                <div
+                  key={i}
                   className="shrink-0 w-32 cursor-pointer hover:scale-105 transition-transform"
                   onClick={() => {
                     // Navigate to book details
@@ -722,7 +870,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                     // You would pass the book data via state/context
                   }}
                 >
-                  <div 
+                  <div
                     className="w-32 h-40 rounded-xl shadow-lg flex items-end justify-center pb-3 mb-2 relative overflow-hidden group"
                     style={{ backgroundColor: book.cover }}
                   >
@@ -758,8 +906,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
           <div className="grid grid-cols-2 gap-3">
             {(crews || []).slice(0, 2).map(crew => (
-              <div 
-                key={crew.id} 
+              <div
+                key={crew.id}
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer"
                 onClick={() => {
                   // Navigate to crew detail
@@ -780,7 +928,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                       <Users className="w-3 h-3" />
                       <span>{crew.members || 1}</span>
                     </div>
-                    <button 
+                    <button
                       onClick={(e) => {
                         e.stopPropagation();
                         // Handle join crew
@@ -803,9 +951,9 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 // ─── EXPLORE WITH GROQ AI CHAT ─────────────────────────────────────────────
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [messages, setMessages] = useState([
-    { 
-      id: 1, 
-      type: 'ai', 
+    {
+      id: 1,
+      type: 'ai',
       content: "Hi! I'm your AI reading companion. Tell me what kind of books you're interested in, and I'll recommend something perfect for you! 📚",
       timestamp: new Date()
     }
@@ -852,7 +1000,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           // Parse the response to extract book data
           books = parseBookRecommendations(aiResponse);
           setSuggestedBooks(books);
-          
+
           const aiMessage = {
             id: Date.now() + 1,
             type: 'ai',
@@ -860,7 +1008,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             books: books,
             timestamp: new Date()
           };
-          
+
           setMessages(prev => [...prev, aiMessage]);
           setIsLoading(false);
         },
@@ -868,12 +1016,12 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
       );
     } catch (error) {
       console.error('Error getting AI response:', error);
-      
+
       // Fallback to mock response
       setTimeout(() => {
         const mockBooks = getMockRecommendations(inputMessage);
         setSuggestedBooks(mockBooks);
-        
+
         const aiMessage = {
           id: Date.now() + 1,
           type: 'ai',
@@ -881,7 +1029,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           books: mockBooks,
           timestamp: new Date()
         };
-        
+
         setMessages(prev => [...prev, aiMessage]);
         setIsLoading(false);
       }, 1500);
@@ -934,7 +1082,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     // Simple parsing - in production you'd have a more sophisticated parser
     const lines = response.split('\n');
     const books = [];
-    
+
     lines.forEach(line => {
       if (line.includes('title:') || line.includes('Title:')) {
         const title = line.split(':')[1]?.trim() || 'Unknown';
@@ -951,14 +1099,14 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         });
       }
     });
-    
+
     return books.length > 0 ? books : getMockRecommendations('');
   };
 
   const handleJoinCrew = (book) => {
     // Check if crew exists, if not, prompt to create
     const crewExists = false; // In real app, check database
-    
+
     if (crewExists) {
       setPage('crews');
     } else {
@@ -1001,7 +1149,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
             <div className="flex gap-4 mb-6">
-              <div 
+              <div
                 className="w-28 h-36 rounded-xl shadow-lg flex items-center justify-center shrink-0"
                 style={{ backgroundColor: selectedBook.cover }}
               >
@@ -1027,7 +1175,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   {selectedBook.description}
                 </p>
               </div>
-              
+
               <div className="bg-gray-50 rounded-xl p-4">
                 <h3 className="font-semibold text-gray-900 mb-3">Book Details</h3>
                 <div className="space-y-2 text-sm">
@@ -1109,10 +1257,10 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   <span className="text-xs font-medium text-gray-500">AI Assistant</span>
                 </div>
               )}
-              
+
               <div className={`rounded-2xl px-4 py-3 ${
-                message.type === 'user' 
-                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
+                message.type === 'user'
+                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
                   : 'bg-white border border-gray-200 text-gray-800'
               }`}>
                 <p className="text-sm leading-relaxed">{message.content}</p>
@@ -1122,13 +1270,13 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               {message.books && message.books.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {message.books.map((book, idx) => (
-                    <div 
-                      key={idx} 
+                    <div
+                      key={idx}
                       className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
                       onClick={() => handleBookClick(book)}
                     >
                       <div className="flex items-start gap-3">
-                        <div 
+                        <div
                           className="w-12 h-16 rounded-lg flex items-center justify-center shrink-0"
                           style={{ backgroundColor: book.cover }}
                         >
@@ -1142,7 +1290,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                             <span className="text-xs text-gray-500 ml-1">{book.rating}</span>
                           </div>
                           <p className="text-xs text-gray-600 mt-1 line-clamp-2">{book.description}</p>
-                          
+
                           <div className="flex items-center gap-2 mt-2">
                             <button
                               onClick={(e) => {
@@ -1170,14 +1318,14 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   ))}
                 </div>
               )}
-              
+
               <p className="text-[10px] text-gray-400 mt-1 px-2">
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
         ))}
-        
+
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
@@ -1188,7 +1336,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             </div>
           </div>
         )}
-        
+
         <div ref={messagesEndRef} />
       </div>
 
@@ -1330,7 +1478,7 @@ const PostPage = ({ user, onPost, setPage }) => {
             <Camera className="w-4 h-4" />
             Add Photo
           </button>
-          
+
           <button
             onClick={() => setIsDonation(!isDonation)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition ${
@@ -1340,7 +1488,7 @@ const PostPage = ({ user, onPost, setPage }) => {
             <Gift className="w-4 h-4" />
             Donation Story
           </button>
-          
+
           <button
             onClick={() => setIsPublic(!isPublic)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition ${
@@ -1415,28 +1563,28 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     try {
       // In production, fetch from API
       const mockMessages = [
-        { 
-          id: 1, 
-          userId: 'user1', 
-          userName: 'Aman', 
+        {
+          id: 1,
+          userId: 'user1',
+          userName: 'Aman',
           userInitials: 'AM',
           content: 'The part where Morrie says "Once you learn how to die, you learn how to live" really hit me. Such a powerful message!',
           timestamp: new Date(Date.now() - 3600000),
           color: '#7B9EA6'
         },
-        { 
-          id: 2, 
-          userId: 'user2', 
-          userName: 'Vikram', 
+        {
+          id: 2,
+          userId: 'user2',
+          userName: 'Vikram',
           userInitials: 'VK',
           content: 'A life-changing book. Makes you appreciate the simple things in life.',
           timestamp: new Date(Date.now() - 1800000),
           color: '#8B5E3C'
         },
-        { 
-          id: 3, 
-          userId: 'user3', 
-          userName: 'Deepika', 
+        {
+          id: 3,
+          userId: 'user3',
+          userName: 'Deepika',
           userInitials: 'DP',
           content: "Mitch Albom's writing is so touching. I cried and felt inspired at the same time.",
           timestamp: new Date(Date.now() - 900000),
@@ -1457,18 +1605,18 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
         { id: 'user2', name: 'Vikram', initials: 'VK', color: '#8B5E3C', online: false },
         { id: 'user3', name: 'Deepika', initials: 'DP', color: '#C8956C', online: true }
       ];
-      
+
       // Add current user if they've joined
       if (isUserJoined(selectedCrew?.id)) {
-        mockMembers.push({ 
-          id: user.id, 
-          name: user.name, 
-          initials: user.name?.slice(0, 2), 
-          color: '#C8622A', 
-          online: true 
+        mockMembers.push({
+          id: user.id,
+          name: user.name,
+          initials: user.name?.slice(0, 2),
+          color: '#C8622A',
+          online: true
         });
       }
-      
+
       setCrewMembers(mockMembers);
     } catch (error) {
       console.error('Error loading members:', error);
@@ -1529,12 +1677,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     const updatedJoinedCrews = [...joinedCrews, crew.id];
     setJoinedCrews(updatedJoinedCrews);
     localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updatedJoinedCrews));
-    
+
     // Update crew members count
-    setCrews(prev => prev.map(c => 
+    setCrews(prev => prev.map(c =>
       c.id === crew.id ? { ...c, members: (c.members || 1) + 1 } : c
     ));
-    
+
     // Update user stats
     const updatedUser = {
       ...user,
@@ -1544,7 +1692,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       }
     };
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    
+
     // Show join message
     setJoinMessage(`You've joined the ${crew.name} crew! 🎉`);
     setShowJoinMessage(true);
@@ -1556,11 +1704,11 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       const updatedJoinedCrews = joinedCrews.filter(id => id !== crew.id);
       setJoinedCrews(updatedJoinedCrews);
       localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updatedJoinedCrews));
-      
-      setCrews(prev => prev.map(c => 
+
+      setCrews(prev => prev.map(c =>
         c.id === crew.id ? { ...c, members: Math.max(0, (c.members || 1) - 1) } : c
       ));
-      
+
       // Update user stats
       const updatedUser = {
         ...user,
@@ -1570,7 +1718,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
         }
       };
       localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      
+
       if (selectedCrew?.id === crew.id) {
         setView('list');
         setSelectedCrew(null);
@@ -1597,7 +1745,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     return (
       <div className="h-screen flex flex-col bg-gray-50">
         {showJoinMessage && <JoinMessageToast />}
-        
+
         {/* Chat Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
           <button onClick={() => setView('bookpage')} className="p-1 hover:bg-gray-100 rounded-lg">
@@ -1605,7 +1753,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           </button>
           <div className="flex items-center gap-2 flex-1 mx-3">
             <div className="relative">
-              <div 
+              <div
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ backgroundColor: selectedCrew.cover }}
               >
@@ -1618,13 +1766,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             <div>
               <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
               <p className="text-xs text-gray-500">
-                {crewMembers.length} member{crewMembers.length !== 1 ? 's' : ''} • 
+                {crewMembers.length} member{crewMembers.length !== 1 ? 's' : ''} •
                 {crewMembers.filter(m => m.online).length} online
               </p>
             </div>
           </div>
           {hasJoined && (
-            <button 
+            <button
               onClick={() => handleLeaveCrew(selectedCrew)}
               className="text-xs text-red-500 px-2 py-1 border border-red-200 rounded-lg"
             >
@@ -1653,9 +1801,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                 return (
                   <div key={message.id} className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
                     {!isOwn && (
-                      <Avatar 
-                        initials={message.userInitials} 
-                        size="sm" 
+                      <Avatar
+                        initials={message.userInitials}
+                        size="sm"
                         color={message.color}
                         online={crewMembers.find(m => m.id === message.userId)?.online}
                       />
@@ -1665,8 +1813,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                         <p className="text-xs text-gray-500 mb-1 px-1">{message.userName}</p>
                       )}
                       <div className={`rounded-2xl px-4 py-2.5 ${
-                        isOwn 
-                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
+                        isOwn
+                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
                           : 'bg-white border border-gray-200 text-gray-900'
                       }`}>
                         <p className="text-sm leading-relaxed">{message.content}</p>
@@ -1678,7 +1826,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   </div>
                 );
               })}
-              
+
               {isTyping && (
                 <div className="flex gap-2">
                   <Avatar initials="..." size="sm" color="#C8622A" />
@@ -1693,7 +1841,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               )}
             </>
           )}
-          
+
           <div ref={messagesEndRef} />
         </div>
 
@@ -1733,7 +1881,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     return (
       <div className="h-screen flex flex-col bg-gray-50">
         {showJoinMessage && <JoinMessageToast />}
-        
+
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10">
           <button onClick={() => setView('list')} className="p-1 hover:bg-gray-100 rounded-lg">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
@@ -1747,7 +1895,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {/* Book Info */}
           <div className="flex gap-4 mb-6">
-            <div 
+            <div
               className="w-24 h-32 rounded-xl shadow-lg flex items-center justify-center shrink-0"
               style={{ backgroundColor: selectedCrew.cover }}
             >
@@ -1770,7 +1918,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   <span className="text-sm text-gray-600">{crewMembers.length} members</span>
                 </div>
                 {!hasJoined ? (
-                  <button 
+                  <button
                     onClick={() => handleJoinCrew(selectedCrew)}
                     className="px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
                   >
@@ -1812,7 +1960,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   <p className="text-sm text-gray-500 mt-1">Based on 22,847 reviews</p>
                 </div>
               </div>
-              
+
               {[1, 2, 3].map((i) => (
                 <div key={i} className="bg-white rounded-xl p-4 border border-gray-200">
                   <div className="flex items-center gap-3 mb-2">
@@ -1855,7 +2003,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   >
                     Join the Discussion
                   </button>
-                  
+
                   {messages.slice(-3).map((msg) => (
                     <div key={msg.id} className="flex gap-3">
                       <Avatar initials={msg.userInitials} size="sm" color={msg.color} />
@@ -1881,11 +2029,11 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               <div className="bg-white rounded-xl p-4 border border-gray-200">
                 <h3 className="font-semibold text-gray-900 mb-2">About this book</h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  {selectedCrew.name} by {selectedCrew.author} is a powerful and inspiring book that has touched millions of readers worldwide. 
+                  {selectedCrew.name} by {selectedCrew.author} is a powerful and inspiring book that has touched millions of readers worldwide.
                   It explores deep themes of life, purpose, and human connection through compelling storytelling and profound insights.
                 </p>
               </div>
-              
+
               <div className="bg-white rounded-xl p-4 border border-gray-200">
                 <h3 className="font-semibold text-gray-900 mb-2">Book Details</h3>
                 <div className="space-y-2 text-sm">
@@ -1914,13 +2062,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           {view === 'similar' && (
             <div className="space-y-3">
               {similarBooks.map((book, i) => (
-                <div 
-                  key={i} 
+                <div
+                  key={i}
                   className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition"
                   onClick={() => handleSimilarBookClick(book)}
                 >
                   <div className="flex items-start gap-3">
-                    <div 
+                    <div
                       className="w-12 h-16 rounded-lg flex items-center justify-center"
                       style={{ backgroundColor: book.cover }}
                     >
@@ -1951,9 +2099,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
       {showJoinMessage && <JoinMessageToast />}
-      
+
       <TopBar user={user} setPage={setPage} title="Reading Crews" />
-      
+
       <div className="px-4 py-4">
         {/* Search and Create */}
         <div className="flex gap-2 mb-5">
@@ -1993,7 +2141,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   </div>
                   <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
                     <div className="absolute inset-0 flex items-center px-4 gap-4">
-                      <div 
+                      <div
                         className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
                         style={{ backgroundColor: crew.cover }}
                       >
@@ -2029,7 +2177,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               >
                 <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
                   <div className="absolute inset-0 flex items-center px-4 gap-4">
-                    <div 
+                    <div
                       className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
                       style={{ backgroundColor: crew.cover }}
                     >
@@ -2048,7 +2196,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   </div>
                 </div>
                 <div className="px-4 py-3 flex justify-end">
-                  <button 
+                  <button
                     onClick={(e) => { e.stopPropagation(); handleJoinCrew(crew); }}
                     className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold"
                   >
@@ -2139,7 +2287,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
               <Target className="w-4 h-4 text-orange-500" />
               <h3 className="font-semibold text-gray-900">Reading Goal {new Date().getFullYear()}</h3>
             </div>
-            <button 
+            <button
               onClick={() => setShowEditGoal(!showEditGoal)}
               className="text-sm text-orange-500 font-medium"
             >
@@ -2185,7 +2333,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
                 <span className="font-semibold text-gray-900">{userStats.booksRead}/{readingGoal.yearly} books</span>
               </div>
               <div className="h-2 bg-orange-200 rounded-full overflow-hidden">
-                <div 
+                <div
                   className="h-full bg-orange-500 rounded-full transition-all duration-500"
                   style={{ width: `${(userStats.booksRead / readingGoal.yearly) * 100}%` }}
                 />
@@ -2221,8 +2369,8 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 text-sm pb-2.5 font-medium border-b-2 transition ${
-                activeTab === tab 
-                  ? 'text-orange-500 border-orange-500' 
+                activeTab === tab
+                  ? 'text-orange-500 border-orange-500'
                   : 'text-gray-500 border-transparent hover:text-gray-700'
               }`}
             >
@@ -2238,7 +2386,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
               <div className="text-center py-8">
                 <Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No posts yet</p>
-                <button 
+                <button
                   onClick={() => setPage('post')}
                   className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
                 >
@@ -2289,6 +2437,420 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+// ─── RECOMMENDATIONS PAGE ───────────────────────────────────────────────────
+const RecommendationsPage = ({ user, setPage }) => {
+  const [recommendKeywords, setRecommendKeywords] = useState('');
+  const [recommendations, setRecommendations] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleAIRecommendation = async () => {
+    if (!recommendKeywords.trim()) {
+      alert('Please enter what you want to read');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      console.log('🤖 Requesting AI recommendations for:', recommendKeywords);
+
+      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000/api'}/recommend/ai`, {
+        query: recommendKeywords
+      });
+
+      if (response.data.success) {
+        console.log('✅ AI recommendations received:', response.data);
+
+        // Format for display
+        setRecommendations([{
+          type: 'ai',
+          query: response.data.query,
+          recommendations: response.data.recommendations,
+          source: response.data.source,
+          isAI: response.data.isAI
+        }]);
+
+        alert(`${response.data.isAI ? '🤖 AI' : '📚'} recommendations loaded!`);
+      } else {
+        throw new Error(response.data.message || 'Failed to get recommendations');
+      }
+    } catch (error) {
+      console.error('❌ Error getting AI recommendations:', error);
+
+      // Show error but don't fail completely - fallback to regular search
+      alert('AI unavailable, using database search');
+      handleRecommendation(); // Fallback to regular search
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRecommendation = async () => {
+    if (!recommendKeywords.trim()) {
+      alert('Please enter what you want to read');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Fallback to old static logic if AI fails
+      const keywords = recommendKeywords.toLowerCase().trim();
+      const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
+        const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
+        return categoryText.includes(keywords) ||
+               category.books.some(book =>
+                 book.title.toLowerCase().includes(keywords) ||
+                 book.author.toLowerCase().includes(keywords)
+               );
+      });
+
+      if (matchingCategories.length > 0) {
+        const results = [];
+        matchingCategories.forEach(category => {
+          results.push({
+            type: 'category',
+            category: category.category,
+            emoji: category.emoji,
+            description: category.description,
+            books: category.books
+          });
+        });
+        setRecommendations(results);
+      } else {
+        const allBooks = BOOK_RECOMMENDATIONS.flatMap(category =>
+          category.books.map(book => ({
+            ...book,
+            category: category.category,
+            emoji: category.emoji
+          }))
+        );
+
+        const filteredBooks = allBooks.filter(book =>
+          book.title.toLowerCase().includes(keywords) ||
+          book.author.toLowerCase().includes(keywords)
+        );
+
+        if (filteredBooks.length > 0) {
+          setRecommendations([
+            {
+              type: 'keyword',
+              keyword: keywords,
+              books: filteredBooks.slice(0, 10)
+            }
+          ]);
+        } else {
+          setRecommendations([
+            {
+              type: 'popular',
+              title: 'Most Popular Books',
+              books: [
+                { title: 'Atomic Habits', author: 'James Clear', category: 'Motivational / Self-Help', rating: 4.8 },
+                { title: 'The Hobbit', author: 'J.R.R. Tolkien', category: 'Fantasy', rating: 4.7 },
+                { title: 'To Kill a Mockingbird', author: 'Harper Lee', category: 'Literary Fiction', rating: 4.8 },
+                { title: 'The Diary of a Young Girl', author: 'Anne Frank', category: 'Biography', rating: 4.8 },
+                { title: 'The Power of Now', author: 'Eckhart Tolle', category: 'Philosophy', rating: 4.3 }
+              ]
+            }
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error('Error in recommendation:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBrowseCategories = () => {
+    setRecommendations(
+      BOOK_RECOMMENDATIONS.map(category => ({
+        type: 'category',
+        category: category.category,
+        emoji: category.emoji,
+        description: category.description,
+        books: category.books.slice(0, 3)
+      }))
+    );
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-6 py-8">
+      <button onClick={() => setPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
+        <ChevronLeft className="w-5 h-5" /> Back to Home
+      </button>
+
+      <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-12">
+        <h1 className="text-4xl font-bold text-white mb-2">🤖 AI Book Recommendations</h1>
+        <p className="text-orange-100">Powered by Groq AI - Get personalized suggestions instantly!</p>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+        <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+          <Sparkles className="w-6 h-6 text-orange-500" />
+          Ask AI for Recommendations
+        </h2>
+
+        <div className="grid md:grid-cols-2 gap-8">
+          <div>
+            <div className="relative mb-6">
+              <Sparkles className="absolute left-4 top-4 text-orange-500" />
+              <input
+                type="text"
+                value={recommendKeywords}
+                onChange={(e) => setRecommendKeywords(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAIRecommendation()}
+                className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
+                placeholder="e.g., books like Harry Potter, mystery thrillers, self-help..."
+              />
+            </div>
+
+            <button
+              onClick={handleAIRecommendation}
+              disabled={!recommendKeywords || loading}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Getting AI Recommendations...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Get AI Recommendations
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleRecommendation}
+              disabled={!recommendKeywords}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4"
+            >
+              📚 Quick Search (Database)
+            </button>
+
+            <button
+              onClick={handleBrowseCategories}
+              className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all"
+            >
+              Browse All Categories
+            </button>
+          </div>
+
+          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6">
+            <h3 className="text-xl font-bold mb-4 text-gray-900 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-orange-500" />
+              How to Use AI Search:
+            </h3>
+            <ul className="space-y-3 text-gray-700">
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Be specific:</strong> "fantasy books with strong female leads"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Describe mood:</strong> "books to help me relax after work"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Compare:</strong> "books like Harry Potter but for adults"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Ask naturally:</strong> "I want to learn about investing"</span>
+              </li>
+            </ul>
+
+            <div className="mt-6 p-4 bg-white rounded-lg border border-orange-200">
+              <p className="text-sm text-gray-600">
+                🤖 <strong>Powered by Groq AI</strong> - Lightning-fast responses with personalized recommendations!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Recommendations Display */}
+      {recommendations.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                {recommendations[0].isAI ? (
+                  <>
+                    <Sparkles className="w-6 h-6 text-orange-500" />
+                    AI Recommendations for "{recommendations[0].query}"
+                  </>
+                ) : recommendations[0].type === 'category' ? (
+                  'Recommended Categories'
+                ) : recommendations[0].type === 'keyword' ? (
+                  `Results for "${recommendations[0].keyword}"`
+                ) : (
+                  'Popular Recommendations'
+                )}
+              </h2>
+              {recommendations[0].source && (
+                <p className="text-sm text-gray-500 mt-1">
+                  📡 Source: {recommendations[0].source}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setRecommendations([])}
+              className="text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-100"
+            >
+              Clear Results
+            </button>
+          </div>
+
+          {/* AI Results (new format) */}
+          {recommendations[0].isAI && recommendations[0].recommendations && (
+            <div className="space-y-4">
+              {recommendations[0].recommendations.map((book, idx) => (
+                <div key={idx} className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100 hover:border-orange-300 transition">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{book.title}</h3>
+                          <p className="text-gray-600">by {book.author}</p>
+                          <p className="text-sm text-orange-600 font-semibold mt-1">
+                            📚 {book.genre}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full">
+                          <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                          <span className="font-bold">{book.rating}</span>
+                        </div>
+                      </div>
+
+                      {book.description && (
+                        <p className="text-gray-700 mb-3 leading-relaxed">
+                          {book.description}
+                        </p>
+                      )}
+
+                      {book.reason && (
+                        <div className="bg-white rounded-lg p-3 border border-orange-200">
+                          <p className="text-sm text-gray-600">
+                            <span className="font-semibold text-orange-600">💡 Why you'd like it:</span> {book.reason}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Original category/keyword results (keep existing code) */}
+          {!recommendations[0].isAI && (
+            <div className="space-y-8">
+              {recommendations.map((rec, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-2xl overflow-hidden">
+                  {rec.type === 'category' ? (
+                    <div>
+                      <div className="bg-gradient-to-r from-orange-100 to-red-100 p-6">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{rec.emoji}</span>
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900">{rec.category}</h3>
+                            <p className="text-gray-600">{rec.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-6">
+                        <h4 className="font-semibold text-gray-700 mb-4">Recommended Books:</h4>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {rec.books.map((book, bookIdx) => (
+                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
+                                  <p className="text-sm text-gray-600">by {book.author}</p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                  <span className="text-sm font-semibold">{book.rating}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-6">
+                        <h3 className="text-xl font-bold text-gray-900">
+                          {rec.type === 'keyword' ? `Books matching "${rec.keyword}"` : rec.title}
+                        </h3>
+                      </div>
+                      <div className="p-6">
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {rec.books.map((book, bookIdx) => (
+                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
+                                  <p className="text-sm text-gray-600">by {book.author}</p>
+                                  {book.category && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                        {book.category}
+                                      </span>
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                  <span className="text-sm font-semibold">{book.rating}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Quick Category Grid */}
+      {recommendations.length === 0 && (
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Categories</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {BOOK_RECOMMENDATIONS.slice(0, 12).map(category => (
+              <button
+                key={category.id}
+                onClick={() => {
+                  setRecommendKeywords(category.category.toLowerCase());
+                  setTimeout(() => handleRecommendation(), 100);
+                }}
+                className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition text-center border border-gray-200 hover:border-orange-300"
+              >
+                <div className="text-2xl mb-2">{category.emoji}</div>
+                <p className="text-sm font-medium text-gray-700 truncate">{category.category}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -2355,10 +2917,10 @@ export default function App() {
 
     const updatedPosts = [newPost, ...posts];
     setPosts(updatedPosts);
-    
+
     // Save to localStorage
     localStorage.setItem(`user_${currentUser.email}_posts`, JSON.stringify(updatedPosts));
-    
+
     // Update user stats
     const updatedUser = {
       ...currentUser,
@@ -2369,7 +2931,7 @@ export default function App() {
     };
     setCurrentUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    
+
     showNotification('Post created successfully!', 'success');
   };
 
@@ -2385,7 +2947,7 @@ export default function App() {
       createdBy: currentUser.email,
       createdAt: new Date().toISOString()
     };
-    
+
     setCrews(prev => [newCrew, ...prev]);
     showNotification(`Crew "${book.title}" created! Invite friends to join.`, 'success');
   };
@@ -2425,7 +2987,7 @@ export default function App() {
 
       <div className="max-w-md mx-auto relative">
         {currentPage === 'home' && (
-          <HomePage 
+          <HomePage
             user={currentUser}
             posts={posts}
             setPosts={setPosts}
@@ -2436,49 +2998,56 @@ export default function App() {
             onUpdateStats={handleUpdateStats}
           />
         )}
-        
+
         {currentPage === 'explore' && (
-          <ExplorePage 
-            user={currentUser} 
+          <ExplorePage
+            user={currentUser}
             setPage={setCurrentPage}
             onCreateCrew={handleCreateCrew}
           />
         )}
-        
+
         {currentPage === 'post' && (
-          <PostPage 
-            user={currentUser} 
-            onPost={handlePost} 
-            setPage={setCurrentPage} 
+          <PostPage
+            user={currentUser}
+            onPost={handlePost}
+            setPage={setCurrentPage}
           />
         )}
-        
+
         {currentPage === 'crews' && (
-          <CrewsPage 
-            user={currentUser} 
+          <CrewsPage
+            user={currentUser}
             crews={crews}
-            setPage={setCurrentPage} 
+            setPage={setCurrentPage}
           />
         )}
-        
+
+        {currentPage === 'recommend' && (
+          <RecommendationsPage
+            user={currentUser}
+            setPage={setCurrentPage}
+          />
+        )}
+
         {currentPage === 'profile' && (
-          <ProfilePage 
-            user={currentUser} 
-            posts={posts} 
+          <ProfilePage
+            user={currentUser}
+            posts={posts}
             setPage={setCurrentPage}
             onUpdateStats={handleUpdateStats}
-            onLogout={() => { 
-              setIsLoggedIn(false); 
-              setCurrentUser(null); 
+            onLogout={() => {
+              setIsLoggedIn(false);
+              setCurrentUser(null);
               localStorage.removeItem('currentUser');
               setCurrentPage('home');
-            }} 
+            }}
           />
         )}
-        
-        <BottomNav 
-          active={currentPage} 
-          setPage={setCurrentPage} 
+
+        <BottomNav
+          active={currentPage}
+          setPage={setCurrentPage}
           unreadCount={unreadMessages}
         />
       </div>
