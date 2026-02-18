@@ -6,10 +6,11 @@ import {
   Sparkles, Lock, Eye, EyeOff, UserPlus, Gift, ThumbsUp, ThumbsDown, 
   Trash2, Edit, Target, Check, ArrowLeft, Clock, TrendingUp, Menu, Upload,
   Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause, 
-  Volume2, Mic, Paperclip, Mail, Phone  // ← Added Mail and Phone
+  Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink
 } from 'lucide-react';
+
 // Import API functions
-import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, chatAPI, crewAPI, userAPI } from './services/api';
+import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, chatAPI, crewAPI, userAPI, bookCrewAPI, getTrendingBooks, aiChatAPI } from './services/api';
 import axios from 'axios';
 
 // Validation functions
@@ -197,12 +198,14 @@ const LoginPage = ({ onLogin }) => {
           readingGoal: readingGoal,
           isVerified: true,
           createdAt: new Date().toISOString(),
-          stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 }
+          stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
+          joinedCrews: []
         };
         
         // Save to localStorage
         localStorage.setItem('currentUser', JSON.stringify(userData));
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
+        localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
         
         onLogin(userData);
         setShowOTP(false);
@@ -221,10 +224,12 @@ const LoginPage = ({ onLogin }) => {
           readingGoal: readingGoal,
           isVerified: true,
           createdAt: new Date().toISOString(),
-          stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 }
+          stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
+          joinedCrews: []
         };
         localStorage.setItem('currentUser', JSON.stringify(userData));
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
+        localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
         onLogin(userData);
         setShowOTP(false);
         localStorage.removeItem('devOTP');
@@ -390,7 +395,8 @@ const LoginPage = ({ onLogin }) => {
                 name: name || email.split('@')[0],
                 email: email,
                 readingGoal: { yearly: 20, monthly: 5 },
-                stats: { booksRead: 12, reviewsGiven: 8, postsCreated: 15, crewsJoined: 3 }
+                stats: { booksRead: 12, reviewsGiven: 8, postsCreated: 15, crewsJoined: 3 },
+                joinedCrews: [1, 2] // Mock joined crews
               };
               localStorage.setItem('currentUser', JSON.stringify(mockUser));
               onLogin(mockUser);
@@ -421,6 +427,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [readingProgress, setReadingProgress] = useState(0);
   const [feedPosts, setFeedPosts] = useState([]);
+  const [selectedTab, setSelectedTab] = useState('feed');
 
   useEffect(() => {
     fetchTrendingBooks();
@@ -431,21 +438,65 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const fetchTrendingBooks = async () => {
     setLoadingTrending(true);
     try {
-      // In production, this would fetch from Groq API
-      // For now, use mock data
-      const mockTrending = [
-        { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
-        { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
-        { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D' },
-        { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882' },
-        { id: 5, title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.5, readers: 32400, cover: '#C8622A' },
-      ];
-      setTrendingBooks(mockTrending);
+      // Try to fetch from Groq API first
+      let response = '';
+      await getTrendingBooks(
+        (token) => { response += token; },
+        () => {
+          try {
+            // Parse the response to extract book data
+            const books = parseTrendingBooks(response);
+            setTrendingBooks(books);
+          } catch (e) {
+            console.error('Error parsing trending books:', e);
+            useMockTrendingBooks();
+          }
+        }
+      );
     } catch (error) {
       console.error('Error fetching trending books:', error);
+      useMockTrendingBooks();
     } finally {
       setLoadingTrending(false);
     }
+  };
+
+  const useMockTrendingBooks = () => {
+    const mockTrending = [
+      { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C', description: 'Tiny changes, remarkable results', genre: 'Self-Help', pages: 320, published: '2018' },
+      { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6', description: 'Timeless lessons on wealth, greed, and happiness', genre: 'Finance', pages: 256, published: '2020' },
+      { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D', description: 'Rules for focused success in a distracted world', genre: 'Productivity', pages: 304, published: '2016' },
+      { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882', description: 'A brief history of humankind', genre: 'History', pages: 512, published: '2011' },
+      { id: 5, title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.5, readers: 32400, cover: '#C8622A', description: 'A fable about following your dreams', genre: 'Fiction', pages: 208, published: '1988' },
+    ];
+    setTrendingBooks(mockTrending);
+  };
+
+  const parseTrendingBooks = (response) => {
+    // Simple parsing - in production you'd have a more sophisticated parser
+    const lines = response.split('\n');
+    const books = [];
+    
+    lines.forEach(line => {
+      if (line.includes('title:') || line.includes('Title:')) {
+        // Extract book info
+        const title = line.split(':')[1]?.trim() || 'Unknown';
+        books.push({
+          id: books.length + 1,
+          title: title,
+          author: 'Various',
+          rating: 4.5,
+          readers: 10000,
+          cover: '#C8622A',
+          description: 'A trending book',
+          genre: 'General',
+          pages: 300,
+          published: '2024'
+        });
+      }
+    });
+    
+    return books.length > 0 ? books : [];
   };
 
   const loadFeedPosts = () => {
@@ -479,55 +530,85 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     }
   };
 
+  const handleTabChange = (tab) => {
+    setSelectedTab(tab);
+    if (tab === 'reviews') setPage('reviews');
+    else if (tab === 'crews') setPage('crews');
+    else if (tab === 'posts') setPage('post');
+    else if (tab === 'books') setPage('explore');
+  };
+
+  const hasReadingGoal = user?.readingGoal?.yearly > 0 && user?.readingGoal?.monthly > 0;
+
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
       <TopBar user={user} setPage={setPage} title="Home" />
       
       <div className="px-4 py-4 space-y-5">
-        {/* Welcome Card with Reading Progress */}
-        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
-          <div className="flex items-center justify-between mb-3">
-            <div>
-              <h2 className="text-xl font-bold">Welcome back, {user?.name?.split(' ')[0]}! 📚</h2>
-              <p className="text-orange-100 text-sm mt-1">Keep reading, keep growing</p>
+        {/* Welcome Card - Shows differently based on whether user has goals */}
+        {!hasReadingGoal ? (
+          <div className="bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl p-5 text-white shadow-lg">
+            <div className="flex items-center gap-3 mb-2">
+              <Leaf className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Welcome, {user?.name?.split(' ')[0]}! 🌱</h2>
             </div>
-            <Avatar initials={user?.name?.slice(0, 2)} size="md" color="white" />
+            <p className="text-green-100 text-sm">Read together, grow together. Set your reading goals to track progress!</p>
+            <button 
+              onClick={() => setPage('profile')}
+              className="mt-3 px-4 py-2 bg-white text-green-600 rounded-xl text-sm font-semibold"
+            >
+              Set Reading Goals
+            </button>
           </div>
-          
-          {/* Reading Progress */}
-          <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm">
-            <div className="flex items-center justify-between text-sm mb-2">
-              <span>Yearly Goal Progress</span>
-              <span className="font-semibold">{user?.stats?.booksRead || 0}/{user?.readingGoal?.yearly || 20} books</span>
+        ) : (
+          <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-xl font-bold">Welcome back, {user?.name?.split(' ')[0]}! 📚</h2>
+                <p className="text-orange-100 text-sm mt-1">Keep reading, keep growing</p>
+              </div>
+              <Avatar initials={user?.name?.slice(0, 2)} size="md" color="white" />
             </div>
-            <div className="h-2 bg-white/30 rounded-full overflow-hidden">
-              <div 
-                className="h-full bg-white rounded-full transition-all duration-500"
-                style={{ width: `${readingProgress}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between mt-2 text-xs text-orange-100">
-              <span>Monthly: {user?.stats?.booksRead || 0}/{user?.readingGoal?.monthly || 5}</span>
-              <span>{Math.round(readingProgress)}% Complete</span>
+            
+            {/* Reading Progress */}
+            <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm">
+              <div className="flex items-center justify-between text-sm mb-2">
+                <span>Yearly Goal Progress</span>
+                <span className="font-semibold">{user?.stats?.booksRead || 0}/{user?.readingGoal?.yearly || 20} books</span>
+              </div>
+              <div className="h-2 bg-white/30 rounded-full overflow-hidden">
+                <div 
+                  className="h-full bg-white rounded-full transition-all duration-500"
+                  style={{ width: `${readingProgress}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between mt-2 text-xs text-orange-100">
+                <span>Monthly: {user?.stats?.booksRead || 0}/{user?.readingGoal?.monthly || 5}</span>
+                <span>{Math.round(readingProgress)}% Complete</span>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
-        {/* Quick Stats */}
+        {/* Quick Stats - Clickable */}
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: 'Books', value: user?.stats?.booksRead || 0, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100' },
-            { label: 'Reviews', value: user?.stats?.reviewsGiven || 0, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100' },
-            { label: 'Posts', value: user?.stats?.postsCreated || 0, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100' },
-            { label: 'Crews', value: user?.stats?.crewsJoined || 0, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100' }
-          ].map(({ label, value, icon: Icon, color, bg }, idx) => (
-            <div key={idx} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+            { label: 'Books', value: user?.stats?.booksRead || 0, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100', tab: 'books' },
+            { label: 'Reviews', value: user?.stats?.reviewsGiven || 0, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100', tab: 'reviews' },
+            { label: 'Posts', value: user?.stats?.postsCreated || 0, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100', tab: 'posts' },
+            { label: 'Crews', value: user?.stats?.crewsJoined || 0, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100', tab: 'crews' }
+          ].map(({ label, value, icon: Icon, color, bg, tab }, idx) => (
+            <button 
+              key={idx} 
+              onClick={() => handleTabChange(tab)}
+              className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 hover:shadow-md transition text-left"
+            >
               <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}>
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
               <p className="text-lg font-bold text-gray-900">{value}</p>
               <p className="text-xs text-gray-500">{label}</p>
-            </div>
+            </button>
           ))}
         </div>
 
@@ -632,12 +713,23 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           ) : (
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {trendingBooks.map((book, i) => (
-                <div key={i} className="shrink-0 w-32">
+                <div 
+                  key={i} 
+                  className="shrink-0 w-32 cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => {
+                    // Navigate to book details
+                    setPage('explore');
+                    // You would pass the book data via state/context
+                  }}
+                >
                   <div 
-                    className="w-32 h-40 rounded-xl shadow-lg flex items-end justify-center pb-3 mb-2"
+                    className="w-32 h-40 rounded-xl shadow-lg flex items-end justify-center pb-3 mb-2 relative overflow-hidden group"
                     style={{ backgroundColor: book.cover }}
                   >
                     <BookOpen className="w-8 h-8 text-white opacity-50" />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                      <ExternalLink className="w-6 h-6 text-white" />
+                    </div>
                   </div>
                   <p className="text-sm font-semibold text-gray-900 leading-tight">{book.title}</p>
                   <p className="text-xs text-gray-500">{book.author}</p>
@@ -686,9 +778,15 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-1 text-xs text-gray-500">
                       <Users className="w-3 h-3" />
-                      <span>1</span>
+                      <span>{crew.members || 1}</span>
                     </div>
-                    <button className="px-3 py-1 bg-orange-500 text-white rounded-lg text-xs font-medium">
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Handle join crew
+                      }}
+                      className="px-3 py-1 bg-orange-500 text-white rounded-lg text-xs font-medium"
+                    >
                       Join
                     </button>
                   </div>
@@ -715,7 +813,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [suggestedBooks, setSuggestedBooks] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [showBookDetails, setShowBookDetails] = useState(false);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -739,74 +838,121 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     setMessages(prev => [...prev, userMessage]);
     setInputMessage('');
     setIsLoading(true);
-    setShowSuggestions(false);
 
     try {
       // Call Groq API for book recommendations
       let aiResponse = '';
       let books = [];
 
-      // For demo, simulate AI response
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Mock AI response based on user input
-      const lowerInput = inputMessage.toLowerCase();
-      if (lowerInput.includes('fantasy') || lowerInput.includes('magic')) {
-        aiResponse = "Based on your interest in fantasy, I recommend these magical books that have captivated millions of readers!";
-        books = [
-          { title: 'The Name of the Wind', author: 'Patrick Rothfuss', rating: 4.7, genre: 'Fantasy', description: 'A masterpiece of storytelling about a legendary magician.' },
-          { title: 'Mistborn', author: 'Brandon Sanderson', rating: 4.8, genre: 'Fantasy', description: 'An epic fantasy with a unique magic system.' },
-          { title: 'The Lies of Locke Lamora', author: 'Scott Lynch', rating: 4.6, genre: 'Fantasy', description: 'Ocean\'s Eleven meets fantasy in this brilliant heist novel.' }
-        ];
-      } else if (lowerInput.includes('self help') || lowerInput.includes('motivation')) {
-        aiResponse = "Looking to grow and improve? Here are some life-changing books that our community loves!";
-        books = [
-          { title: 'Atomic Habits', author: 'James Clear', rating: 4.8, genre: 'Self-Help', description: 'Tiny changes, remarkable results.' },
-          { title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, genre: 'Finance', description: 'Timeless lessons on wealth and happiness.' },
-          { title: 'Daring Greatly', author: 'Brené Brown', rating: 4.6, genre: 'Self-Help', description: 'How courage changes everything.' }
-        ];
-      } else if (lowerInput.includes('thriller') || lowerInput.includes('mystery')) {
-        aiResponse = "If you love suspense and plot twists, you'll absolutely love these thrillers!";
-        books = [
-          { title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5, genre: 'Thriller', description: 'A shocking psychological thriller.' },
-          { title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.3, genre: 'Thriller', description: 'The thriller that defined a generation.' },
-          { title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.4, genre: 'Mystery', description: 'A spellbinding mystery.' }
-        ];
-      } else {
-        aiResponse = "I've found some fantastic books that match your interests. Take a look!";
-        books = [
-          { title: 'The Midnight Library', author: 'Matt Haig', rating: 4.6, genre: 'Fiction', description: 'Between life and death, there is a library.' },
-          { title: 'Project Hail Mary', author: 'Andy Weir', rating: 4.8, genre: 'Sci-Fi', description: 'A lone astronaut must save humanity.' },
-          { title: 'Educated', author: 'Tara Westover', rating: 4.7, genre: 'Memoir', description: 'A memoir of survival and transformation.' }
-        ];
-      }
-
-      setSuggestedBooks(books);
-      setShowSuggestions(true);
-
-      const aiMessage = {
-        id: Date.now() + 1,
-        type: 'ai',
-        content: aiResponse,
-        books: books,
-        timestamp: new Date()
-      };
-
-      setMessages(prev => [...prev, aiMessage]);
+      // Use the AI chat API
+      await aiChatAPI.streamResponse(
+        inputMessage,
+        (token) => { aiResponse += token; },
+        () => {
+          // Parse the response to extract book data
+          books = parseBookRecommendations(aiResponse);
+          setSuggestedBooks(books);
+          
+          const aiMessage = {
+            id: Date.now() + 1,
+            type: 'ai',
+            content: aiResponse,
+            books: books,
+            timestamp: new Date()
+          };
+          
+          setMessages(prev => [...prev, aiMessage]);
+          setIsLoading(false);
+        },
+        user.id
+      );
     } catch (error) {
       console.error('Error getting AI response:', error);
       
-      const errorMessage = {
-        id: Date.now() + 1,
-        type: 'ai',
-        content: "I'm having trouble connecting right now. Please try again in a moment.",
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, errorMessage]);
-    } finally {
-      setIsLoading(false);
+      // Fallback to mock response
+      setTimeout(() => {
+        const mockBooks = getMockRecommendations(inputMessage);
+        setSuggestedBooks(mockBooks);
+        
+        const aiMessage = {
+          id: Date.now() + 1,
+          type: 'ai',
+          content: getMockResponse(inputMessage),
+          books: mockBooks,
+          timestamp: new Date()
+        };
+        
+        setMessages(prev => [...prev, aiMessage]);
+        setIsLoading(false);
+      }, 1500);
     }
+  };
+
+  const getMockRecommendations = (input) => {
+    const lowerInput = input.toLowerCase();
+    if (lowerInput.includes('fantasy') || lowerInput.includes('magic')) {
+      return [
+        { id: 1, title: 'The Name of the Wind', author: 'Patrick Rothfuss', rating: 4.7, genre: 'Fantasy', description: 'A masterpiece of storytelling about a legendary magician.', cover: '#8B4513', pages: 662, published: '2007' },
+        { id: 2, title: 'Mistborn', author: 'Brandon Sanderson', rating: 4.8, genre: 'Fantasy', description: 'An epic fantasy with a unique magic system.', cover: '#4A4A4A', pages: 541, published: '2006' },
+        { id: 3, title: 'The Lies of Locke Lamora', author: 'Scott Lynch', rating: 4.6, genre: 'Fantasy', description: 'Ocean\'s Eleven meets fantasy in this brilliant heist novel.', cover: '#2C3E50', pages: 499, published: '2006' }
+      ];
+    } else if (lowerInput.includes('self help') || lowerInput.includes('motivation')) {
+      return [
+        { id: 4, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, genre: 'Self-Help', description: 'Tiny changes, remarkable results.', cover: '#E8A87C', pages: 320, published: '2018' },
+        { id: 5, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, genre: 'Finance', description: 'Timeless lessons on wealth and happiness.', cover: '#7B9EA6', pages: 256, published: '2020' },
+        { id: 6, title: 'Daring Greatly', author: 'Brené Brown', rating: 4.6, genre: 'Self-Help', description: 'How courage changes everything.', cover: '#C44536', pages: 304, published: '2012' }
+      ];
+    } else if (lowerInput.includes('thriller') || lowerInput.includes('mystery')) {
+      return [
+        { id: 7, title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5, genre: 'Thriller', description: 'A shocking psychological thriller.', cover: '#2C1810', pages: 336, published: '2019' },
+        { id: 8, title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.3, genre: 'Thriller', description: 'The thriller that defined a generation.', cover: '#8B0000', pages: 432, published: '2012' },
+        { id: 9, title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.4, genre: 'Mystery', description: 'A spellbinding mystery.', cover: '#2F4F4F', pages: 672, published: '2005' }
+      ];
+    } else {
+      return [
+        { id: 10, title: 'The Midnight Library', author: 'Matt Haig', rating: 4.6, genre: 'Fiction', description: 'Between life and death, there is a library.', cover: '#483D8B', pages: 304, published: '2020' },
+        { id: 11, title: 'Project Hail Mary', author: 'Andy Weir', rating: 4.8, genre: 'Sci-Fi', description: 'A lone astronaut must save humanity.', cover: '#CD5C5C', pages: 496, published: '2021' },
+        { id: 12, title: 'Educated', author: 'Tara Westover', rating: 4.7, genre: 'Memoir', description: 'A memoir of survival and transformation.', cover: '#DAA520', pages: 352, published: '2018' }
+      ];
+    }
+  };
+
+  const getMockResponse = (input) => {
+    const lowerInput = input.toLowerCase();
+    if (lowerInput.includes('fantasy') || lowerInput.includes('magic')) {
+      return "Based on your interest in fantasy, I recommend these magical books that have captivated millions of readers!";
+    } else if (lowerInput.includes('self help') || lowerInput.includes('motivation')) {
+      return "Looking to grow and improve? Here are some life-changing books that our community loves!";
+    } else if (lowerInput.includes('thriller') || lowerInput.includes('mystery')) {
+      return "If you love suspense and plot twists, you'll absolutely love these thrillers!";
+    } else {
+      return "I've found some fantastic books that match your interests. Take a look!";
+    }
+  };
+
+  const parseBookRecommendations = (response) => {
+    // Simple parsing - in production you'd have a more sophisticated parser
+    const lines = response.split('\n');
+    const books = [];
+    
+    lines.forEach(line => {
+      if (line.includes('title:') || line.includes('Title:')) {
+        const title = line.split(':')[1]?.trim() || 'Unknown';
+        books.push({
+          id: books.length + 1,
+          title: title,
+          author: 'Author',
+          rating: 4.5,
+          genre: 'General',
+          description: 'A recommended book',
+          cover: '#C8622A',
+          pages: 300,
+          published: '2024'
+        });
+      }
+    });
+    
+    return books.length > 0 ? books : getMockRecommendations('');
   };
 
   const handleJoinCrew = (book) => {
@@ -835,6 +981,100 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
       alert('Link copied to clipboard!');
     }
   };
+
+  const handleBookClick = (book) => {
+    setSelectedBook(book);
+    setShowBookDetails(true);
+  };
+
+  // Book Details Modal
+  if (showBookDetails && selectedBook) {
+    return (
+      <div className="h-screen flex flex-col bg-gray-50">
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10">
+          <button onClick={() => setShowBookDetails(false)} className="p-1 hover:bg-gray-100 rounded-lg">
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <span className="font-semibold text-gray-900 flex-1">Book Details</span>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+            <div className="flex gap-4 mb-6">
+              <div 
+                className="w-28 h-36 rounded-xl shadow-lg flex items-center justify-center shrink-0"
+                style={{ backgroundColor: selectedBook.cover }}
+              >
+                <BookOpen className="w-12 h-12 text-white opacity-80" />
+              </div>
+              <div className="flex-1">
+                <span className="text-xs px-2 py-1 bg-orange-100 text-orange-600 rounded-full font-medium inline-block mb-2">
+                  {selectedBook.genre}
+                </span>
+                <h2 className="font-bold text-gray-900 text-xl">{selectedBook.title}</h2>
+                <p className="text-sm text-gray-500">by {selectedBook.author}</p>
+                <div className="flex items-center gap-2 mt-2">
+                  <StarRating rating={selectedBook.rating} />
+                  <span className="text-sm font-medium">{selectedBook.rating}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <h3 className="font-semibold text-gray-900 mb-2">About this book</h3>
+                <p className="text-sm text-gray-600 leading-relaxed">
+                  {selectedBook.description}
+                </p>
+              </div>
+              
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h3 className="font-semibold text-gray-900 mb-3">Book Details</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Author</span>
+                    <span className="text-gray-900 font-medium">{selectedBook.author}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Genre</span>
+                    <span className="text-gray-900 font-medium">{selectedBook.genre}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Pages</span>
+                    <span className="text-gray-900 font-medium">{selectedBook.pages}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Published</span>
+                    <span className="text-gray-900 font-medium">{selectedBook.published}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Rating</span>
+                    <span className="text-gray-900 font-medium">{selectedBook.rating}/5</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => handleJoinCrew(selectedBook)}
+                  className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-xl font-medium"
+                >
+                  Join Crew
+                </button>
+                <button
+                  onClick={() => handleInviteFriends(selectedBook)}
+                  className="flex-1 px-4 py-3 border border-gray-200 rounded-xl font-medium text-gray-700"
+                >
+                  <UserPlus className="w-4 h-4 inline mr-2" />
+                  Invite
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
@@ -879,12 +1119,19 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               </div>
 
               {/* Book Suggestions */}
-              {message.books && (
+              {message.books && message.books.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {message.books.map((book, idx) => (
-                    <div key={idx} className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm">
+                    <div 
+                      key={idx} 
+                      className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
+                      onClick={() => handleBookClick(book)}
+                    >
                       <div className="flex items-start gap-3">
-                        <div className="w-12 h-16 rounded-lg bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shrink-0">
+                        <div 
+                          className="w-12 h-16 rounded-lg flex items-center justify-center shrink-0"
+                          style={{ backgroundColor: book.cover }}
+                        >
                           <BookOpen className="w-6 h-6 text-white" />
                         </div>
                         <div className="flex-1">
@@ -894,17 +1141,23 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                             <StarRating rating={book.rating} size="xs" />
                             <span className="text-xs text-gray-500 ml-1">{book.rating}</span>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1">{book.description}</p>
+                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">{book.description}</p>
                           
                           <div className="flex items-center gap-2 mt-2">
                             <button
-                              onClick={() => handleJoinCrew(book)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleJoinCrew(book);
+                              }}
                               className="flex-1 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium"
                             >
                               Join Crew
                             </button>
                             <button
-                              onClick={() => handleInviteFriends(book)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleInviteFriends(book);
+                              }}
                               className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600"
                             >
                               <UserPlus className="w-3 h-3 inline mr-1" />
@@ -939,7 +1192,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input Area */}
+      {/* Input Area - Always visible at bottom */}
       <div className="bg-white border-t border-gray-200 px-4 py-3">
         <div className="flex items-center gap-2">
           <button className="p-2 hover:bg-gray-100 rounded-full transition">
@@ -1128,8 +1381,19 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   const [crewMembers, setCrewMembers] = useState([]);
   const [similarBooks, setSimilarBooks] = useState([]);
   const [crews, setCrews] = useState(initialCrews || []);
+  const [joinedCrews, setJoinedCrews] = useState([]);
+  const [showJoinMessage, setShowJoinMessage] = useState(false);
+  const [joinMessage, setJoinMessage] = useState('');
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+
+  // Load joined crews from localStorage
+  useEffect(() => {
+    const savedJoinedCrews = localStorage.getItem(`user_${user.email}_joinedCrews`);
+    if (savedJoinedCrews) {
+      setJoinedCrews(JSON.parse(savedJoinedCrews));
+    }
+  }, [user.email]);
 
   useEffect(() => {
     if (selectedCrew) {
@@ -1177,15 +1441,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           content: "Mitch Albom's writing is so touching. I cried and felt inspired at the same time.",
           timestamp: new Date(Date.now() - 900000),
           color: '#C8956C'
-        },
-        { 
-          id: 4, 
-          userId: user.id, 
-          userName: user.name, 
-          userInitials: user.name?.slice(0, 2),
-          content: 'Just started reading this! So excited to discuss with you all!',
-          timestamp: new Date(Date.now() - 300000),
-          color: '#C8622A'
         }
       ];
       setMessages(mockMessages);
@@ -1200,9 +1455,20 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       const mockMembers = [
         { id: 'user1', name: 'Aman', initials: 'AM', color: '#7B9EA6', online: true },
         { id: 'user2', name: 'Vikram', initials: 'VK', color: '#8B5E3C', online: false },
-        { id: 'user3', name: 'Deepika', initials: 'DP', color: '#C8956C', online: true },
-        { id: user.id, name: user.name, initials: user.name?.slice(0, 2), color: '#C8622A', online: true }
+        { id: 'user3', name: 'Deepika', initials: 'DP', color: '#C8956C', online: true }
       ];
+      
+      // Add current user if they've joined
+      if (isUserJoined(selectedCrew?.id)) {
+        mockMembers.push({ 
+          id: user.id, 
+          name: user.name, 
+          initials: user.name?.slice(0, 2), 
+          color: '#C8622A', 
+          online: true 
+        });
+      }
+      
       setCrewMembers(mockMembers);
     } catch (error) {
       console.error('Error loading members:', error);
@@ -1213,10 +1479,10 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     try {
       // In production, fetch from API
       const mockSimilar = [
-        { title: 'The Five People You Meet in Heaven', author: 'Mitch Albom', rating: 4.5 },
-        { title: 'For One More Day', author: 'Mitch Albom', rating: 4.3 },
-        { title: 'The Time Keeper', author: 'Mitch Albom', rating: 4.4 },
-        { title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.7 }
+        { id: 101, title: 'The Five People You Meet in Heaven', author: 'Mitch Albom', rating: 4.5, cover: '#8B4513' },
+        { id: 102, title: 'For One More Day', author: 'Mitch Albom', rating: 4.3, cover: '#2C3E50' },
+        { id: 103, title: 'The Time Keeper', author: 'Mitch Albom', rating: 4.4, cover: '#4A4A4A' },
+        { id: 104, title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.7, cover: '#C8622A' }
       ];
       setSimilarBooks(mockSimilar);
     } catch (error) {
@@ -1225,7 +1491,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedCrew) return;
+    if (!newMessage.trim() || !selectedCrew || !isUserJoined(selectedCrew.id)) return;
 
     const message = {
       id: Date.now(),
@@ -1254,10 +1520,19 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     typingTimeoutRef.current = setTimeout(() => setIsTyping(false), 1000);
   };
 
+  const isUserJoined = (crewId) => {
+    return joinedCrews.includes(crewId);
+  };
+
   const handleJoinCrew = (crew) => {
-    // In production, update database
+    // Update joined crews
+    const updatedJoinedCrews = [...joinedCrews, crew.id];
+    setJoinedCrews(updatedJoinedCrews);
+    localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updatedJoinedCrews));
+    
+    // Update crew members count
     setCrews(prev => prev.map(c => 
-      c.id === crew.id ? { ...c, members: (c.members || 0) + 1 } : c
+      c.id === crew.id ? { ...c, members: (c.members || 1) + 1 } : c
     ));
     
     // Update user stats
@@ -1270,11 +1545,18 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     };
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
     
-    alert(`You've joined the ${crew.name} crew!`);
+    // Show join message
+    setJoinMessage(`You've joined the ${crew.name} crew! 🎉`);
+    setShowJoinMessage(true);
+    setTimeout(() => setShowJoinMessage(false), 3000);
   };
 
   const handleLeaveCrew = (crew) => {
     if (window.confirm(`Are you sure you want to leave ${crew.name}?`)) {
+      const updatedJoinedCrews = joinedCrews.filter(id => id !== crew.id);
+      setJoinedCrews(updatedJoinedCrews);
+      localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updatedJoinedCrews));
+      
       setCrews(prev => prev.map(c => 
         c.id === crew.id ? { ...c, members: Math.max(0, (c.members || 1) - 1) } : c
       ));
@@ -1289,15 +1571,33 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       };
       localStorage.setItem('currentUser', JSON.stringify(updatedUser));
       
-      setView('list');
-      setSelectedCrew(null);
+      if (selectedCrew?.id === crew.id) {
+        setView('list');
+        setSelectedCrew(null);
+      }
     }
   };
 
+  const handleSimilarBookClick = (book) => {
+    // Navigate to book details
+    setPage('explore');
+  };
+
+  // Join message toast
+  const JoinMessageToast = () => (
+    <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] animate-slideDown">
+      {joinMessage}
+    </div>
+  );
+
   // Chat View
   if (view === 'chat' && selectedCrew) {
+    const hasJoined = isUserJoined(selectedCrew.id);
+
     return (
       <div className="h-screen flex flex-col bg-gray-50">
+        {showJoinMessage && <JoinMessageToast />}
+        
         {/* Chat Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
           <button onClick={() => setView('bookpage')} className="p-1 hover:bg-gray-100 rounded-lg">
@@ -1311,98 +1611,129 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               >
                 <BookOpen className="w-4 h-4 text-white" />
               </div>
-              <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+              {hasJoined && (
+                <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+              )}
             </div>
             <div>
               <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
-              <p className="text-xs text-gray-500">{crewMembers.length} members • 3 online</p>
+              <p className="text-xs text-gray-500">
+                {crewMembers.length} member{crewMembers.length !== 1 ? 's' : ''} • 
+                {crewMembers.filter(m => m.online).length} online
+              </p>
             </div>
           </div>
-          <button className="p-2 hover:bg-gray-100 rounded-full">
-            <MoreHorizontal className="w-5 h-5 text-gray-600" />
-          </button>
+          {hasJoined && (
+            <button 
+              onClick={() => handleLeaveCrew(selectedCrew)}
+              className="text-xs text-red-500 px-2 py-1 border border-red-200 rounded-lg"
+            >
+              Leave
+            </button>
+          )}
         </div>
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-          {messages.map((message) => {
-            const isOwn = message.userId === user.id;
-            return (
-              <div key={message.id} className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                {!isOwn && (
-                  <Avatar 
-                    initials={message.userInitials} 
-                    size="sm" 
-                    color={message.color}
-                    online={crewMembers.find(m => m.id === message.userId)?.online}
-                  />
-                )}
-                <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                  {!isOwn && (
-                    <p className="text-xs text-gray-500 mb-1 px-1">{message.userName}</p>
-                  )}
-                  <div className={`rounded-2xl px-4 py-2.5 ${
-                    isOwn 
-                      ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
-                      : 'bg-white border border-gray-200 text-gray-900'
-                  }`}>
-                    <p className="text-sm leading-relaxed">{message.content}</p>
-                  </div>
-                  <p className="text-[10px] text-gray-400 mt-1 px-1">
-                    {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </p>
-                </div>
-              </div>
-            );
-          })}
-          
-          {isTyping && (
-            <div className="flex gap-2">
-              <Avatar initials="..." size="sm" color="#C8622A" />
-              <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2">
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                </div>
-              </div>
+          {!hasJoined ? (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <Lock className="w-12 h-12 text-gray-300 mb-3" />
+              <p className="text-gray-500 mb-2">Join this crew to see the chat</p>
+              <button
+                onClick={() => handleJoinCrew(selectedCrew)}
+                className="px-6 py-2 bg-orange-500 text-white rounded-xl font-medium"
+              >
+                Join Crew
+              </button>
             </div>
+          ) : (
+            <>
+              {messages.map((message) => {
+                const isOwn = message.userId === user.id;
+                return (
+                  <div key={message.id} className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                    {!isOwn && (
+                      <Avatar 
+                        initials={message.userInitials} 
+                        size="sm" 
+                        color={message.color}
+                        online={crewMembers.find(m => m.id === message.userId)?.online}
+                      />
+                    )}
+                    <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
+                      {!isOwn && (
+                        <p className="text-xs text-gray-500 mb-1 px-1">{message.userName}</p>
+                      )}
+                      <div className={`rounded-2xl px-4 py-2.5 ${
+                        isOwn 
+                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
+                          : 'bg-white border border-gray-200 text-gray-900'
+                      }`}>
+                        <p className="text-sm leading-relaxed">{message.content}</p>
+                      </div>
+                      <p className="text-[10px] text-gray-400 mt-1 px-1">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                  </div>
+                );
+              })}
+              
+              {isTyping && (
+                <div className="flex gap-2">
+                  <Avatar initials="..." size="sm" color="#C8622A" />
+                  <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2">
+                    <div className="flex gap-1">
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </>
           )}
           
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input Area */}
-        <div className="bg-white border-t border-gray-200 px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
-            <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2">
-              <input
-                value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                onKeyDown={handleTyping}
-                className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
-                placeholder="Type a message..."
-              />
-              <button
-                onClick={handleSendMessage}
-                disabled={!newMessage.trim()}
-                className="p-1 disabled:opacity-50"
-              >
-                <Send className="w-5 h-5 text-orange-500" />
-              </button>
+        {/* Input Area - Only show if joined */}
+        {hasJoined && (
+          <div className="bg-white border-t border-gray-200 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
+              <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2">
+                <input
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  onKeyDown={handleTyping}
+                  className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+                  placeholder="Type a message..."
+                />
+                <button
+                  onClick={handleSendMessage}
+                  disabled={!newMessage.trim()}
+                  className="p-1 disabled:opacity-50"
+                >
+                  <Send className="w-5 h-5 text-orange-500" />
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     );
   }
 
   // Book Detail View (Reviews, About, Similar)
   if (view !== 'list' && selectedCrew) {
+    const hasJoined = isUserJoined(selectedCrew.id);
+
     return (
       <div className="h-screen flex flex-col bg-gray-50">
+        {showJoinMessage && <JoinMessageToast />}
+        
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10">
           <button onClick={() => setView('list')} className="p-1 hover:bg-gray-100 rounded-lg">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
@@ -1436,14 +1767,20 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               <div className="flex items-center gap-3 mt-2">
                 <div className="flex items-center gap-1">
                   <Users className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">1 member</span>
+                  <span className="text-sm text-gray-600">{crewMembers.length} members</span>
                 </div>
-                <button 
-                  onClick={() => handleJoinCrew(selectedCrew)}
-                  className="px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
-                >
-                  Join Crew
-                </button>
+                {!hasJoined ? (
+                  <button 
+                    onClick={() => handleJoinCrew(selectedCrew)}
+                    className="px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                  >
+                    Join Crew
+                  </button>
+                ) : (
+                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-lg text-sm font-medium">
+                    Joined
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1499,27 +1836,42 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           {/* Crew Chat Tab */}
           {view === 'crewchat' && (
             <div className="space-y-4">
-              <button
-                onClick={() => setView('chat')}
-                className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl p-4 font-semibold mb-4"
-              >
-                Join the Discussion
-              </button>
-              
-              {messages.slice(-3).map((msg) => (
-                <div key={msg.id} className="flex gap-3">
-                  <Avatar initials={msg.userInitials} size="sm" color={msg.color} />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-semibold text-sm">{msg.userName}</span>
-                      <span className="text-xs text-gray-400">
-                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </span>
-                    </div>
-                    <p className="text-sm text-gray-600">{msg.content}</p>
-                  </div>
+              {!hasJoined ? (
+                <div className="text-center py-8">
+                  <Lock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500 mb-3">Join this crew to see the chat</p>
+                  <button
+                    onClick={() => handleJoinCrew(selectedCrew)}
+                    className="px-6 py-2 bg-orange-500 text-white rounded-xl font-medium"
+                  >
+                    Join Crew
+                  </button>
                 </div>
-              ))}
+              ) : (
+                <>
+                  <button
+                    onClick={() => setView('chat')}
+                    className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl p-4 font-semibold mb-4"
+                  >
+                    Join the Discussion
+                  </button>
+                  
+                  {messages.slice(-3).map((msg) => (
+                    <div key={msg.id} className="flex gap-3">
+                      <Avatar initials={msg.userInitials} size="sm" color={msg.color} />
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-sm">{msg.userName}</span>
+                          <span className="text-xs text-gray-400">
+                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-sm text-gray-600">{msg.content}</p>
+                      </div>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
           )}
 
@@ -1562,9 +1914,16 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           {view === 'similar' && (
             <div className="space-y-3">
               {similarBooks.map((book, i) => (
-                <div key={i} className="bg-white rounded-xl p-4 border border-gray-200">
+                <div 
+                  key={i} 
+                  className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition"
+                  onClick={() => handleSimilarBookClick(book)}
+                >
                   <div className="flex items-start gap-3">
-                    <div className="w-12 h-16 rounded-lg bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+                    <div 
+                      className="w-12 h-16 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: book.cover }}
+                    >
                       <BookOpen className="w-6 h-6 text-white" />
                     </div>
                     <div className="flex-1">
@@ -1591,6 +1950,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   // Crews List View
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
+      {showJoinMessage && <JoinMessageToast />}
+      
       <TopBar user={user} setPage={setPage} title="Reading Crews" />
       
       <div className="px-4 py-4">
@@ -1610,36 +1971,49 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
         {/* My Crews */}
         <div className="mb-6">
-          <h2 className="text-lg font-bold text-gray-900 mb-3">My Crews</h2>
+          <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
+            <Users className="w-5 h-5 text-orange-500" />
+            My Crews
+          </h2>
           <div className="space-y-3">
-            {crews.filter((_, i) => i < 1).map(crew => (
-              <div
-                key={crew.id}
-                className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
-                onClick={() => { setSelectedCrew(crew); setView('bookpage'); }}
-              >
-                <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
-                  <div className="absolute inset-0 flex items-center px-4 gap-4">
-                    <div 
-                      className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
-                      style={{ backgroundColor: crew.cover }}
-                    >
-                      <BookOpen className="w-6 h-6 text-white" />
-                    </div>
-                    <div>
-                      <p className="font-bold text-gray-900">{crew.name}</p>
-                      <p className="text-xs text-gray-500">by {crew.author}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
-                          {crew.genre}
-                        </span>
-                        <span className="text-xs text-gray-500">1 member</span>
+            {crews.filter(crew => isUserJoined(crew.id)).length === 0 ? (
+              <div className="bg-white rounded-xl p-6 text-center border border-gray-200">
+                <p className="text-gray-500 text-sm">You haven't joined any crews yet</p>
+                <p className="text-xs text-gray-400 mt-1">Join a crew to start discussing books!</p>
+              </div>
+            ) : (
+              crews.filter(crew => isUserJoined(crew.id)).map(crew => (
+                <div
+                  key={crew.id}
+                  className="bg-white rounded-xl overflow-hidden border border-green-200 shadow-sm cursor-pointer hover:shadow-md transition relative"
+                  onClick={() => { setSelectedCrew(crew); setView('bookpage'); }}
+                >
+                  <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
+                    Joined
+                  </div>
+                  <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
+                    <div className="absolute inset-0 flex items-center px-4 gap-4">
+                      <div 
+                        className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
+                        style={{ backgroundColor: crew.cover }}
+                      >
+                        <BookOpen className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="font-bold text-gray-900">{crew.name}</p>
+                        <p className="text-xs text-gray-500">by {crew.author}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
+                            {crew.genre}
+                          </span>
+                          <span className="text-xs text-gray-500">{crew.members || 1} members</span>
+                        </div>
                       </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -1647,7 +2021,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
         <div>
           <h2 className="text-lg font-bold text-gray-900 mb-3">Discover Crews</h2>
           <div className="space-y-3">
-            {crews.slice(1).map(crew => (
+            {crews.filter(crew => !isUserJoined(crew.id)).map(crew => (
               <div
                 key={crew.id}
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
@@ -1668,7 +2042,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                         <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
                           {crew.genre}
                         </span>
-                        <span className="text-xs text-gray-500">1 member</span>
+                        <span className="text-xs text-gray-500">{crew.members || 1} members</span>
                       </div>
                     </div>
                   </div>
