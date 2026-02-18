@@ -8,7 +8,7 @@ export const healthCheck = async () => {
   return response.json();
 };
 
-// Check backend connection (wrapper around healthCheck)
+// Check backend connection
 export const checkBackendConnection = async () => {
   try {
     const data = await healthCheck();
@@ -25,7 +25,56 @@ export const checkBackendConnection = async () => {
   }
 };
 
-// Donation API
+// User API (NEW)
+export const userAPI = {
+  create: async (userData) => {
+    const response = await fetch(`${API_URL}/api/users`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData)
+    });
+    if (!response.ok) throw new Error('Failed to create user');
+    return response.json();
+  },
+  
+  get: async (email) => {
+    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}`);
+    if (!response.ok) throw new Error('Failed to fetch user');
+    return response.json();
+  },
+  
+  updateGoals: async (email, goals) => {
+    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/goals`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(goals)
+    });
+    if (!response.ok) throw new Error('Failed to update goals');
+    return response.json();
+  },
+  
+  addBook: async (email, bookData) => {
+    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/books`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(bookData)
+    });
+    if (!response.ok) throw new Error('Failed to add book');
+    return response.json();
+  },
+  
+  incrementStat: async (email, field) => {
+    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/stats/increment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field })
+    });
+    if (!response.ok) throw new Error('Failed to increment stat');
+    return response.json();
+  }
+};
+
+// Donation API (Keep for backwards compatibility, but consider renaming to postAPI)
 export const donationAPI = {
   getAll: async () => {
     const response = await fetch(`${API_URL}/api/donations`);
@@ -127,7 +176,6 @@ export const getBookRecommendations = async (keywords, onToken, onDone) => {
     });
 
     console.log('📡 Response status:', response.status);
-    console.log('📡 Response type:', response.headers.get('content-type'));
 
     if (!response.ok) {
       const errText = await response.text();
@@ -153,12 +201,9 @@ export const getBookRecommendations = async (keywords, onToken, onDone) => {
         break;
       }
 
-      // Decode the chunk and add to buffer
       buffer += decoder.decode(value, { stream: true });
-      
-      // Process complete lines
       const lines = buffer.split('\n');
-      buffer = lines.pop() || ''; // Keep incomplete line in buffer
+      buffer = lines.pop() || '';
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -168,7 +213,7 @@ export const getBookRecommendations = async (keywords, onToken, onDone) => {
         }
 
         try {
-          const jsonStr = trimmed.slice(6); // Remove 'data: ' prefix
+          const jsonStr = trimmed.slice(6);
           const parsed = JSON.parse(jsonStr);
           
           if (parsed.token) {
@@ -190,7 +235,6 @@ export const getBookRecommendations = async (keywords, onToken, onDone) => {
       }
     }
 
-    // Call onDone if not already called
     onDone();
 
   } catch (error) {
@@ -199,7 +243,7 @@ export const getBookRecommendations = async (keywords, onToken, onDone) => {
   }
 };
 
-// ✅ NEW: Get Trending Books using AI
+// Get Trending Books using AI (NEW)
 export const getTrendingBooks = async (onToken, onDone) => {
   const url = `${API_URL}/api/recommend`;
   console.log('🔥 Fetching trending books from:', url);
@@ -284,6 +328,7 @@ export const getTrendingBooks = async (onToken, onDone) => {
     throw error;
   }
 };
+
 // Book Crew API
 export const bookCrewAPI = {
   getAll: async () => {

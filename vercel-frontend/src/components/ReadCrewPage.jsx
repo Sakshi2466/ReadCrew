@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Users, MessageCircle, Send, Image, Video, BookOpen, Sparkles, ChevronLeft, Search, UserPlus, LogOut as Leave, Clock, Check, Book } from 'lucide-react';
+import { Users, MessageCircle, Send, Image, Video, BookOpen, Sparkles, ChevronLeft, Search, UserPlus, LogOut as Leave, Clock, Check, Book, Star, Heart, Share2, MoreHorizontal } from 'lucide-react';
 import io from 'socket.io-client';
 import { bookCrewAPI, getBookRecommendations } from '../services/api';
 
@@ -23,8 +23,25 @@ const parseAIBooksResponse = (text) => {
   return books;
 };
 
+// Avatar Component
+const Avatar = ({ initials, size = 'md', color = '#C8956C' }) => {
+  const sizes = { 
+    xs: 'w-8 h-8 text-xs', 
+    sm: 'w-10 h-10 text-sm', 
+    md: 'w-12 h-12 text-base', 
+    lg: 'w-16 h-16 text-xl' 
+  };
+  
+  return (
+    <div className={`${sizes[size]} rounded-full flex items-center justify-center font-semibold text-white shrink-0`}
+      style={{ backgroundColor: color }}>
+      {initials?.slice(0, 2)}
+    </div>
+  );
+};
+
 const ReadCrewPage = ({ currentUser, onBack }) => {
-  const [view, setView] = useState('search'); // 'search', 'crews', 'chat'
+  const [view, setView] = useState('search'); // 'search', 'crews', 'about', 'chat', 'similar'
   const [searchKeywords, setSearchKeywords] = useState('');
   const [aiSuggestions, setAiSuggestions] = useState([]);
   const [aiLoading, setAiLoading] = useState(false);
@@ -38,6 +55,10 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
   const [socket, setSocket] = useState(null);
   const [typingUsers, setTypingUsers] = useState([]);
   const [isTyping, setIsTyping] = useState(false);
+  
+  // About/Similar states
+  const [activeTab, setActiveTab] = useState('About');
+  const [similarCrews, setSimilarCrews] = useState([]);
   
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -146,17 +167,12 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
         description: book.description || ''
       };
       
-      console.log('📤 Join request data:', joinData);
-      
       const result = await bookCrewAPI.join(joinData);
-      
-      console.log('📥 Join result:', result);
 
       if (result.success) {
         alert(result.message);
         await loadCrews();
         
-        // If not already a member, automatically open the chat
         if (!result.alreadyMember) {
           const updatedCrews = await bookCrewAPI.getAll();
           if (updatedCrews.success) {
@@ -165,21 +181,33 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
             );
             
             if (joinedCrew) {
-              handleOpenChat(joinedCrew);
-            } else {
-              setView('crews');
+              handleOpenAbout(joinedCrew);
             }
           }
         } else {
-          setView('crews');
+          const crew = allCrews.find(c => c.bookName.toLowerCase() === book.title.toLowerCase());
+          if (crew) handleOpenAbout(crew);
         }
-      } else {
-        alert(result.message || 'Failed to join crew');
       }
     } catch (error) {
       console.error('❌ Error joining crew:', error);
       alert(`Failed to join crew: ${error.message}`);
     }
+  };
+
+  const handleOpenAbout = async (crew) => {
+    console.log('📖 Opening About page for:', crew.bookName);
+    
+    setSelectedCrew(crew);
+    setView('about');
+    
+    // Load similar crews based on genre/author
+    const similar = allCrews.filter(c => 
+      c._id !== crew._id && 
+      (c.author === crew.author || c.genre === crew.genre)
+    ).slice(0, 3);
+    
+    setSimilarCrews(similar);
   };
 
   const handleOpenChat = async (crew) => {
@@ -188,17 +216,12 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     setSelectedCrew(crew);
     setView('chat');
     
-    // Join socket room
     if (socket && socket.connected) {
       socket.emit('join-crew', crew.bookName);
-      console.log('🔌 Joined socket room:', crew.bookName);
     }
     
-    // Load messages
     try {
       const result = await bookCrewAPI.getMessages(crew.bookName);
-      console.log('📬 Messages loaded:', result);
-      
       if (result.success) {
         setMessages(result.messages);
       }
@@ -211,8 +234,6 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     if (!confirm(`Are you sure you want to leave ${selectedCrew.bookName} Crew?`)) return;
     
     try {
-      console.log('👋 Leaving crew:', selectedCrew.bookName);
-      
       await bookCrewAPI.leave(selectedCrew.bookName, currentUser.email);
       
       if (socket && socket.connected) {
@@ -242,29 +263,20 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
       content: newMessage.trim()
     };
     
-    console.log('📤 Sending message:', messageData);
-    
     try {
       const result = await bookCrewAPI.sendMessage(messageData);
       
-      console.log('📥 Send result:', result);
-      
       if (result.success) {
-        // Emit to socket for real-time delivery to others
         if (socket && socket.connected) {
           socket.emit('send-message', {
             bookName: selectedCrew.bookName,
             message: result.message
           });
-          console.log('🔌 Message emitted to socket');
         }
         
-        // Add to local state immediately
         setMessages(prev => [...prev, result.message]);
         setNewMessage('');
         handleStopTyping();
-      } else {
-        alert(result.message || 'Failed to send message');
       }
     } catch (error) {
       console.error('❌ Error sending message:', error);
@@ -304,8 +316,6 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
       return;
     }
     
-    console.log('📎 Uploading file:', file.name, file.type);
-    
     const reader = new FileReader();
     reader.onloadend = async () => {
       const messageData = {
@@ -317,12 +327,8 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
         mediaUrl: reader.result
       };
       
-      console.log('📤 Sending media message');
-      
       try {
         const result = await bookCrewAPI.sendMessage(messageData);
-        
-        console.log('📥 Media send result:', result);
         
         if (result.success) {
           if (socket && socket.connected) {
@@ -333,8 +339,6 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
           }
           
           setMessages(prev => [...prev, result.message]);
-        } else {
-          alert(result.message || 'Failed to send media');
         }
       } catch (error) {
         console.error('❌ Error sending media:', error);
@@ -345,200 +349,249 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     reader.readAsDataURL(file);
   };
 
-  // SEARCH VIEW
-  if (view === 'search') {
+  // ABOUT PAGE VIEW
+  if (view === 'about' && selectedCrew) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <button
-          onClick={onBack}
-          className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold"
-        >
-          <ChevronLeft className="w-5 h-5" /> Back to Home
-        </button>
-
-        <div className="bg-gradient-to-r from-orange-500 via-red-500 to-pink-500 rounded-3xl p-8 sm:p-12 text-white mb-8">
-          <div className="flex items-center gap-4 mb-4">
-            <Users className="w-12 h-12" />
+      <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+        {/* Header */}
+        <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center gap-3 border-b border-[#EDE8E3]">
+          <button onClick={() => setView('crews')}>
+            <ChevronLeft className="w-6 h-6 text-[#6B5D52]" />
+          </button>
+          <div className="flex items-center gap-3 flex-1">
+            <div className="w-12 h-16 rounded-lg shadow-md flex items-center justify-center" style={{ backgroundColor: '#C8622A' }}>
+              <BookOpen className="w-6 h-6 text-white" />
+            </div>
             <div>
-              <h1 className="text-4xl font-bold">ReadCrew</h1>
-              <p className="text-orange-100">Find books. Join crews. Read together.</p>
+              <h1 className="font-bold text-[#2D2419]">{selectedCrew.bookName}</h1>
+              <p className="text-xs text-[#9B8E84]">{selectedCrew.totalMembers} members — currently reading</p>
             </div>
           </div>
-          
-          <button
-            onClick={() => setView('crews')}
-            className="px-6 py-3 bg-white text-orange-600 rounded-xl font-semibold hover:shadow-lg transition"
-          >
-            View My Crews ({myCrews.length})
-          </button>
+          <button><MoreHorizontal className="w-5 h-5 text-[#9B8E84]" /></button>
         </div>
 
-        <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100 mb-8">
-          <h2 className="text-2xl font-bold mb-6 text-gray-900">Find Your Reading Crew</h2>
-          
-          <div className="flex gap-3 mb-6">
-            <div className="relative flex-1">
-              <Sparkles className="absolute left-4 top-4 text-orange-500" />
-              <input
-                type="text"
-                value={searchKeywords}
-                onChange={(e) => setSearchKeywords(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleGetSuggestions()}
-                className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none"
-                placeholder="fantasy adventure, self-help, romance..."
-                disabled={aiLoading}
-              />
-            </div>
+        {/* Tabs */}
+        <div className="flex gap-0 border-b border-[#EDE8E3] px-4 bg-white">
+          {['Chat', 'About', 'Resources', 'More'].map((tab) => (
             <button
-              onClick={handleGetSuggestions}
-              disabled={!searchKeywords || aiLoading}
-              className="px-8 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-xl transition disabled:opacity-50"
+              key={tab}
+              onClick={() => {
+                setActiveTab(tab);
+                if (tab === 'Chat') handleOpenChat(selectedCrew);
+              }}
+              className={`px-4 py-3 text-sm font-medium border-b-2 transition ${
+                activeTab === tab 
+                  ? 'text-[#C8622A] border-[#C8622A]' 
+                  : 'text-[#9B8E84] border-transparent'
+              }`}
             >
-              {aiLoading ? 'Loading...' : 'Get Suggestions'}
+              {tab}
+            </button>
+          ))}
+        </div>
+
+        <div className="px-4 py-4 space-y-4">
+          {/* Finished reading prompt */}
+          <div className="bg-white rounded-2xl p-4 border border-[#EDE8E3] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Star className="w-5 h-5 text-amber-400 fill-amber-400" />
+              <span className="text-sm font-medium text-[#2D2419]">Finished the book?</span>
+              <span className="text-sm text-[#9B8E84]">4.7 ⭐⭐⭐⭐⭐</span>
+            </div>
+          </div>
+
+          {/* About Section */}
+          <div className="bg-white rounded-2xl p-5 border border-[#EDE8E3]">
+            <h2 className="text-xl font-bold text-[#2D2419] mb-3" style={{ fontFamily: 'Georgia, serif' }}>
+              About {selectedCrew.bookName} Crew
+            </h2>
+            <p className="text-sm text-[#6B5D52] leading-relaxed mb-4">
+              {selectedCrew.description || `Welcome to the ${selectedCrew.bookName} Crew! We are a supportive community focused on discussing this amazing book by ${selectedCrew.author}.`}
+            </p>
+
+            <h3 className="font-bold text-[#2D2419] mb-2">What we'll do here:</h3>
+            <ul className="space-y-2 mb-4">
+              <li className="flex items-start gap-2 text-sm text-[#6B5D52]">
+                <span>💡</span>
+                <span>Weekly insights and discussions on key themes</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm text-[#6B5D52]">
+                <span>📚</span>
+                <span>Share personal experiences and takeaways</span>
+              </li>
+              <li className="flex items-start gap-2 text-sm text-[#6B5D52]">
+                <span>🎯</span>
+                <span>Motivate and hold each other accountable with challenges</span>
+              </li>
+            </ul>
+
+            <div className="border-t border-[#EDE8E3] pt-4">
+              <h3 className="font-bold text-[#2D2419] mb-2">Join our reading goals!</h3>
+              <div className="bg-[#FAF6F1] rounded-xl p-3">
+                <p className="text-sm text-[#6B5D52] mb-2">
+                  <strong>Read {selectedCrew.bookName}</strong> by May 31st 🎯
+                </p>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-[#9B8E84]">154 / 384 reading</span>
+                  <button className="px-4 py-1.5 bg-[#C8622A] text-white rounded-lg text-xs font-semibold">
+                    I'm in!
+                  </button>
+                </div>
+                <div className="mt-2 h-2 bg-white rounded-full overflow-hidden">
+                  <div className="h-full bg-[#C8622A] rounded-full" style={{ width: '40%' }} />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Crew Leader */}
+          <div className="bg-white rounded-2xl p-4 border border-[#EDE8E3]">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-[#2D2419]">Crew Leader</h3>
+              <ChevronLeft className="w-4 h-4 text-[#9B8E84] rotate-180" />
+            </div>
+            <div className="flex items-center gap-3">
+              <Avatar initials="AL" size="md" color="#7B9EA6" />
+              <div className="flex-1">
+                <p className="font-semibold text-[#2D2419]">Alex</p>
+                <p className="text-xs text-[#9B8E84]">Admin</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4 mt-3 pt-3 border-t border-[#EDE8E3]">
+              <div className="text-center">
+                <p className="text-sm font-bold text-[#2D2419]">{selectedCrew.totalMembers}</p>
+                <p className="text-xs text-[#9B8E84]">members</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-[#2D2419]">563</p>
+                <p className="text-xs text-[#9B8E84]">Posts</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm font-bold text-[#2D2419]">96</p>
+                <p className="text-xs text-[#9B8E84]">Reviews</p>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-3">
+              <button className="flex-1 py-2 border border-[#EDE8E3] rounded-xl text-sm font-medium text-[#2D2419] flex items-center justify-center gap-1">
+                <UserPlus className="w-4 h-4" /> Invite members
+              </button>
+              <button className="flex-1 py-2 bg-[#C8622A] text-white rounded-xl text-sm font-semibold">
+                Invite crew
+              </button>
+            </div>
+          </div>
+
+          {/* Similar Crews */}
+          <div className="bg-white rounded-2xl p-4 border border-[#EDE8E3]">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-[#2D2419]">Similar Crews</h3>
+              <button onClick={() => setView('similar')} className="text-xs text-[#C8622A] font-semibold">
+                See all
+              </button>
+            </div>
+            {similarCrews.length === 0 ? (
+              <p className="text-sm text-[#9B8E84] text-center py-4">No similar crews yet</p>
+            ) : (
+              <div className="space-y-3">
+                {similarCrews.slice(0, 2).map((crew) => (
+                  <div key={crew._id} 
+                    onClick={() => handleOpenAbout(crew)}
+                    className="flex items-center gap-3 p-3 bg-[#FAF6F1] rounded-xl cursor-pointer hover:bg-[#F5EDE3]">
+                    <div className="w-10 h-14 rounded-lg shadow-sm flex items-center justify-center" 
+                      style={{ backgroundColor: '#8B5E3C' }}>
+                      <BookOpen className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-semibold text-[#2D2419] text-sm">{crew.bookName}</p>
+                      <p className="text-xs text-[#9B8E84]">{crew.totalMembers} members</p>
+                    </div>
+                    <button 
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleJoinCrew({ title: crew.bookName, author: crew.author });
+                      }}
+                      className="px-3 py-1.5 bg-[#C8622A] text-white rounded-lg text-xs font-semibold">
+                      Join
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Action Buttons */}
+          <div className="space-y-2">
+            <button 
+              onClick={() => handleOpenChat(selectedCrew)}
+              className="w-full py-3 bg-[#C8622A] text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+              <MessageCircle className="w-5 h-5" />
+              Open Chat
+            </button>
+            <button onClick={handleLeaveCrew}
+              className="w-full py-3 border border-red-200 text-red-500 rounded-xl font-medium flex items-center justify-center gap-2">
+              <Leave className="w-4 h-4" />
+              Leave Crew
             </button>
           </div>
-
-          {aiLoading && (
-            <div className="text-center py-12">
-              <div className="w-12 h-12 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-gray-600">Finding perfect books for you...</p>
-            </div>
-          )}
-
-          {aiSuggestions.length > 0 && (
-            <div className="space-y-4">
-              <h3 className="text-xl font-bold text-gray-900">Choose a book to join its crew:</h3>
-              {aiSuggestions.map((book, index) => (
-                <div
-                  key={index}
-                  className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100"
-                >
-                  <div className="flex flex-col sm:flex-row items-start justify-between gap-4">
-                    <div className="flex-1">
-                      <h4 className="text-xl font-bold text-gray-900 mb-2">{book.title}</h4>
-                      <p className="text-sm text-gray-600 mb-3">by {book.author}</p>
-                      <p className="text-gray-700">{book.description}</p>
-                    </div>
-                    <button
-                      onClick={() => handleJoinCrew(book)}
-                      className="w-full sm:w-auto px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition flex items-center justify-center gap-2 shrink-0"
-                    >
-                      <UserPlus className="w-5 h-5" />
-                      Join Crew
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
-          <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Reading Crews</h2>
-          
-          {allCrews.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500">No crews yet. Be the first to create one!</p>
-            </div>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {allCrews.map((crew) => (
-                <div
-                  key={crew._id}
-                  className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-6 border border-blue-100 hover:border-blue-300 transition"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <Book className="w-10 h-10 text-blue-600" />
-                    <div className="flex items-center gap-1 text-sm text-gray-600">
-                      <Users className="w-4 h-4" />
-                      {crew.totalMembers}
-                    </div>
-                  </div>
-                  
-                  <h3 className="font-bold text-lg mb-2 text-gray-900">{crew.bookName}</h3>
-                  <p className="text-sm text-gray-600 mb-4">by {crew.author}</p>
-                  
-                  {crew.members.some(m => m.userEmail === currentUser.email) ? (
-                    <button
-                      onClick={() => handleOpenChat(crew)}
-                      className="w-full px-4 py-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white rounded-xl font-semibold hover:shadow-lg transition flex items-center justify-center gap-2"
-                    >
-                      <MessageCircle className="w-5 h-5" />
-                      Open Chat
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => handleJoinCrew(crew)}
-                      className="w-full px-4 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition flex items-center justify-center gap-2"
-                    >
-                      <UserPlus className="w-5 h-5" />
-                      Join Crew
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
         </div>
       </div>
     );
   }
 
-  // CREWS LIST VIEW
-  if (view === 'crews') {
+  // SIMILAR CREWS VIEW
+  if (view === 'similar' && selectedCrew) {
     return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 py-8">
-        <button
-          onClick={() => setView('search')}
-          className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold"
-        >
-          <ChevronLeft className="w-5 h-5" /> Back to Search
-        </button>
+      <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+        <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center gap-3 border-b border-[#EDE8E3]">
+          <button onClick={() => setView('about')}>
+            <ChevronLeft className="w-6 h-6 text-[#6B5D52]" />
+          </button>
+          <h1 className="font-bold text-[#2D2419] text-lg">Similar Crews</h1>
+        </div>
 
-        <div className="bg-white rounded-3xl shadow-xl p-8 border border-gray-100">
-          <h2 className="text-3xl font-bold mb-6 text-gray-900">My Reading Crews</h2>
+        <div className="px-4 py-4">
+          <p className="text-sm text-[#9B8E84] mb-4">Explore other groups that share a similar vibe.</p>
           
-          {myCrews.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 mb-4">You haven't joined any crews yet</p>
-              <button
-                onClick={() => setView('search')}
-                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold hover:shadow-lg transition"
-              >
-                Find Crews
-              </button>
+          <div className="mb-4">
+            <div className="flex items-center gap-2 bg-white border border-[#EDE8E3] rounded-xl px-3 py-2.5">
+              <Search className="w-4 h-4 text-[#9B8E84]" />
+              <input className="flex-1 bg-transparent text-sm text-[#2D2419] placeholder-[#B8AEA8] outline-none"
+                placeholder="Search Crews..." />
             </div>
-          ) : (
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {myCrews.map((crew) => (
-                <div
-                  key={crew._id}
-                  onClick={() => handleOpenChat(crew)}
-                  className="bg-gradient-to-br from-blue-50 to-white rounded-xl p-6 border border-blue-100 hover:border-blue-300 transition cursor-pointer hover:shadow-lg"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <Book className="w-10 h-10 text-blue-600" />
-                    <div className="flex items-center gap-1 text-sm text-gray-600">
-                      <Users className="w-4 h-4" />
-                      {crew.totalMembers} members
-                    </div>
+          </div>
+
+          <div className="space-y-3">
+            {allCrews.filter(c => c._id !== selectedCrew._id).map((crew) => (
+              <div key={crew._id} className="bg-white rounded-2xl p-4 border border-[#EDE8E3]">
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-12 h-16 rounded-lg shadow-md flex items-center justify-center" 
+                    style={{ backgroundColor: '#8B5E3C' }}>
+                    <BookOpen className="w-6 h-6 text-white" />
                   </div>
-                  
-                  <h3 className="font-bold text-lg mb-2 text-gray-900">{crew.bookName}</h3>
-                  <p className="text-sm text-gray-600 mb-4">by {crew.author}</p>
-                  
-                  <div className="flex items-center justify-between pt-4 border-t">
-                    <span className="text-xs text-gray-500">
-                      Joined {new Date(crew.members.find(m => m.userEmail === currentUser.email)?.joinedAt).toLocaleDateString()}
-                    </span>
-                    <MessageCircle className="w-5 h-5 text-blue-600" />
+                  <div className="flex-1">
+                    <h3 className="font-bold text-[#2D2419]">{crew.bookName}</h3>
+                    <p className="text-xs text-[#9B8E84] mb-2">{crew.totalMembers} members</p>
+                    <p className="text-xs text-[#6B5D52] line-clamp-2">
+                      {crew.description || `Join the crew reading ${crew.bookName} by ${crew.author}`}
+                    </p>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+                
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => handleOpenAbout(crew)}
+                    className="flex-1 py-2 border border-[#EDE8E3] rounded-xl text-sm font-medium text-[#2D2419]">
+                    View
+                  </button>
+                  <button 
+                    onClick={() => handleJoinCrew({ title: crew.bookName, author: crew.author })}
+                    className="flex-1 py-2 bg-[#C8622A] text-white rounded-xl text-sm font-semibold">
+                    Join →
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -547,40 +600,23 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
   // CHAT VIEW
   if (view === 'chat' && selectedCrew) {
     return (
-      <div className="h-screen flex flex-col bg-gray-50">
+      <div className="h-screen flex flex-col bg-[#FAF6F1]">
         {/* Chat Header */}
-        <div className="bg-white border-b px-4 py-4 flex items-center justify-between sticky top-0 z-10">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                if (socket && socket.connected) {
-                  socket.emit('leave-crew', selectedCrew.bookName);
-                }
-                setView('crews');
-                setSelectedCrew(null);
-                setMessages([]);
-              }}
-              className="text-gray-600 hover:text-gray-900"
-            >
-              <ChevronLeft className="w-6 h-6" />
-            </button>
-            <Book className="w-8 h-8 text-blue-600" />
+        <div className="bg-white border-b border-[#EDE8E3] px-4 py-3 flex items-center justify-between sticky top-0 z-10">
+          <button onClick={() => setView('about')} className="text-[#6B5D52]">
+            <ChevronLeft className="w-6 h-6" />
+          </button>
+          <div className="flex items-center gap-2 flex-1 mx-3">
+            <div className="w-8 h-8 rounded-lg shadow-sm flex items-center justify-center"
+              style={{ backgroundColor: '#C8622A' }}>
+              <BookOpen className="w-4 h-4 text-white" />
+            </div>
             <div>
-              <h2 className="font-bold text-lg text-gray-900">{selectedCrew.bookName} Crew</h2>
-              <p className="text-sm text-gray-600 flex items-center gap-1">
-                <Users className="w-3 h-3" />
-                {selectedCrew.totalMembers} members
-              </p>
+              <p className="font-semibold text-[#2D2419] text-sm">{selectedCrew.bookName}</p>
+              <p className="text-xs text-[#9B8E84]">{selectedCrew.totalMembers} members</p>
             </div>
           </div>
-          
-          <button
-            onClick={handleLeaveCrew}
-            className="px-4 py-2 text-red-600 hover:bg-red-50 rounded-lg transition flex items-center gap-2"
-          >
-            <Leave className="w-4 h-4" />
-            <span className="hidden sm:inline">Leave</span>
-          </button>
+          <button><MoreHorizontal className="w-5 h-5 text-[#9B8E84]" /></button>
         </div>
 
         {/* Messages Area */}
@@ -606,40 +642,27 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
               }
               
               return (
-                <div
-                  key={index}
-                  className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}
-                >
+                <div key={index} className={`flex ${isOwn ? 'justify-end' : 'justify-start'}`}>
                   <div className={`max-w-[70%] ${isOwn ? 'order-2' : 'order-1'}`}>
                     {!isOwn && (
                       <p className="text-xs text-gray-600 mb-1 px-3">{msg.userName}</p>
                     )}
                     
-                    <div
-                      className={`rounded-2xl px-4 py-3 ${
-                        isOwn
-                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
-                          : 'bg-white border border-gray-200'
-                      }`}
-                    >
+                    <div className={`rounded-2xl px-4 py-3 ${
+                      isOwn
+                        ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+                        : 'bg-white border border-gray-200'
+                    }`}>
                       {msg.messageType === 'text' ? (
                         <p className="whitespace-pre-wrap break-words">{msg.content}</p>
                       ) : msg.messageType === 'image' ? (
                         <div>
-                          <img
-                            src={msg.mediaUrl}
-                            alt={msg.content}
-                            className="rounded-lg max-w-full h-auto mb-2"
-                          />
+                          <img src={msg.mediaUrl} alt={msg.content} className="rounded-lg max-w-full h-auto mb-2" />
                           <p className="text-xs opacity-75">{msg.content}</p>
                         </div>
                       ) : msg.messageType === 'video' ? (
                         <div>
-                          <video
-                            src={msg.mediaUrl}
-                            controls
-                            className="rounded-lg max-w-full h-auto mb-2"
-                          />
+                          <video src={msg.mediaUrl} controls className="rounded-lg max-w-full h-auto mb-2" />
                           <p className="text-xs opacity-75">{msg.content}</p>
                         </div>
                       ) : null}
@@ -664,27 +687,17 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
         </div>
 
         {/* Message Input */}
-        <div className="bg-white border-t p-4">
+        <div className="bg-white border-t border-[#EDE8E3] p-4">
           <form onSubmit={handleSendMessage} className="flex items-end gap-2">
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              accept="image/*,video/*"
-              className="hidden"
-            />
+            <input type="file" ref={fileInputRef} onChange={handleImageUpload}
+              accept="image/*,video/*" className="hidden" />
             
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="p-3 text-gray-600 hover:bg-gray-100 rounded-lg transition"
-              title="Send image or video"
-            >
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              className="p-3 text-gray-600 hover:bg-gray-100 rounded-lg transition">
               <Image className="w-5 h-5" />
             </button>
             
-            <textarea
-              value={newMessage}
+            <textarea value={newMessage}
               onChange={(e) => {
                 setNewMessage(e.target.value);
                 handleTyping();
@@ -697,16 +710,10 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
               }}
               placeholder="Type a message..."
               className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none resize-none"
-              rows="1"
-              style={{ maxHeight: '120px' }}
-            />
+              rows="1" style={{ maxHeight: '120px' }} />
             
-            <button
-              type="submit"
-              disabled={!newMessage.trim()}
-              className="p-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:shadow-lg transition disabled:opacity-50"
-              title="Send message"
-            >
+            <button type="submit" disabled={!newMessage.trim()}
+              className="p-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-lg hover:shadow-lg transition disabled:opacity-50">
               <Send className="w-5 h-5" />
             </button>
           </form>
@@ -715,7 +722,175 @@ const ReadCrewPage = ({ currentUser, onBack }) => {
     );
   }
 
-  return null;
+  // CREWS LIST VIEW (My Crews)
+  if (view === 'crews') {
+    return (
+      <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+        <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center gap-3 border-b border-[#EDE8E3]">
+          <button onClick={() => setView('search')}>
+            <ChevronLeft className="w-6 h-6 text-[#6B5D52]" />
+          </button>
+          <h1 className="font-bold text-[#2D2419] text-lg">My Reading Crews</h1>
+        </div>
+
+        <div className="px-4 py-4">
+          {myCrews.length === 0 ? (
+            <div className="text-center py-12">
+              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500 mb-4">You haven't joined any crews yet</p>
+              <button onClick={() => setView('search')}
+                className="px-6 py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold">
+                Find Crews
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {myCrews.map((crew) => (
+                <div key={crew._id}
+                  onClick={() => handleOpenAbout(crew)}
+                  className="bg-white rounded-2xl p-4 border border-[#EDE8E3] cursor-pointer hover:shadow-md transition">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-16 rounded-lg shadow-md flex items-center justify-center"
+                      style={{ backgroundColor: '#C8622A' }}>
+                      <BookOpen className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-[#2D2419]">{crew.bookName}</h3>
+                      <p className="text-xs text-[#9B8E84]">by {crew.author}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Users className="w-3 h-3 text-[#9B8E84]" />
+                        <span className="text-xs text-[#9B8E84]">{crew.totalMembers} members</span>
+                      </div>
+                    </div>
+                    <MessageCircle className="w-5 h-5 text-[#C8622A]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // SEARCH VIEW (Default)
+  return (
+    <div className="pb-24 bg-[#FAF6F1] min-h-screen">
+      <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center justify-between border-b border-[#EDE8E3]">
+        <button onClick={onBack} className="flex items-center gap-2 text-[#C8622A] font-semibold">
+          <ChevronLeft className="w-5 h-5" /> Back
+        </button>
+        <button onClick={() => setView('crews')}
+          className="px-4 py-2 bg-[#C8622A] text-white rounded-xl text-sm font-semibold">
+          My Crews ({myCrews.length})
+        </button>
+      </div>
+
+      <div className="px-4 py-4 space-y-4">
+        <div className="bg-gradient-to-r from-orange-500 to-red-500 rounded-3xl p-6 text-white">
+          <div className="flex items-center gap-3 mb-3">
+            <Users className="w-10 h-10" />
+            <div>
+              <h1 className="text-2xl font-bold">ReadCrew</h1>
+              <p className="text-sm opacity-90">Find books. Join crews. Read together.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-3xl p-5 border border-[#EDE8E3]">
+          <h2 className="text-lg font-bold mb-3 text-[#2D2419]">Find Your Reading Crew</h2>
+          
+          <div className="flex gap-2 mb-4">
+            <div className="relative flex-1">
+              <Sparkles className="absolute left-3 top-3.5 text-[#C8622A] w-5 h-5" />
+              <input type="text" value={searchKeywords}
+                onChange={(e) => setSearchKeywords(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleGetSuggestions()}
+                className="w-full pl-11 pr-4 py-3.5 rounded-xl border-2 border-[#EDE8E3] focus:border-[#C8622A] focus:outline-none text-sm"
+                placeholder="fantasy, self-help, romance..." disabled={aiLoading} />
+            </div>
+            <button onClick={handleGetSuggestions} disabled={!searchKeywords || aiLoading}
+              className="px-6 py-3.5 bg-[#C8622A] text-white rounded-xl font-semibold hover:shadow-lg transition disabled:opacity-50 text-sm whitespace-nowrap">
+              {aiLoading ? 'Loading...' : 'Get Suggestions'}
+            </button>
+          </div>
+
+          {aiLoading && (
+            <div className="text-center py-8">
+              <div className="w-10 h-10 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-3" />
+              <p className="text-[#9B8E84] text-sm">Finding perfect books for you...</p>
+            </div>
+          )}
+
+          {aiSuggestions.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="font-bold text-[#2D2419]">AI Suggestions:</h3>
+              {aiSuggestions.map((book, index) => (
+                <div key={index}
+                  className="bg-[#FAF6F1] rounded-xl p-4 border border-[#EDE8E3]">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex-1">
+                      <h4 className="font-bold text-[#2D2419]">{book.title}</h4>
+                      <p className="text-xs text-[#9B8E84] mb-2">by {book.author}</p>
+                      <p className="text-sm text-[#6B5D52]">{book.description}</p>
+                    </div>
+                    <button onClick={() => handleJoinCrew(book)}
+                      className="px-4 py-2 bg-[#C8622A] text-white rounded-xl text-sm font-semibold whitespace-nowrap">
+                      Join Crew
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white rounded-3xl p-5 border border-[#EDE8E3]">
+          <h2 className="text-lg font-bold mb-3 text-[#2D2419]">🔥 Popular Crews 🔥</h2>
+          
+          {allCrews.length === 0 ? (
+            <div className="text-center py-8">
+              <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+              <p className="text-gray-500 text-sm">No crews yet. Be the first to create one!</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {allCrews.map((crew) => (
+                <div key={crew._id}
+                  className="bg-[#FAF6F1] rounded-xl p-4 border border-[#EDE8E3]">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-16 rounded-lg shadow-md flex items-center justify-center"
+                      style={{ backgroundColor: '#8B5E3C' }}>
+                      <BookOpen className="w-6 h-6 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-bold text-[#2D2419] text-sm">{crew.bookName}</h3>
+                      <p className="text-xs text-[#9B8E84]">by {crew.author}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Users className="w-3 h-3 text-[#9B8E84]" />
+                        <span className="text-xs text-[#9B8E84]">{crew.totalMembers} members</span>
+                      </div>
+                    </div>
+                    {crew.members.some(m => m.userEmail === currentUser.email) ? (
+                      <button onClick={() => handleOpenAbout(crew)}
+                        className="px-4 py-2 bg-green-500 text-white rounded-xl text-xs font-semibold">
+                        Open
+                      </button>
+                    ) : (
+                      <button onClick={() => handleJoinCrew({ title: crew.bookName, author: crew.author })}
+                        className="px-4 py-2 bg-[#C8622A] text-white rounded-xl text-xs font-semibold">
+                        Join
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 export default ReadCrewPage;
