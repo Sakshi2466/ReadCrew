@@ -1,18 +1,47 @@
+// models/Review.js
 const mongoose = require('mongoose');
 
 const reviewSchema = new mongoose.Schema({
-  userName: { type: String, required: true },
-  userEmail: { type: String, required: true },
-  bookName: { type: String, required: true },
-  author: { type: String, required: true },
-  review: { type: String, required: true },
-  sentiment: { type: String, enum: ['positive', 'neutral', 'negative'], default: 'positive' },
-  rating: { type: Number, min: 1, max: 5, default: 5 },
-  likes: { type: Number, default: 0 },
-  helpful: { type: Number, default: 0 },
-  likedBy: [{ type: String }] // Store user emails who liked
-}, {
-  timestamps: true
+  bookName: {
+    type: String,
+    required: true
+  },
+  author: {
+    type: String,
+    required: true
+  },
+  rating: {
+    type: Number,
+    required: true,
+    min: 1,
+    max: 5
+  },
+  review: {
+    type: String,
+    required: true
+  },
+  sentiment: {
+    type: String,
+    enum: ['positive', 'negative'],
+    default: 'positive'
+  },
+  userName: {
+    type: String,
+    required: true
+  },
+  userEmail: {
+    type: String,
+    required: true
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
 });
+
+// Index for faster queries
+reviewSchema.index({ userEmail: 1 });
+reviewSchema.index({ bookName: 1 });
+reviewSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Review', reviewSchema);
