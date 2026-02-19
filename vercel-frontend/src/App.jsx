@@ -886,317 +886,276 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   );
 };
 
-// ─── EXPLORE PAGE ────────────────────────────────────────────────────────
+// ─── ENHANCED EXPLORE PAGE (Beautiful UI like image) ────────────────────────
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
-  const [messages, setMessages] = useState([
-    {
-      id: 1,
-      type: 'ai',
-      content: "Hi! I'm your AI reading companion. Tell me what kind of books you're interested in, and I'll recommend something perfect for you! 📚",
-      timestamp: new Date()
-    }
+  const [query, setQuery] = useState('');
+  const [intensity, setIntensity] = useState(50);
+  const [suggestions, setSuggestions] = useState([
+    { emoji: '🚀', label: 'Space exploration' },
+    { emoji: '👨‍🚀', label: 'Sci-fi adventure' },
+    { emoji: '🌌', label: 'Cosmic philosophy' },
+    { emoji: '📚', label: 'Real NASA stories' },
   ]);
-  const [inputMessage, setInputMessage] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [suggestedBooks, setSuggestedBooks] = useState([]);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [showBookDetails, setShowBookDetails] = useState(false);
-  const messagesEndRef = useRef(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [results, setResults] = useState([]);
+  const [searched, setSearched] = useState(false);
+  const [selectedTags, setSelectedTags] = useState([]);
+  const inputRef = useRef();
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Dynamic suggestions based on input
+  const SUGGESTION_MAP = {
+    space: [
+      { emoji: '🚀', label: 'Space exploration' },
+      { emoji: '👨‍🚀', label: 'Sci-fi adventure' },
+      { emoji: '🌌', label: 'Cosmic philosophy' },
+      { emoji: '📚', label: 'Real NASA stories' },
+    ],
+    love: [
+      { emoji: '❤️', label: 'Romantic drama' },
+      { emoji: '💔', label: 'Heartbreak & healing' },
+      { emoji: '💑', label: 'Long-distance love' },
+      { emoji: '🌹', label: 'Classic romance' },
+    ],
+    motivation: [
+      { emoji: '💪', label: 'Self-improvement' },
+      { emoji: '🎯', label: 'Goal setting' },
+      { emoji: '🧠', label: 'Mindset shifts' },
+      { emoji: '🚀', label: 'Entrepreneurship' },
+    ],
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (query.trim()) {
+      const lower = query.toLowerCase();
+      for (const [key, sug] of Object.entries(SUGGESTION_MAP)) {
+        if (lower.includes(key)) {
+          setSuggestions(sug);
+          setShowSuggestions(true);
+          return;
+        }
+      }
+      setSuggestions([
+        { emoji: '✨', label: `${query} fiction` },
+        { emoji: '📖', label: `${query} non-fiction` },
+        { emoji: '🌟', label: `Popular ${query}` },
+      ]);
+      setShowSuggestions(true);
+    } else {
+      setSuggestions([
+        { emoji: '🚀', label: 'Space exploration' },
+        { emoji: '👨‍🚀', label: 'Sci-fi adventure' },
+        { emoji: '🌌', label: 'Cosmic philosophy' },
+        { emoji: '📚', label: 'Real NASA stories' },
+      ]);
+      setShowSuggestions(false);
+    }
+  }, [query]);
 
-  const handleSendMessage = async () => {
-    if (!inputMessage.trim() || isLoading) return;
+  const handleSuggestionClick = (label) => {
+    setQuery(label);
+    setShowSuggestions(false);
+    if (!selectedTags.includes(label)) {
+      setSelectedTags([...selectedTags, label]);
+    }
+    inputRef.current?.focus();
+  };
 
-    const userMessage = {
-      id: Date.now(),
-      type: 'user',
-      content: inputMessage,
-      timestamp: new Date()
-    };
+  const removeTag = (tag) => {
+    setSelectedTags(selectedTags.filter(t => t !== tag));
+  };
 
-    setMessages(prev => [...prev, userMessage]);
-    const queryText = inputMessage;
-    setInputMessage('');
-    setIsLoading(true);
+  const handleFindBook = async () => {
+    if (!query.trim()) return;
+    
+    setLoading(true);
+    setSearched(true);
+    setResults([]);
+    setShowSuggestions(false);
+
+    const intensityLabel = 
+      intensity < 33 ? 'light and easy to read' : 
+      intensity < 66 ? 'moderately engaging' : 
+      'deep and intellectually intense';
+    
+    const fullQuery = `${query}. Books that are ${intensityLabel}.`;
 
     try {
       const response = await axios.post(`${API_URL}/api/recommend/ai`, {
-        query: queryText
+        query: fullQuery
       });
 
-      if (response.data.success) {
-        const books = response.data.recommendations || [];
-        setSuggestedBooks(books);
-
-        const aiMessage = {
-          id: Date.now() + 1,
-          type: 'ai',
-          content: response.data.isAI 
-            ? `Great! I found some amazing books for you based on "${queryText}":`
-            : `Here are some book recommendations for "${queryText}":`,
-          books: books,
-          timestamp: new Date()
-        };
-
-        setMessages(prev => [...prev, aiMessage]);
+      if (response.data.success && response.data.recommendations) {
+        setResults(response.data.recommendations);
       } else {
-        throw new Error('Failed to get recommendations');
+        throw new Error('No recommendations');
       }
     } catch (error) {
-      console.error('Error getting AI response:', error);
-      
-      const aiMessage = {
-        id: Date.now() + 1,
-        type: 'ai',
-        content: "I'm having trouble connecting right now. Please try again in a moment.",
-        timestamp: new Date()
-      };
-      
-      setMessages(prev => [...prev, aiMessage]);
+      console.error('Error fetching recommendations:', error);
+      // Fallback
+      setResults([
+        { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', description: 'Tiny changes, remarkable results', rating: 4.8 },
+        { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', description: 'Survival on Mars', rating: 4.7 },
+      ]);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   const handleJoinCrew = (book) => {
-    if (window.confirm(`No crew found for "${book.title}". Would you like to create one?`)) {
+    if (window.confirm(`Create crew for "${book.title}"?`)) {
       onCreateCrew(book);
       setPage('crews');
     }
   };
 
-  const handleInviteFriends = (book) => {
-    if (navigator.share) {
-      navigator.share({
-        title: `Let's read ${book.title} together!`,
-        text: `I found this amazing book "${book.title}" by ${book.author}. Want to start a reading crew?`,
-        url: window.location.href,
-      });
-    } else {
-      navigator.clipboard.writeText(`Check out "${book.title}" by ${book.author} - let's read together!`);
-      alert('Link copied to clipboard!');
-    }
+  const handleInvite = (book) => {
+    alert('Share feature coming soon!');
   };
 
-  const handleBookClick = (book) => {
-    setSelectedBook(book);
-    setShowBookDetails(true);
+  const getBookColor = (title) => {
+    const colors = ['#C8622A', '#7B9EA6', '#8B5E3C', '#C8956C'];
+    const hash = title.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
   };
 
-  if (showBookDetails && selectedBook) {
+  // RESULTS VIEW
+  if (searched) {
     return (
-      <div className="h-screen flex flex-col bg-gray-50">
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10">
-          <button onClick={() => setShowBookDetails(false)} className="p-1 hover:bg-gray-100 rounded-lg">
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
+      <div className="min-h-screen bg-[#FAF6F1] pb-24">
+        <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center gap-3 border-b border-[#EDE8E3]">
+          <button onClick={() => { setSearched(false); setResults([]); }} className="p-2 hover:bg-[#F0E8DF] rounded-xl">
+            <ChevronLeft className="w-5 h-5 text-[#6B5D52]" />
           </button>
-          <span className="font-semibold text-gray-900 flex-1">Book Details</span>
+          <div className="flex-1 bg-white border border-[#EDE8E3] rounded-xl px-3 py-2 flex items-center gap-2">
+            <Search className="w-4 h-4 text-[#9B8E84]" />
+            <span className="text-sm text-[#2D2419]">{query}</span>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
-            <div className="flex gap-4 mb-6">
-              <div 
-                className="w-28 h-36 rounded-xl shadow-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: selectedBook.cover || '#C8622A' }}
-              >
-                <BookOpen className="w-12 h-12 text-white opacity-80" />
-              </div>
-              <div className="flex-1">
-                <span className="text-xs px-2 py-1 bg-orange-100 text-orange-600 rounded-full font-medium inline-block mb-2">
-                  {selectedBook.genre || 'General'}
-                </span>
-                <h2 className="font-bold text-gray-900 text-xl">{selectedBook.title}</h2>
-                <p className="text-sm text-gray-500">by {selectedBook.author}</p>
-                <div className="flex items-center gap-2 mt-2">
-                  <StarRating rating={selectedBook.rating || 4.5} />
-                  <span className="text-sm font-medium">{selectedBook.rating || 4.5}</span>
-                </div>
-              </div>
+        <div className="px-4 py-5">
+          {loading && (
+            <div className="text-center py-16">
+              <div className="w-16 h-16 border-4 border-[#F0E8DF] border-t-[#C8622A] rounded-full animate-spin mx-auto mb-5" />
+              <p className="text-[#6B5D52] font-medium">Finding your perfect book...</p>
             </div>
+          )}
 
-            <div className="space-y-4">
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">About this book</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  {selectedBook.description || 'A captivating book that readers love.'}
-                </p>
+          {results.length > 0 && (
+            <>
+              <h2 className="font-bold text-[#2D2419] mb-4">Books for "{query}"</h2>
+              <div className="space-y-4">
+                {results.map((book, i) => (
+                  <div key={i} className="bg-white rounded-2xl border border-[#EDE8E3] p-4">
+                    <div className="flex gap-4">
+                      <div className="w-20 h-28 rounded-xl flex items-center justify-center" style={{ backgroundColor: getBookColor(book.title) }}>
+                        <BookOpen className="w-8 h-8 text-white" />
+                      </div>
+                      <div className="flex-1">
+                        <h3 className="font-bold text-[#2D2419]">{book.title}</h3>
+                        <p className="text-sm text-[#9B8E84]">by {book.author}</p>
+                        {book.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{book.genre}</span>}
+                        {book.description && <p className="text-xs text-[#6B5D52] mt-2">{book.description}</p>}
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mt-4">
+                      <button onClick={() => handleJoinCrew(book)} className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold">
+                        Join Crew
+                      </button>
+                      <button onClick={() => handleInvite(book)} className="px-4 py-2.5 border border-[#EDE8E3] rounded-xl">
+                        <UserPlus className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={() => handleJoinCrew(selectedBook)}
-                  className="flex-1 px-4 py-3 bg-orange-500 text-white rounded-xl font-medium"
-                >
-                  Join Crew
-                </button>
-                <button
-                  onClick={() => handleInviteFriends(selectedBook)}
-                  className="flex-1 px-4 py-3 border border-gray-200 rounded-xl font-medium text-gray-700"
-                >
-                  <UserPlus className="w-4 h-4 inline mr-2" />
-                  Invite
-                </button>
-              </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
+  // MAIN EXPLORE VIEW
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2">
-          <button onClick={() => setPage('home')} className="p-1 hover:bg-gray-100 rounded-lg">
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
-          </button>
-          <div className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <h1 className="font-bold text-gray-900">AI Reading Assistant</h1>
-              <p className="text-xs text-gray-500">Powered by AI</p>
-            </div>
-          </div>
+    <div className="min-h-screen pb-24 bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1]">
+      <div className="px-5 pt-12 max-w-md mx-auto">
+        <div className="text-center mb-8">
+          <h1 className="text-[2rem] font-bold text-[#2D1F14] leading-tight mb-3" style={{ fontFamily: 'Georgia, serif' }}>
+            What do you feel like<br />reading today?
+          </h1>
+          <p className="text-[#8B7968] text-sm">You can type anything — a mood, a topic, a vibe</p>
         </div>
-        <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
-      </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
-        {messages.map((message) => (
-          <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[85%] ${message.type === 'user' ? 'items-end' : 'items-start'}`}>
-              {message.type === 'ai' && (
-                <div className="flex items-center gap-2 mb-1 ml-1">
-                  <div className="w-5 h-5 bg-gradient-to-br from-purple-500 to-pink-500 rounded-full flex items-center justify-center">
-                    <Sparkles className="w-3 h-3 text-white" />
-                  </div>
-                  <span className="text-xs font-medium text-gray-500">AI Assistant</span>
-                </div>
-              )}
-              
-              <div className={`rounded-2xl px-4 py-3 ${
-                message.type === 'user' 
-                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
-                  : 'bg-white border border-gray-200 text-gray-800'
-              }`}>
-                <p className="text-sm leading-relaxed">{message.content}</p>
-              </div>
-
-              {message.books && message.books.length > 0 && (
-                <div className="mt-3 space-y-2">
-                  {message.books.map((book, idx) => (
-                    <div 
-                      key={idx} 
-                      className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
-                      onClick={() => handleBookClick(book)}
-                    >
-                      <div className="flex items-start gap-3">
-                        <div 
-                          className="w-12 h-16 rounded-lg flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: book.cover || '#C8622A' }}
-                        >
-                          <BookOpen className="w-6 h-6 text-white" />
-                        </div>
-                        <div className="flex-1">
-                          <h4 className="font-semibold text-gray-900">{book.title}</h4>
-                          <p className="text-xs text-gray-500">by {book.author}</p>
-                          <div className="flex items-center gap-1 mt-1">
-                            <StarRating rating={book.rating || 4.5} size="xs" />
-                            <span className="text-xs text-gray-500 ml-1">{book.rating || 4.5}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-2 mt-2">
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleJoinCrew(book);
-                              }}
-                              className="flex-1 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-xs font-medium"
-                            >
-                              Join Crew
-                            </button>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleInviteFriends(book);
-                              }}
-                              className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs font-medium text-gray-600"
-                            >
-                              <UserPlus className="w-3 h-3 inline mr-1" />
-                              Invite
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              
-              <p className="text-[10px] text-gray-400 mt-1 px-2">
-                {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-              </p>
-            </div>
+        <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-5 shadow-lg border border-[#EDE8E3] mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-lg">✨</span>
+            <span className="text-[#8B7968] text-sm">Tell me what's on your mind...</span>
           </div>
-        ))}
-        
-        {isLoading && (
-          <div className="flex justify-start">
-            <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
-              <div className="flex items-center gap-2">
-                <LoadingSpinner size="sm" color="orange" />
-                <span className="text-sm text-gray-500">Thinking...</span>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
-      </div>
 
-      <div className="bg-white border-t border-gray-200 px-4 py-3 pb-safe">
-        <div className="flex items-center gap-2">
-          <button className="p-2 hover:bg-gray-100 rounded-full transition">
-            <Paperclip className="w-5 h-5 text-gray-500" />
-          </button>
-          <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2.5">
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            onFocus={() => setShowSuggestions(true)}
+            onKeyDown={(e) => e.key === 'Enter' && handleFindBook()}
+            placeholder=""
+            className="w-full bg-[#FAF8F5] border border-[#E8E0D8] rounded-2xl px-4 py-3.5 text-[#2D1F14] text-base outline-none focus:border-[#C8622A] mb-3"
+          />
+
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="bg-[#FAF8F5] border border-[#E8E0D8] rounded-2xl overflow-hidden mb-3">
+              {suggestions.map((s, i) => (
+                <button key={i} onClick={() => handleSuggestionClick(s.label)} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[#F0E8DF] text-left border-b border-[#EDE8E3] last:border-0">
+                  <span className="text-xl">{s.emoji}</span>
+                  <span className="text-[#2D1F14] text-sm font-medium">{s.label}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {selectedTags.length > 0 && (
+            <div className="flex gap-2 flex-wrap">
+              {selectedTags.map((tag, i) => (
+                <span key={i} className="flex items-center gap-1.5 bg-[#F0E8DF] text-[#6B5D52] text-xs px-3 py-1.5 rounded-full">
+                  🌙 {tag}
+                  <button onClick={() => removeTag(tag)}>×</button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="mb-6">
+          <p className="text-center text-[#6B5D52] text-sm font-medium mb-3">How intense should it be?</p>
+          <div className="flex items-center gap-3">
+            <span className="text-lg">☀️</span>
+            <span className="text-xs text-[#9B8E84]">Light</span>
             <input
-              type="text"
-              value={inputMessage}
-              onChange={(e) => setInputMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSendMessage();
-                }
-              }}
-              className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
-              placeholder="Ask for book recommendations..."
-              disabled={isLoading}
+              type="range"
+              min="0"
+              max="100"
+              value={intensity}
+              onChange={(e) => setIntensity(Number(e.target.value))}
+              className="flex-1 h-1.5 rounded-full outline-none"
+              style={{ background: `linear-gradient(to right, #C8622A ${intensity}%, #E8DDD5 ${intensity}%)` }}
             />
-            <button
-              onClick={handleSendMessage}
-              disabled={!inputMessage.trim() || isLoading}
-              className="p-1.5 disabled:opacity-50 transition hover:scale-110 active:scale-95"
-            >
-              <Send className={`w-5 h-5 ${!inputMessage.trim() || isLoading ? 'text-gray-400' : 'text-orange-500'}`} />
-            </button>
+            <span className="text-xs text-[#9B8E84]">Deep</span>
+            <span className="text-lg">🌑</span>
           </div>
+          <p className="text-xs text-[#C8622A] font-medium text-center mt-2">
+            {intensity < 33 ? 'Light & Breezy' : intensity < 66 ? 'Moderately Deep' : 'Deep & Intense'}
+          </p>
         </div>
-        <p className="text-xs text-gray-400 mt-2 text-center">
-          💡 Try: "fantasy books with magic" or "self-help for productivity"
-        </p>
+
+        <button
+          onClick={handleFindBook}
+          disabled={!query.trim() || loading}
+          className="w-full py-4 rounded-2xl font-bold text-white text-base shadow-lg disabled:opacity-50"
+          style={{ background: 'linear-gradient(135deg, #C8622A 0%, #A0481E 100%)' }}
+        >
+          {loading ? 'Finding...' : '✨ Find My Book'}
+        </button>
       </div>
     </div>
   );
@@ -2426,6 +2385,420 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           </div>
         )}
       </div>
+    </div>
+  );
+};
+
+// ─── RECOMMENDATIONS PAGE ───────────────────────────────────────────────────
+const RecommendationsPage = ({ user, setPage }) => {
+  const [recommendKeywords, setRecommendKeywords] = useState('');
+  const [recommendations, setRecommendations] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleAIRecommendation = async () => {
+    if (!recommendKeywords.trim()) {
+      alert('Please enter what you want to read');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      console.log('🤖 Requesting AI recommendations for:', recommendKeywords);
+
+      const response = await axios.post(`${API_URL}/api/recommend/ai`, {
+        query: recommendKeywords
+      });
+
+      if (response.data.success) {
+        console.log('✅ AI recommendations received:', response.data);
+
+        // Format for display
+        setRecommendations([{
+          type: 'ai',
+          query: response.data.query,
+          recommendations: response.data.recommendations,
+          source: response.data.source,
+          isAI: response.data.isAI
+        }]);
+
+        alert(`${response.data.isAI ? '🤖 AI' : '📚'} recommendations loaded!`);
+      } else {
+        throw new Error(response.data.message || 'Failed to get recommendations');
+      }
+    } catch (error) {
+      console.error('❌ Error getting AI recommendations:', error);
+
+      // Show error but don't fail completely - fallback to regular search
+      alert('AI unavailable, using database search');
+      handleRecommendation(); // Fallback to regular search
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRecommendation = async () => {
+    if (!recommendKeywords.trim()) {
+      alert('Please enter what you want to read');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Fallback to old static logic if AI fails
+      const keywords = recommendKeywords.toLowerCase().trim();
+      const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
+        const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
+        return categoryText.includes(keywords) ||
+               category.books.some(book =>
+                 book.title.toLowerCase().includes(keywords) ||
+                 book.author.toLowerCase().includes(keywords)
+               );
+      });
+
+      if (matchingCategories.length > 0) {
+        const results = [];
+        matchingCategories.forEach(category => {
+          results.push({
+            type: 'category',
+            category: category.category,
+            emoji: category.emoji,
+            description: category.description,
+            books: category.books
+          });
+        });
+        setRecommendations(results);
+      } else {
+        const allBooks = BOOK_RECOMMENDATIONS.flatMap(category =>
+          category.books.map(book => ({
+            ...book,
+            category: category.category,
+            emoji: category.emoji
+          }))
+        );
+
+        const filteredBooks = allBooks.filter(book =>
+          book.title.toLowerCase().includes(keywords) ||
+          book.author.toLowerCase().includes(keywords)
+        );
+
+        if (filteredBooks.length > 0) {
+          setRecommendations([
+            {
+              type: 'keyword',
+              keyword: keywords,
+              books: filteredBooks.slice(0, 10)
+            }
+          ]);
+        } else {
+          setRecommendations([
+            {
+              type: 'popular',
+              title: 'Most Popular Books',
+              books: [
+                { title: 'Atomic Habits', author: 'James Clear', category: 'Motivational / Self-Help', rating: 4.8 },
+                { title: 'The Hobbit', author: 'J.R.R. Tolkien', category: 'Fantasy', rating: 4.7 },
+                { title: 'To Kill a Mockingbird', author: 'Harper Lee', category: 'Literary Fiction', rating: 4.8 },
+                { title: 'The Diary of a Young Girl', author: 'Anne Frank', category: 'Biography', rating: 4.8 },
+                { title: 'The Power of Now', author: 'Eckhart Tolle', category: 'Philosophy', rating: 4.3 }
+              ]
+            }
+          ]);
+        }
+      }
+    } catch (error) {
+      console.error('Error in recommendation:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBrowseCategories = () => {
+    setRecommendations(
+      BOOK_RECOMMENDATIONS.map(category => ({
+        type: 'category',
+        category: category.category,
+        emoji: category.emoji,
+        description: category.description,
+        books: category.books.slice(0, 3)
+      }))
+    );
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto px-6 py-8">
+      <button onClick={() => setPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
+        <ChevronLeft className="w-5 h-5" /> Back to Home
+      </button>
+
+      <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-12">
+        <h1 className="text-4xl font-bold text-white mb-2">🤖 AI Book Recommendations</h1>
+        <p className="text-orange-100">Powered by Groq AI - Get personalized suggestions instantly!</p>
+      </div>
+
+      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
+        <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
+          <Sparkles className="w-6 h-6 text-orange-500" />
+          Ask AI for Recommendations
+        </h2>
+
+        <div className="grid md:grid-cols-2 gap-8">
+          <div>
+            <div className="relative mb-6">
+              <Sparkles className="absolute left-4 top-4 text-orange-500" />
+              <input
+                type="text"
+                value={recommendKeywords}
+                onChange={(e) => setRecommendKeywords(e.target.value)}
+                onKeyPress={(e) => e.key === 'Enter' && handleAIRecommendation()}
+                className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
+                placeholder="e.g., books like Harry Potter, mystery thrillers, self-help..."
+              />
+            </div>
+
+            <button
+              onClick={handleAIRecommendation}
+              disabled={!recommendKeywords || loading}
+              className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4 flex items-center justify-center gap-2"
+            >
+              {loading ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Getting AI Recommendations...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-5 h-5" />
+                  Get AI Recommendations
+                </>
+              )}
+            </button>
+
+            <button
+              onClick={handleRecommendation}
+              disabled={!recommendKeywords}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4"
+            >
+              📚 Quick Search (Database)
+            </button>
+
+            <button
+              onClick={handleBrowseCategories}
+              className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all"
+            >
+              Browse All Categories
+            </button>
+          </div>
+
+          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6">
+            <h3 className="text-xl font-bold mb-4 text-gray-900 flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-orange-500" />
+              How to Use AI Search:
+            </h3>
+            <ul className="space-y-3 text-gray-700">
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Be specific:</strong> "fantasy books with strong female leads"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Describe mood:</strong> "books to help me relax after work"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Compare:</strong> "books like Harry Potter but for adults"</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="text-orange-500 font-bold">💡</span>
+                <span><strong>Ask naturally:</strong> "I want to learn about investing"</span>
+              </li>
+            </ul>
+
+            <div className="mt-6 p-4 bg-white rounded-lg border border-orange-200">
+              <p className="text-sm text-gray-600">
+                🤖 <strong>Powered by Groq AI</strong> - Lightning-fast responses with personalized recommendations!
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* AI Recommendations Display */}
+      {recommendations.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
+          <div className="flex items-center justify-between mb-8">
+            <div>
+              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+                {recommendations[0].isAI ? (
+                  <>
+                    <Sparkles className="w-6 h-6 text-orange-500" />
+                    AI Recommendations for "{recommendations[0].query}"
+                  </>
+                ) : recommendations[0].type === 'category' ? (
+                  'Recommended Categories'
+                ) : recommendations[0].type === 'keyword' ? (
+                  `Results for "${recommendations[0].keyword}"`
+                ) : (
+                  'Popular Recommendations'
+                )}
+              </h2>
+              {recommendations[0].source && (
+                <p className="text-sm text-gray-500 mt-1">
+                  📡 Source: {recommendations[0].source}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => setRecommendations([])}
+              className="text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-100"
+            >
+              Clear Results
+            </button>
+          </div>
+
+          {/* AI Results (new format) */}
+          {recommendations[0].isAI && recommendations[0].recommendations && (
+            <div className="space-y-4">
+              {recommendations[0].recommendations.map((book, idx) => (
+                <div key={idx} className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100 hover:border-orange-300 transition">
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center text-white font-bold text-xl">
+                      {idx + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="text-xl font-bold text-gray-900">{book.title}</h3>
+                          <p className="text-gray-600">by {book.author}</p>
+                          <p className="text-sm text-orange-600 font-semibold mt-1">
+                            📚 {book.genre}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full">
+                          <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                          <span className="font-bold">{book.rating}</span>
+                        </div>
+                      </div>
+
+                      {book.description && (
+                        <p className="text-gray-700 mb-3 leading-relaxed">
+                          {book.description}
+                        </p>
+                      )}
+
+                      {book.reason && (
+                        <div className="bg-white rounded-lg p-3 border border-orange-200">
+                          <p className="text-sm text-gray-600">
+                            <span className="font-semibold text-orange-600">💡 Why you'd like it:</span> {book.reason}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Original category/keyword results (keep existing code) */}
+          {!recommendations[0].isAI && (
+            <div className="space-y-8">
+              {recommendations.map((rec, idx) => (
+                <div key={idx} className="border border-gray-200 rounded-2xl overflow-hidden">
+                  {rec.type === 'category' ? (
+                    <div>
+                      <div className="bg-gradient-to-r from-orange-100 to-red-100 p-6">
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl">{rec.emoji}</span>
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900">{rec.category}</h3>
+                            <p className="text-gray-600">{rec.description}</p>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="p-6">
+                        <h4 className="font-semibold text-gray-700 mb-4">Recommended Books:</h4>
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {rec.books.map((book, bookIdx) => (
+                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
+                                  <p className="text-sm text-gray-600">by {book.author}</p>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                  <span className="text-sm font-semibold">{book.rating}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-6">
+                        <h3 className="text-xl font-bold text-gray-900">
+                          {rec.type === 'keyword' ? `Books matching "${rec.keyword}"` : rec.title}
+                        </h3>
+                      </div>
+                      <div className="p-6">
+                        <div className="grid md:grid-cols-2 gap-4">
+                          {rec.books.map((book, bookIdx) => (
+                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
+                              <div className="flex justify-between items-start mb-2">
+                                <div>
+                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
+                                  <p className="text-sm text-gray-600">by {book.author}</p>
+                                  {book.category && (
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
+                                        {book.category}
+                                      </span>
+                                    </p>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
+                                  <span className="text-sm font-semibold">{book.rating}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Quick Category Grid */}
+      {recommendations.length === 0 && (
+        <div className="mt-8">
+          <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Categories</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+            {BOOK_RECOMMENDATIONS.slice(0, 12).map(category => (
+              <button
+                key={category.id}
+                onClick={() => {
+                  setRecommendKeywords(category.category.toLowerCase());
+                  setTimeout(() => handleRecommendation(), 100);
+                }}
+                className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition text-center border border-gray-200 hover:border-orange-300"
+              >
+                <div className="text-2xl mb-2">{category.emoji}</div>
+                <p className="text-sm font-medium text-gray-700 truncate">{category.category}</p>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 };
