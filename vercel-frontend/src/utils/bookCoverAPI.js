@@ -1,6 +1,4 @@
 // src/utils/bookCoverAPI.js
-// Free book cover images from Open Library (Internet Archive)
-// No API key required!
 
 /**
  * Get book cover URL from Open Library
@@ -22,7 +20,7 @@ export const getCoverByTitle = async (title, author = '') => {
   try {
     const query = author ? `${title} ${author}` : title;
     const response = await fetch(
-      `https://openlibrary.org/search.json?title=${encodeURIComponent(query)}&limit=1`
+      `https://openlibrary.org/search.json?title=${encodeURIComponent(query)}&limit=5`
     );
     const data = await response.json();
     
@@ -38,9 +36,19 @@ export const getCoverByTitle = async (title, author = '') => {
       if (book.isbn && book.isbn.length > 0) {
         return getCoverByISBN(book.isbn[0], 'L');
       }
+      
+      // Try OCLC
+      if (book.oclc && book.oclc.length > 0) {
+        return `https://covers.openlibrary.org/b/oclc/${book.oclc[0]}-L.jpg`;
+      }
+      
+      // Try LCCN
+      if (book.lccn && book.lccn.length > 0) {
+        return `https://covers.openlibrary.org/b/lccn/${book.lccn[0]}-L.jpg`;
+      }
     }
     
-    // Fallback to placeholder
+    // Return null if no cover found
     return null;
   } catch (error) {
     console.error('Error fetching cover:', error);
@@ -68,16 +76,30 @@ export const getBookDetails = async (title, author = '') => {
         b.title?.toLowerCase() === title.toLowerCase()
       ) || data.docs[0];
       
+      let coverUrl = null;
+      
+      if (book.cover_i) {
+        coverUrl = `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`;
+      } else if (book.isbn && book.isbn.length > 0) {
+        coverUrl = getCoverByISBN(book.isbn[0], 'L');
+      } else if (book.oclc && book.oclc.length > 0) {
+        coverUrl = `https://covers.openlibrary.org/b/oclc/${book.oclc[0]}-L.jpg`;
+      } else if (book.lccn && book.lccn.length > 0) {
+        coverUrl = `https://covers.openlibrary.org/b/lccn/${book.lccn[0]}-L.jpg`;
+      }
+      
       return {
         title: book.title || title,
         author: book.author_name?.[0] || author,
-        coverUrl: book.cover_i 
-          ? `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`
-          : null,
+        coverUrl: coverUrl,
         isbn: book.isbn?.[0],
         publishYear: book.first_publish_year,
         subjects: book.subject?.slice(0, 5) || [],
-        description: book.first_sentence?.[0] || '',
+        description: book.first_sentence?.[0] || 'No description available',
+        ratings_average: book.ratings_average,
+        ratings_count: book.ratings_count,
+        number_of_pages: book.number_of_pages_median,
+        publishers: book.publisher?.[0],
       };
     }
     
@@ -88,7 +110,7 @@ export const getBookDetails = async (title, author = '') => {
       isbn: null,
       publishYear: null,
       subjects: [],
-      description: '',
+      description: 'Book details not found',
     };
   } catch (error) {
     console.error('Error fetching book details:', error);
@@ -99,7 +121,7 @@ export const getBookDetails = async (title, author = '') => {
       isbn: null,
       publishYear: null,
       subjects: [],
-      description: '',
+      description: 'Error fetching book details',
     };
   }
 };
@@ -121,10 +143,40 @@ export const getPlaceholderGradient = (title = '') => {
     'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
     'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
     'linear-gradient(135deg, #ff6e7f 0%, #bfe9ff 100%)',
+    'linear-gradient(135deg, #C8622A 0%, #A0481E 100%)',
+    'linear-gradient(135deg, #7B9EA6 0%, #5D7E86 100%)',
   ];
   
-  const index = title.charCodeAt(0) % gradients.length;
+  const index = (title.charCodeAt(0) || 0) % gradients.length;
   return gradients[index];
+};
+
+/**
+ * Generate a colored placeholder with initials
+ * @param {string} title - Book title
+ * @param {string} author - Book author
+ * @returns {object} Placeholder data
+ */
+export const getPlaceholderData = (title, author) => {
+  const colors = [
+    { bg: '#E8A87C', text: '#FFFFFF' },
+    { bg: '#7B9EA6', text: '#FFFFFF' },
+    { bg: '#C8622A', text: '#FFFFFF' },
+    { bg: '#C4A882', text: '#FFFFFF' },
+    { bg: '#8B5E3C', text: '#FFFFFF' },
+    { bg: '#C8956C', text: '#FFFFFF' },
+    { bg: '#2D2D2D', text: '#FFFFFF' },
+    { bg: '#4A4A4A', text: '#FFFFFF' },
+  ];
+  
+  const index = (title.charCodeAt(0) || 0) % colors.length;
+  const initials = title.split(' ').map(word => word[0]).join('').slice(0, 2).toUpperCase();
+  
+  return {
+    backgroundColor: colors[index].bg,
+    textColor: colors[index].text,
+    initials: initials
+  };
 };
 
 /**
@@ -134,47 +186,32 @@ export const getPlaceholderGradient = (title = '') => {
  */
 export const batchFetchCovers = async (books) => {
   const promises = books.map(book => getBookDetails(book.title, book.author));
-  return Promise.all(promises);
+  const results = await Promise.all(promises);
+  
+  return books.map((book, index) => ({
+    ...book,
+    coverUrl: results[index].coverUrl,
+    details: results[index]
+  }));
 };
 
-// ===== ALTERNATIVE FREE APIs (if needed) =====
-
 /**
- * Google Books API (free, 1000 requests/day, requires API key)
- * Get API key: https://console.cloud.google.com/apis/credentials
+ * Preload book cover
+ * @param {string} coverUrl - URL of the cover image
+ * @returns {Promise<boolean>} Whether the image loaded successfully
  */
-export const getGoogleBooksCover = async (title, author, apiKey) => {
-  try {
-    const query = `${title} ${author}`.trim();
-    const response = await fetch(
-      `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&key=${apiKey}`
-    );
-    const data = await response.json();
-    
-    if (data.items && data.items.length > 0) {
-      const book = data.items[0];
-      return {
-        coverUrl: book.volumeInfo.imageLinks?.thumbnail?.replace('http:', 'https:'),
-        title: book.volumeInfo.title,
-        author: book.volumeInfo.authors?.[0],
-        description: book.volumeInfo.description,
-        isbn: book.volumeInfo.industryIdentifiers?.[0]?.identifier,
-      };
+export const preloadCover = (coverUrl) => {
+  return new Promise((resolve) => {
+    if (!coverUrl) {
+      resolve(false);
+      return;
     }
-    return null;
-  } catch (error) {
-    console.error('Google Books API error:', error);
-    return null;
-  }
-};
-
-/**
- * Fallback: Use a generated book cover with title/author text
- */
-export const generateTextCover = (title, author, gradient) => {
-  // This would return a data URL for a canvas-generated cover
-  // For simplicity, we'll just return the gradient
-  return gradient;
+    
+    const img = new Image();
+    img.onload = () => resolve(true);
+    img.onerror = () => resolve(false);
+    img.src = coverUrl;
+  });
 };
 
 export default {
@@ -182,6 +219,7 @@ export default {
   getCoverByTitle,
   getBookDetails,
   getPlaceholderGradient,
+  getPlaceholderData,
   batchFetchCovers,
-  getGoogleBooksCover,
+  preloadCover,
 };
