@@ -6,12 +6,15 @@ import {
   Sparkles, Lock, Eye, EyeOff, UserPlus, Gift, ThumbsUp, ThumbsDown,
   Trash2, Edit, Target, Check, ArrowLeft, Clock, TrendingUp, Menu, Upload,
   Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause,
-  Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink
+  Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink, ThumbsUp as LikeIcon
 } from 'lucide-react';
 
 // Import API functions
 import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, chatAPI, crewAPI, userAPI, bookCrewAPI, getTrendingBooks, aiChatAPI } from './services/api';
 import axios from 'axios';
+
+// API URL
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:10000';
 
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -220,11 +223,11 @@ const LoadingSpinner = ({ size = 'md', color = 'orange' }) => {
 // ─── BOTTOM NAV ────────────────────────────────────────────────────────────
 const BottomNav = ({ active, setPage, unreadCount = 0 }) => {
   const items = [
-    { id: 'home', icon: Home, label: 'Home' },
+    { id: 'home', icon: BookOpen, label: 'ReadCrew' },
     { id: 'explore', icon: Sparkles, label: 'Explore' },
     { id: 'post', icon: Edit3, label: 'Post' },
     { id: 'crews', icon: Users, label: 'Crews' },
-    { id: 'profile', icon: User, label: 'Profile' },
+    { id: 'reviews', icon: Star, label: 'Reviews' },
   ];
 
   return (
@@ -261,7 +264,7 @@ const BottomNav = ({ active, setPage, unreadCount = 0 }) => {
 };
 
 // ─── TOP BAR ───────────────────────────────────────────────────────────────
-const TopBar = ({ user, setPage, title, showBack = false, onBack }) => (
+const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true }) => (
   <header className="sticky top-0 bg-white/95 backdrop-blur-sm z-40 px-4 py-3 flex items-center justify-between border-b border-gray-200">
     <div className="flex items-center gap-3">
       {showBack && (
@@ -278,15 +281,17 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack }) => (
         </span>
       </div>
     </div>
-    <div className="flex items-center gap-3">
-      <button className="relative p-1 hover:bg-gray-100 rounded-lg transition">
-        <Bell className="w-5 h-5 text-gray-600" />
-        <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
-      </button>
-      <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
-        <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
-      </button>
-    </div>
+    {showProfile && (
+      <div className="flex items-center gap-3">
+        <button className="relative p-1 hover:bg-gray-100 rounded-lg transition">
+          <Bell className="w-5 h-5 text-gray-600" />
+          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+        </button>
+        <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
+          <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
+        </button>
+      </div>
+    )}
   </header>
 );
 
@@ -314,14 +319,16 @@ const LoginPage = ({ onLogin }) => {
       const result = await otpAPI.sendOTP({ name, email, phone });
       if (result.success) {
         setShowOTP(true);
-        alert('OTP sent to your email!');
+        alert('OTP sent to your email! Check your inbox.');
+      } else {
+        alert(result.message || 'Failed to send OTP');
       }
     } catch (error) {
       console.error('Error sending OTP:', error);
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       localStorage.setItem('devOTP', otp);
       setShowOTP(true);
-      alert(`Dev OTP: ${otp}`);
+      alert(`Development OTP: ${otp} (Check console)`);
     } finally {
       setLoading(false);
     }
@@ -350,7 +357,6 @@ const LoginPage = ({ onLogin }) => {
           joinedCrews: []
         };
 
-        // Save to localStorage
         localStorage.setItem('currentUser', JSON.stringify(userData));
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
         localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
@@ -460,11 +466,10 @@ const LoginPage = ({ onLogin }) => {
                 />
               </div>
 
-              {/* Reading Goals during signup */}
               <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
                 <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Target className="w-4 h-4 text-orange-500" />
-                  Set Your Reading Goals
+                  Set Your Reading Goals (Optional)
                 </h3>
                 <div className="space-y-3">
                   <div>
@@ -474,8 +479,9 @@ const LoginPage = ({ onLogin }) => {
                       value={readingGoal.yearly}
                       onChange={(e) => setReadingGoal({...readingGoal, yearly: parseInt(e.target.value) || 0})}
                       className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
-                      min="1"
+                      min="0"
                       max="100"
+                      placeholder="e.g., 20"
                     />
                   </div>
                   <div>
@@ -485,8 +491,9 @@ const LoginPage = ({ onLogin }) => {
                       value={readingGoal.monthly}
                       onChange={(e) => setReadingGoal({...readingGoal, monthly: parseInt(e.target.value) || 0})}
                       className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
-                      min="1"
+                      min="0"
                       max="20"
+                      placeholder="e.g., 5"
                     />
                   </div>
                 </div>
@@ -542,11 +549,13 @@ const LoginPage = ({ onLogin }) => {
                 id: Date.now().toString(),
                 name: name || email.split('@')[0],
                 email: email,
-                readingGoal: { yearly: 20, monthly: 5 },
-                stats: { booksRead: 12, reviewsGiven: 8, postsCreated: 15, crewsJoined: 3 },
-                joinedCrews: [1, 2] // Mock joined crews
+                readingGoal: { yearly: 0, monthly: 0 },
+                stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
+                joinedCrews: []
               };
               localStorage.setItem('currentUser', JSON.stringify(mockUser));
+              localStorage.setItem(`user_${mockUser.email}_stats`, JSON.stringify(mockUser.stats));
+              localStorage.setItem(`user_${mockUser.email}_joinedCrews`, JSON.stringify([]));
               onLogin(mockUser);
             } else {
               handleSendOTP();
@@ -575,92 +584,59 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [readingProgress, setReadingProgress] = useState(0);
   const [feedPosts, setFeedPosts] = useState([]);
-  const [selectedTab, setSelectedTab] = useState('feed');
 
   useEffect(() => {
-    fetchTrendingBooks();
+    loadTrendingBooks();
     loadFeedPosts();
     calculateReadingProgress();
-  }, []);
+  }, [user?.stats?.booksRead]);
 
-  const fetchTrendingBooks = async () => {
+  const loadTrendingBooks = async () => {
     setLoadingTrending(true);
     try {
-      // Try to fetch from Groq API first
-      let response = '';
-      await getTrendingBooks(
-        (token) => { response += token; },
-        () => {
-          try {
-            // Parse the response to extract book data
-            const books = parseTrendingBooks(response);
-            setTrendingBooks(books);
-          } catch (e) {
-            console.error('Error parsing trending books:', e);
-            useMockTrendingBooks();
-          }
-        }
-      );
+      const response = await fetch(`${API_URL}/api/recommend/trending`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setTrendingBooks(data.books);
+      } else {
+        // Fallback to mock data
+        setTrendingBooks([
+          { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
+          { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
+          { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D' },
+          { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882' },
+        ]);
+      }
     } catch (error) {
-      console.error('Error fetching trending books:', error);
-      useMockTrendingBooks();
+      console.error('Error loading trending books:', error);
+      // Fallback to mock data
+      setTrendingBooks([
+        { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
+        { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
+        { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D' },
+        { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882' },
+      ]);
     } finally {
       setLoadingTrending(false);
     }
   };
 
-  const useMockTrendingBooks = () => {
-    const mockTrending = [
-      { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C', description: 'Tiny changes, remarkable results', genre: 'Self-Help', pages: 320, published: '2018' },
-      { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6', description: 'Timeless lessons on wealth, greed, and happiness', genre: 'Finance', pages: 256, published: '2020' },
-      { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D', description: 'Rules for focused success in a distracted world', genre: 'Productivity', pages: 304, published: '2016' },
-      { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882', description: 'A brief history of humankind', genre: 'History', pages: 512, published: '2011' },
-      { id: 5, title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.5, readers: 32400, cover: '#C8622A', description: 'A fable about following your dreams', genre: 'Fiction', pages: 208, published: '1988' },
-    ];
-    setTrendingBooks(mockTrending);
-  };
-
-  const parseTrendingBooks = (response) => {
-    // Simple parsing - in production you'd have a more sophisticated parser
-    const lines = response.split('\n');
-    const books = [];
-
-    lines.forEach(line => {
-      if (line.includes('title:') || line.includes('Title:')) {
-        // Extract book info
-        const title = line.split(':')[1]?.trim() || 'Unknown';
-        books.push({
-          id: books.length + 1,
-          title: title,
-          author: 'Various',
-          rating: 4.5,
-          readers: 10000,
-          cover: '#C8622A',
-          description: 'A trending book',
-          genre: 'General',
-          pages: 300,
-          published: '2024'
-        });
-      }
-    });
-
-    return books.length > 0 ? books : [];
-  };
-
   const loadFeedPosts = () => {
-    // Combine donations and posts into a single feed
     const feed = [
       ...(donations || []).map(d => ({ ...d, type: 'donation', timestamp: new Date(d.createdAt) })),
       ...(posts || []).map(p => ({ ...p, type: 'post', timestamp: new Date(p.createdAt || Date.now()) }))
     ].sort((a, b) => b.timestamp - a.timestamp).slice(0, 10);
-
+    
     setFeedPosts(feed);
   };
 
   const calculateReadingProgress = () => {
-    if (user?.readingGoal) {
+    if (user?.readingGoal?.yearly > 0) {
       const progress = (user.stats?.booksRead || 0) / user.readingGoal.yearly * 100;
       setReadingProgress(Math.min(progress, 100));
+    } else {
+      setReadingProgress(0);
     }
   };
 
@@ -669,8 +645,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       if (type === 'donation') {
         await donationAPI.like(postId);
       }
-      // Update UI optimistically
-      setFeedPosts(prev => prev.map(p =>
+      setFeedPosts(prev => prev.map(p => 
         p._id === postId ? { ...p, likes: (p.likes || 0) + 1, liked: true } : p
       ));
     } catch (error) {
@@ -678,90 +653,74 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     }
   };
 
-  const handleTabChange = (tab) => {
-    setSelectedTab(tab);
-    if (tab === 'reviews') setPage('reviews');
-    else if (tab === 'crews') setPage('crews');
-    else if (tab === 'posts') setPage('post');
-    else if (tab === 'books') setPage('explore');
-  };
-
-  const hasReadingGoal = user?.readingGoal?.yearly > 0 && user?.readingGoal?.monthly > 0;
+  const hasReadingGoal = user?.readingGoal?.yearly > 0 || user?.readingGoal?.monthly > 0;
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
-      <TopBar user={user} setPage={setPage} title="Home" />
-
+      <TopBar user={user} setPage={setPage} title="ReadCrew" />
+      
       <div className="px-4 py-4 space-y-5">
-        {/* Welcome Card - Shows differently based on whether user has goals */}
-        {!hasReadingGoal ? (
-          <div className="bg-gradient-to-br from-green-500 to-emerald-500 rounded-2xl p-5 text-white shadow-lg">
-            <div className="flex items-center gap-3 mb-2">
-              <Leaf className="w-6 h-6" />
-              <h2 className="text-xl font-bold">Welcome, {user?.name?.split(' ')[0]}! 🌱</h2>
+        {/* Welcome Card */}
+        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-xl font-bold">Welcome, {user?.name?.split(' ')[0]}! 📚</h2>
+              <p className="text-orange-100 text-sm mt-1">Read together, grow together</p>
             </div>
-            <p className="text-green-100 text-sm">Read together, grow together. Set your reading goals to track progress!</p>
-            <button
-              onClick={() => setPage('profile')}
-              className="mt-3 px-4 py-2 bg-white text-green-600 rounded-xl text-sm font-semibold"
-            >
-              Set Reading Goals
-            </button>
+            <Avatar initials={user?.name?.slice(0, 2)} size="md" color="white" />
           </div>
-        ) : (
-          <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
-            <div className="flex items-center justify-between mb-3">
-              <div>
-                <h2 className="text-xl font-bold">Welcome back, {user?.name?.split(' ')[0]}! 📚</h2>
-                <p className="text-orange-100 text-sm mt-1">Keep reading, keep growing</p>
-              </div>
-              <Avatar initials={user?.name?.slice(0, 2)} size="md" color="white" />
-            </div>
-
-            {/* Reading Progress */}
+          
+          {/* Reading Progress - Only show if goals are set */}
+          {hasReadingGoal && (
             <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm">
               <div className="flex items-center justify-between text-sm mb-2">
                 <span>Yearly Goal Progress</span>
-                <span className="font-semibold">{user?.stats?.booksRead || 0}/{user?.readingGoal?.yearly || 20} books</span>
+                <span className="font-semibold">{user?.stats?.booksRead || 0}/{user?.readingGoal?.yearly || 0} books</span>
               </div>
               <div className="h-2 bg-white/30 rounded-full overflow-hidden">
-                <div
+                <div 
                   className="h-full bg-white rounded-full transition-all duration-500"
                   style={{ width: `${readingProgress}%` }}
                 />
               </div>
               <div className="flex items-center justify-between mt-2 text-xs text-orange-100">
-                <span>Monthly: {user?.stats?.booksRead || 0}/{user?.readingGoal?.monthly || 5}</span>
+                <span>Monthly: {user?.stats?.booksRead || 0}/{user?.readingGoal?.monthly || 0}</span>
                 <span>{Math.round(readingProgress)}% Complete</span>
               </div>
             </div>
-          </div>
-        )}
+          )}
+          
+          {/* Prompt to set goals if not set */}
+          {!hasReadingGoal && (
+            <button
+              onClick={() => setPage('profile')}
+              className="mt-3 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2 text-sm font-medium transition"
+            >
+              Set Reading Goals →
+            </button>
+          )}
+        </div>
 
-        {/* Quick Stats - Clickable */}
+        {/* Quick Stats */}
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: 'Books', value: user?.stats?.booksRead || 0, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100', tab: 'books' },
-            { label: 'Reviews', value: user?.stats?.reviewsGiven || 0, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100', tab: 'reviews' },
-            { label: 'Posts', value: user?.stats?.postsCreated || 0, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100', tab: 'posts' },
-            { label: 'Crews', value: user?.stats?.crewsJoined || 0, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100', tab: 'crews' }
-          ].map(({ label, value, icon: Icon, color, bg, tab }, idx) => (
-            <button
-              key={idx}
-              onClick={() => handleTabChange(tab)}
-              className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 hover:shadow-md transition text-left"
-            >
+            { label: 'Books', value: user?.stats?.booksRead || 0, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100' },
+            { label: 'Reviews', value: user?.stats?.reviewsGiven || 0, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100' },
+            { label: 'Posts', value: user?.stats?.postsCreated || 0, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100' },
+            { label: 'Crews', value: user?.stats?.crewsJoined || 0, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100' }
+          ].map(({ label, value, icon: Icon, color, bg }, idx) => (
+            <div key={idx} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
               <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}>
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
               <p className="text-lg font-bold text-gray-900">{value}</p>
               <p className="text-xs text-gray-500">{label}</p>
-            </button>
+            </div>
           ))}
         </div>
 
         {/* Create Post Button */}
-        <button
+        <button 
           onClick={() => setPage('post')}
           className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md transition"
         >
@@ -772,7 +731,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           <Avatar initials={user?.name?.slice(0, 2)} size="xs" color="#C8622A" className="ml-auto" />
         </button>
 
-        {/* Live Feed - Posts from community */}
+        {/* Live Feed */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -808,21 +767,21 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                       </div>
                     </div>
                   </div>
-
+                  
                   {post.image && (
-                    <img
-                      src={post.image}
-                      alt={post.bookName}
+                    <img 
+                      src={post.image} 
+                      alt={post.bookName} 
                       className="w-full h-48 object-cover rounded-xl mb-3"
                     />
                   )}
-
+                  
                   <p className="text-sm text-gray-700 leading-relaxed mb-3">
                     {post.story || post.content}
                   </p>
-
+                  
                   <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
-                    <button
+                    <button 
                       onClick={() => handleLikePost(post._id, post.type)}
                       className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
                     >
@@ -861,23 +820,12 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           ) : (
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {trendingBooks.map((book, i) => (
-                <div
-                  key={i}
-                  className="shrink-0 w-32 cursor-pointer hover:scale-105 transition-transform"
-                  onClick={() => {
-                    // Navigate to book details
-                    setPage('explore');
-                    // You would pass the book data via state/context
-                  }}
-                >
-                  <div
-                    className="w-32 h-40 rounded-xl shadow-lg flex items-end justify-center pb-3 mb-2 relative overflow-hidden group"
+                <div key={i} className="shrink-0 w-32">
+                  <div 
+                    className="w-32 h-40 rounded-xl shadow-lg flex items-end justify-center pb-3 mb-2"
                     style={{ backgroundColor: book.cover }}
                   >
                     <BookOpen className="w-8 h-8 text-white opacity-50" />
-                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                      <ExternalLink className="w-6 h-6 text-white" />
-                    </div>
                   </div>
                   <p className="text-sm font-semibold text-gray-900 leading-tight">{book.title}</p>
                   <p className="text-xs text-gray-500">{book.author}</p>
@@ -906,14 +854,10 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
           <div className="grid grid-cols-2 gap-3">
             {(crews || []).slice(0, 2).map(crew => (
-              <div
-                key={crew.id}
+              <div 
+                key={crew.id} 
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer"
-                onClick={() => {
-                  // Navigate to crew detail
-                  setPage('crews');
-                  // You would pass the selected crew via state/context
-                }}
+                onClick={() => setPage('crews')}
               >
                 <div className="h-16 flex items-center justify-center" style={{ backgroundColor: crew.cover + '20' }}>
                   <div className="w-10 h-12 rounded-lg shadow-md flex items-center justify-center" style={{ backgroundColor: crew.cover }}>
@@ -928,13 +872,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                       <Users className="w-3 h-3" />
                       <span>{crew.members || 1}</span>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Handle join crew
-                      }}
-                      className="px-3 py-1 bg-orange-500 text-white rounded-lg text-xs font-medium"
-                    >
+                    <button className="px-3 py-1 bg-orange-500 text-white rounded-lg text-xs font-medium">
                       Join
                     </button>
                   </div>
@@ -948,7 +886,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   );
 };
 
-// ─── FIXED EXPLORE PAGE WITH WORKING INPUT ─────────────────────────────────
+// ─── EXPLORE PAGE ────────────────────────────────────────────────────────
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [messages, setMessages] = useState([
     {
@@ -989,12 +927,9 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     setIsLoading(true);
 
     try {
-      console.log('🤖 Sending to AI:', queryText);
-      
-      const response = await axios.post(
-        `${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommend/ai`,
-        { query: queryText }
-      );
+      const response = await axios.post(`${API_URL}/api/recommend/ai`, {
+        query: queryText
+      });
 
       if (response.data.success) {
         const books = response.data.recommendations || [];
@@ -1015,77 +950,25 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         throw new Error('Failed to get recommendations');
       }
     } catch (error) {
-      console.error('❌ Error getting AI response:', error);
-
-      const mockBooks = getMockRecommendations(queryText);
-      setSuggestedBooks(mockBooks);
-
+      console.error('Error getting AI response:', error);
+      
       const aiMessage = {
         id: Date.now() + 1,
         type: 'ai',
-        content: getMockResponse(queryText),
-        books: mockBooks,
+        content: "I'm having trouble connecting right now. Please try again in a moment.",
         timestamp: new Date()
       };
-
+      
       setMessages(prev => [...prev, aiMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const getMockRecommendations = (input) => {
-    const lowerInput = input.toLowerCase();
-    if (lowerInput.includes('fantasy') || lowerInput.includes('magic')) {
-      return [
-        { id: 1, title: 'The Name of the Wind', author: 'Patrick Rothfuss', rating: 4.7, genre: 'Fantasy', description: 'A masterpiece of storytelling about a legendary magician.', cover: '#8B4513', pages: 662, published: '2007' },
-        { id: 2, title: 'Mistborn', author: 'Brandon Sanderson', rating: 4.8, genre: 'Fantasy', description: 'An epic fantasy with a unique magic system.', cover: '#4A4A4A', pages: 541, published: '2006' },
-        { id: 3, title: 'The Lies of Locke Lamora', author: 'Scott Lynch', rating: 4.6, genre: 'Fantasy', description: 'Ocean\'s Eleven meets fantasy in this brilliant heist novel.', cover: '#2C3E50', pages: 499, published: '2006' }
-      ];
-    } else if (lowerInput.includes('self help') || lowerInput.includes('motivation')) {
-      return [
-        { id: 4, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, genre: 'Self-Help', description: 'Tiny changes, remarkable results.', cover: '#E8A87C', pages: 320, published: '2018' },
-        { id: 5, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, genre: 'Finance', description: 'Timeless lessons on wealth and happiness.', cover: '#7B9EA6', pages: 256, published: '2020' },
-        { id: 6, title: 'Daring Greatly', author: 'Brené Brown', rating: 4.6, genre: 'Self-Help', description: 'How courage changes everything.', cover: '#C44536', pages: 304, published: '2012' }
-      ];
-    } else if (lowerInput.includes('thriller') || lowerInput.includes('mystery')) {
-      return [
-        { id: 7, title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5, genre: 'Thriller', description: 'A shocking psychological thriller.', cover: '#2C1810', pages: 336, published: '2019' },
-        { id: 8, title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.3, genre: 'Thriller', description: 'The thriller that defined a generation.', cover: '#8B0000', pages: 432, published: '2012' },
-        { id: 9, title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.4, genre: 'Mystery', description: 'A spellbinding mystery.', cover: '#2F4F4F', pages: 672, published: '2005' }
-      ];
-    } else {
-      return [
-        { id: 10, title: 'The Midnight Library', author: 'Matt Haig', rating: 4.6, genre: 'Fiction', description: 'Between life and death, there is a library.', cover: '#483D8B', pages: 304, published: '2020' },
-        { id: 11, title: 'Project Hail Mary', author: 'Andy Weir', rating: 4.8, genre: 'Sci-Fi', description: 'A lone astronaut must save humanity.', cover: '#CD5C5C', pages: 496, published: '2021' },
-        { id: 12, title: 'Educated', author: 'Tara Westover', rating: 4.7, genre: 'Memoir', description: 'A memoir of survival and transformation.', cover: '#DAA520', pages: 352, published: '2018' }
-      ];
-    }
-  };
-
-  const getMockResponse = (input) => {
-    const lowerInput = input.toLowerCase();
-    if (lowerInput.includes('fantasy') || lowerInput.includes('magic')) {
-      return "Based on your interest in fantasy, I recommend these magical books that have captivated millions of readers!";
-    } else if (lowerInput.includes('self help') || lowerInput.includes('motivation')) {
-      return "Looking to grow and improve? Here are some life-changing books that our community loves!";
-    } else if (lowerInput.includes('thriller') || lowerInput.includes('mystery')) {
-      return "If you love suspense and plot twists, you'll absolutely love these thrillers!";
-    } else {
-      return "I've found some fantastic books that match your interests. Take a look!";
-    }
-  };
-
   const handleJoinCrew = (book) => {
-    const crewExists = false;
-
-    if (crewExists) {
+    if (window.confirm(`No crew found for "${book.title}". Would you like to create one?`)) {
+      onCreateCrew(book);
       setPage('crews');
-    } else {
-      if (window.confirm(`No crew found for "${book.title}". Would you like to create one?`)) {
-        onCreateCrew(book);
-        setPage('crews');
-      }
     }
   };
 
@@ -1107,7 +990,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     setShowBookDetails(true);
   };
 
-  // Book Details Modal
   if (showBookDetails && selectedBook) {
     return (
       <div className="h-screen flex flex-col bg-gray-50">
@@ -1121,21 +1003,21 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
             <div className="flex gap-4 mb-6">
-              <div
+              <div 
                 className="w-28 h-36 rounded-xl shadow-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: selectedBook.cover }}
+                style={{ backgroundColor: selectedBook.cover || '#C8622A' }}
               >
                 <BookOpen className="w-12 h-12 text-white opacity-80" />
               </div>
               <div className="flex-1">
                 <span className="text-xs px-2 py-1 bg-orange-100 text-orange-600 rounded-full font-medium inline-block mb-2">
-                  {selectedBook.genre}
+                  {selectedBook.genre || 'General'}
                 </span>
                 <h2 className="font-bold text-gray-900 text-xl">{selectedBook.title}</h2>
                 <p className="text-sm text-gray-500">by {selectedBook.author}</p>
                 <div className="flex items-center gap-2 mt-2">
-                  <StarRating rating={selectedBook.rating} />
-                  <span className="text-sm font-medium">{selectedBook.rating}</span>
+                  <StarRating rating={selectedBook.rating || 4.5} />
+                  <span className="text-sm font-medium">{selectedBook.rating || 4.5}</span>
                 </div>
               </div>
             </div>
@@ -1144,34 +1026,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               <div>
                 <h3 className="font-semibold text-gray-900 mb-2">About this book</h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  {selectedBook.description}
+                  {selectedBook.description || 'A captivating book that readers love.'}
                 </p>
-              </div>
-
-              <div className="bg-gray-50 rounded-xl p-4">
-                <h3 className="font-semibold text-gray-900 mb-3">Book Details</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Author</span>
-                    <span className="text-gray-900 font-medium">{selectedBook.author}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Genre</span>
-                    <span className="text-gray-900 font-medium">{selectedBook.genre}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Pages</span>
-                    <span className="text-gray-900 font-medium">{selectedBook.pages}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Published</span>
-                    <span className="text-gray-900 font-medium">{selectedBook.published}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Rating</span>
-                    <span className="text-gray-900 font-medium">{selectedBook.rating}/5</span>
-                  </div>
-                </div>
               </div>
 
               <div className="flex gap-3">
@@ -1209,14 +1065,13 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             </div>
             <div>
               <h1 className="font-bold text-gray-900">AI Reading Assistant</h1>
-              <p className="text-xs text-gray-500">Powered by Groq AI</p>
+              <p className="text-xs text-gray-500">Powered by AI</p>
             </div>
           </div>
         </div>
         <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
       </div>
 
-      {/* Messages Container */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.map((message) => (
           <div key={message.id} className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}>
@@ -1229,28 +1084,27 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   <span className="text-xs font-medium text-gray-500">AI Assistant</span>
                 </div>
               )}
-
+              
               <div className={`rounded-2xl px-4 py-3 ${
-                message.type === 'user'
-                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+                message.type === 'user' 
+                  ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
                   : 'bg-white border border-gray-200 text-gray-800'
               }`}>
                 <p className="text-sm leading-relaxed">{message.content}</p>
               </div>
 
-              {/* Book Suggestions */}
               {message.books && message.books.length > 0 && (
                 <div className="mt-3 space-y-2">
                   {message.books.map((book, idx) => (
-                    <div
-                      key={idx}
+                    <div 
+                      key={idx} 
                       className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
                       onClick={() => handleBookClick(book)}
                     >
                       <div className="flex items-start gap-3">
-                        <div
+                        <div 
                           className="w-12 h-16 rounded-lg flex items-center justify-center shrink-0"
-                          style={{ backgroundColor: book.cover }}
+                          style={{ backgroundColor: book.cover || '#C8622A' }}
                         >
                           <BookOpen className="w-6 h-6 text-white" />
                         </div>
@@ -1258,11 +1112,10 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                           <h4 className="font-semibold text-gray-900">{book.title}</h4>
                           <p className="text-xs text-gray-500">by {book.author}</p>
                           <div className="flex items-center gap-1 mt-1">
-                            <StarRating rating={book.rating} size="xs" />
-                            <span className="text-xs text-gray-500 ml-1">{book.rating}</span>
+                            <StarRating rating={book.rating || 4.5} size="xs" />
+                            <span className="text-xs text-gray-500 ml-1">{book.rating || 4.5}</span>
                           </div>
-                          <p className="text-xs text-gray-600 mt-1 line-clamp-2">{book.description}</p>
-
+                          
                           <div className="flex items-center gap-2 mt-2">
                             <button
                               onClick={(e) => {
@@ -1290,14 +1143,14 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   ))}
                 </div>
               )}
-
+              
               <p className="text-[10px] text-gray-400 mt-1 px-2">
                 {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </p>
             </div>
           </div>
         ))}
-
+        
         {isLoading && (
           <div className="flex justify-start">
             <div className="bg-white border border-gray-200 rounded-2xl px-4 py-3">
@@ -1308,11 +1161,10 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             </div>
           </div>
         )}
-
+        
         <div ref={messagesEndRef} />
       </div>
 
-      {/* FIXED INPUT AREA - Always visible at bottom */}
       <div className="bg-white border-t border-gray-200 px-4 py-3 pb-safe">
         <div className="flex items-center gap-2">
           <button className="p-2 hover:bg-gray-100 rounded-full transition">
@@ -1332,7 +1184,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
               placeholder="Ask for book recommendations..."
               disabled={isLoading}
-              autoFocus
             />
             <button
               onClick={handleSendMessage}
@@ -1419,7 +1270,6 @@ const PostPage = ({ user, onPost, setPage }) => {
           </div>
         </div>
 
-        {/* Book Details */}
         <div className="space-y-3 mb-4">
           <input
             value={bookName}
@@ -1435,7 +1285,6 @@ const PostPage = ({ user, onPost, setPage }) => {
           />
         </div>
 
-        {/* Image Preview */}
         {image && (
           <div className="relative mb-4">
             <img src={image} alt="preview" className="w-full rounded-xl" />
@@ -1448,7 +1297,6 @@ const PostPage = ({ user, onPost, setPage }) => {
           </div>
         )}
 
-        {/* Post Options */}
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => fileRef.current?.click()}
@@ -1457,7 +1305,7 @@ const PostPage = ({ user, onPost, setPage }) => {
             <Camera className="w-4 h-4" />
             Add Photo
           </button>
-
+          
           <button
             onClick={() => setIsDonation(!isDonation)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition ${
@@ -1467,7 +1315,7 @@ const PostPage = ({ user, onPost, setPage }) => {
             <Gift className="w-4 h-4" />
             Donation Story
           </button>
-
+          
           <button
             onClick={() => setIsPublic(!isPublic)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition ${
@@ -1498,9 +1346,207 @@ const PostPage = ({ user, onPost, setPage }) => {
   );
 };
 
-// ─── FIXED CREWS PAGE WITH WORKING CHAT INPUT ───────────────────────────────
+// ─── REVIEWS PAGE ─────────────────────────────────────────────────────────
+const ReviewsPage = ({ user, setPage }) => {
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [newReview, setNewReview] = useState({
+    bookName: '',
+    author: '',
+    rating: 5,
+    review: '',
+    sentiment: 'positive'
+  });
+
+  useEffect(() => {
+    loadReviews();
+  }, []);
+
+  const loadReviews = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/reviews`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setReviews(data.reviews);
+      }
+    } catch (error) {
+      console.error('Error loading reviews:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateReview = async () => {
+    if (!newReview.bookName || !newReview.author || !newReview.review) {
+      alert('Please fill all fields');
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/api/reviews`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ...newReview,
+          userName: user.name,
+          userEmail: user.email
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        setReviews([data.review, ...reviews]);
+        setShowCreateForm(false);
+        setNewReview({
+          bookName: '',
+          author: '',
+          rating: 5,
+          review: '',
+          sentiment: 'positive'
+        });
+        
+        // Update user stats
+        const updatedUser = {
+          ...user,
+          stats: {
+            ...user.stats,
+            reviewsGiven: (user.stats?.reviewsGiven || 0) + 1
+          }
+        };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      }
+    } catch (error) {
+      console.error('Error creating review:', error);
+      alert('Failed to create review');
+    }
+  };
+
+  return (
+    <div className="pb-24 bg-gray-50 min-h-screen">
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
+        <button onClick={() => setPage('home')} className="p-1 hover:bg-gray-100 rounded-lg">
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <h2 className="font-semibold text-gray-900">Book Reviews</h2>
+        <button
+          onClick={() => setShowCreateForm(!showCreateForm)}
+          className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
+        >
+          {showCreateForm ? 'Cancel' : 'Write Review'}
+        </button>
+      </div>
+
+      <div className="px-4 py-4">
+        {showCreateForm && (
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Write a Review</h3>
+            
+            <div className="space-y-3 mb-4">
+              <input
+                type="text"
+                value={newReview.bookName}
+                onChange={(e) => setNewReview({...newReview, bookName: e.target.value})}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                placeholder="Book name"
+              />
+              <input
+                type="text"
+                value={newReview.author}
+                onChange={(e) => setNewReview({...newReview, author: e.target.value})}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                placeholder="Author"
+              />
+              
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Rating</label>
+                <StarRating 
+                  rating={newReview.rating} 
+                  onChange={(r) => setNewReview({...newReview, rating: r})}
+                />
+              </div>
+              
+              <textarea
+                value={newReview.review}
+                onChange={(e) => setNewReview({...newReview, review: e.target.value})}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                placeholder="Write your review..."
+                rows={4}
+              />
+              
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Sentiment</label>
+                <select
+                  value={newReview.sentiment}
+                  onChange={(e) => setNewReview({...newReview, sentiment: e.target.value})}
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                >
+                  <option value="positive">Positive</option>
+                  <option value="negative">Negative</option>
+                </select>
+              </div>
+            </div>
+            
+            <button
+              onClick={handleCreateReview}
+              className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium"
+            >
+              Submit Review
+            </button>
+          </div>
+        )}
+
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <LoadingSpinner />
+          </div>
+        ) : reviews.length === 0 ? (
+          <div className="text-center py-12">
+            <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No reviews yet. Be the first to write one!</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {reviews.map((review, idx) => (
+              <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <h3 className="font-semibold text-gray-900">{review.bookName}</h3>
+                    <p className="text-xs text-gray-500">by {review.author}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <StarRating rating={review.rating} size="xs" />
+                  </div>
+                </div>
+                
+                <p className="text-sm text-gray-700 mb-3">{review.review}</p>
+                
+                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                  <div className="flex items-center gap-2">
+                    <Avatar initials={review.userName?.slice(0, 2)} size="xs" color="#C8622A" />
+                    <span className="text-xs text-gray-500">{review.userName}</span>
+                  </div>
+                  <span className={`text-xs px-2 py-1 rounded-full ${
+                    review.sentiment === 'positive' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  }`}>
+                    {review.sentiment === 'positive' ? '👍 Positive' : '👎 Negative'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── CREWS PAGE ───────────────────────────────────────────────────────────
 const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
-  const [view, setView] = useState('list'); // 'list', 'chat', 'bookpage', 'about', 'similar'
+  const [view, setView] = useState('list');
   const [selectedCrew, setSelectedCrew] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -1514,7 +1560,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
-  // Load joined crews from localStorage
   useEffect(() => {
     const savedJoinedCrews = localStorage.getItem(`user_${user.email}_joinedCrews`);
     if (savedJoinedCrews) {
@@ -1540,14 +1585,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
   const loadCrewMessages = async () => {
     try {
-      // In production, fetch from API
       const mockMessages = [
         {
           id: 1,
           userId: 'user1',
           userName: 'Aman',
           userInitials: 'AM',
-          content: 'The part where Morrie says "Once you learn how to die, you learn how to live" really hit me. Such a powerful message!',
+          content: 'This book is amazing! The way it explores deep themes is incredible.',
           timestamp: new Date(Date.now() - 3600000),
           color: '#7B9EA6'
         },
@@ -1556,7 +1600,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           userId: 'user2',
           userName: 'Vikram',
           userInitials: 'VK',
-          content: 'A life-changing book. Makes you appreciate the simple things in life.',
+          content: 'I love how the author builds the characters. So relatable!',
           timestamp: new Date(Date.now() - 1800000),
           color: '#8B5E3C'
         },
@@ -1565,7 +1609,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           userId: 'user3',
           userName: 'Deepika',
           userInitials: 'DP',
-          content: "Mitch Albom's writing is so touching. I cried and felt inspired at the same time.",
+          content: 'Has anyone read the sequel? Is it as good as this one?',
           timestamp: new Date(Date.now() - 900000),
           color: '#C8956C'
         }
@@ -1578,14 +1622,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
   const loadCrewMembers = async () => {
     try {
-      // In production, fetch from API
       const mockMembers = [
         { id: 'user1', name: 'Aman', initials: 'AM', color: '#7B9EA6', online: true },
         { id: 'user2', name: 'Vikram', initials: 'VK', color: '#8B5E3C', online: false },
         { id: 'user3', name: 'Deepika', initials: 'DP', color: '#C8956C', online: true }
       ];
 
-      // Add current user if they've joined
       if (isUserJoined(selectedCrew?.id)) {
         mockMembers.push({
           id: user.id,
@@ -1604,7 +1646,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
   const loadSimilarBooks = async () => {
     try {
-      // In production, fetch from API
       const mockSimilar = [
         { id: 101, title: 'The Five People You Meet in Heaven', author: 'Mitch Albom', rating: 4.5, cover: '#8B4513' },
         { id: 102, title: 'For One More Day', author: 'Mitch Albom', rating: 4.3, cover: '#2C3E50' },
@@ -1632,13 +1673,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
     setMessages(prev => [...prev, message]);
     setNewMessage('');
-
-    try {
-      // In production, send to API
-      await chatAPI.sendMessage(selectedCrew.id, message);
-    } catch (error) {
-      console.error('Error sending message:', error);
-    }
   };
 
   const handleTyping = () => {
@@ -1652,17 +1686,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   };
 
   const handleJoinCrew = (crew) => {
-    // Update joined crews
     const updatedJoinedCrews = [...joinedCrews, crew.id];
     setJoinedCrews(updatedJoinedCrews);
     localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updatedJoinedCrews));
 
-    // Update crew members count
     setCrews(prev => prev.map(c =>
       c.id === crew.id ? { ...c, members: (c.members || 1) + 1 } : c
     ));
 
-    // Update user stats
     const updatedUser = {
       ...user,
       stats: {
@@ -1672,7 +1703,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     };
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
 
-    // Show join message
     setJoinMessage(`You've joined the ${crew.name} crew! 🎉`);
     setShowJoinMessage(true);
     setTimeout(() => setShowJoinMessage(false), 3000);
@@ -1688,7 +1718,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
         c.id === crew.id ? { ...c, members: Math.max(0, (c.members || 1) - 1) } : c
       ));
 
-      // Update user stats
       const updatedUser = {
         ...user,
         stats: {
@@ -1705,19 +1734,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     }
   };
 
-  const handleSimilarBookClick = (book) => {
-    // Navigate to book details
-    setPage('explore');
-  };
-
-  // Join message toast
   const JoinMessageToast = () => (
     <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] animate-slideDown">
       {joinMessage}
     </div>
   );
 
-  // Chat View
   if (view === 'chat' && selectedCrew) {
     const hasJoined = isUserJoined(selectedCrew.id);
 
@@ -1725,14 +1747,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       <div className="h-screen flex flex-col bg-gray-50">
         {showJoinMessage && <JoinMessageToast />}
 
-        {/* Chat Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
           <button onClick={() => setView('bookpage')} className="p-1 hover:bg-gray-100 rounded-lg">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
           <div className="flex items-center gap-2 flex-1 mx-3">
             <div className="relative">
-              <div
+              <div 
                 className="w-8 h-8 rounded-lg flex items-center justify-center"
                 style={{ backgroundColor: selectedCrew.cover }}
               >
@@ -1760,7 +1781,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           )}
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
           {!hasJoined ? (
             <div className="flex flex-col items-center justify-center h-full text-center">
@@ -1780,9 +1800,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                 return (
                   <div key={message.id} className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
                     {!isOwn && (
-                      <Avatar
-                        initials={message.userInitials}
-                        size="sm"
+                      <Avatar 
+                        initials={message.userInitials} 
+                        size="sm" 
                         color={message.color}
                         online={crewMembers.find(m => m.id === message.userId)?.online}
                       />
@@ -1792,8 +1812,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                         <p className="text-xs text-gray-500 mb-1 px-1">{message.userName}</p>
                       )}
                       <div className={`rounded-2xl px-4 py-2.5 ${
-                        isOwn
-                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+                        isOwn 
+                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
                           : 'bg-white border border-gray-200 text-gray-900'
                       }`}>
                         <p className="text-sm leading-relaxed">{message.content}</p>
@@ -1805,7 +1825,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   </div>
                 );
               })}
-
+              
               {isTyping && (
                 <div className="flex gap-2">
                   <Avatar initials="..." size="sm" color="#C8622A" />
@@ -1820,11 +1840,10 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               )}
             </>
           )}
-
+          
           <div ref={messagesEndRef} />
         </div>
 
-        {/* FIXED INPUT AREA - Only show if joined */}
         {hasJoined && (
           <div className="bg-white border-t border-gray-200 px-4 py-3 pb-safe">
             <div className="flex items-center gap-2">
@@ -1843,7 +1862,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   }}
                   className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
                   placeholder="Type a message..."
-                  autoFocus
                 />
                 <button
                   onClick={handleSendMessage}
@@ -1860,14 +1878,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     );
   }
 
-  // Book Detail View (Reviews, About, Similar)
   if (view !== 'list' && selectedCrew) {
     const hasJoined = isUserJoined(selectedCrew.id);
 
     return (
       <div className="h-screen flex flex-col bg-gray-50">
         {showJoinMessage && <JoinMessageToast />}
-
+        
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10">
           <button onClick={() => setView('list')} className="p-1 hover:bg-gray-100 rounded-lg">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
@@ -1879,9 +1896,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          {/* Book Info */}
           <div className="flex gap-4 mb-6">
-            <div
+            <div 
               className="w-24 h-32 rounded-xl shadow-lg flex items-center justify-center shrink-0"
               style={{ backgroundColor: selectedCrew.cover }}
             >
@@ -1896,7 +1912,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               <div className="flex items-center gap-2 mt-2">
                 <StarRating rating={4.5} />
                 <span className="text-sm font-medium">4.5</span>
-                <span className="text-xs text-gray-400">(22k reviews)</span>
               </div>
               <div className="flex items-center gap-3 mt-2">
                 <div className="flex items-center gap-1">
@@ -1904,7 +1919,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   <span className="text-sm text-gray-600">{crewMembers.length} members</span>
                 </div>
                 {!hasJoined ? (
-                  <button
+                  <button 
                     onClick={() => handleJoinCrew(selectedCrew)}
                     className="px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
                   >
@@ -1919,7 +1934,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-4 border-b border-gray-200 mb-4">
             {['Reviews', 'Crew Chat', 'About', 'Similar'].map((tab) => (
               <button
@@ -1936,7 +1950,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             ))}
           </div>
 
-          {/* Reviews Tab */}
           {view === 'reviews' && (
             <div className="space-y-4">
               <div className="flex items-center gap-4 mb-4">
@@ -1946,7 +1959,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   <p className="text-sm text-gray-500 mt-1">Based on 22,847 reviews</p>
                 </div>
               </div>
-
+              
               {[1, 2, 3].map((i) => (
                 <div key={i} className="bg-white rounded-xl p-4 border border-gray-200">
                   <div className="flex items-center gap-3 mb-2">
@@ -1967,7 +1980,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             </div>
           )}
 
-          {/* Crew Chat Tab */}
           {view === 'crewchat' && (
             <div className="space-y-4">
               {!hasJoined ? (
@@ -1989,7 +2001,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   >
                     Join the Discussion
                   </button>
-
+                  
                   {messages.slice(-3).map((msg) => (
                     <div key={msg.id} className="flex gap-3">
                       <Avatar initials={msg.userInitials} size="sm" color={msg.color} />
@@ -2009,17 +2021,16 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             </div>
           )}
 
-          {/* About Tab */}
           {view === 'about' && (
             <div className="space-y-4">
               <div className="bg-white rounded-xl p-4 border border-gray-200">
                 <h3 className="font-semibold text-gray-900 mb-2">About this book</h3>
                 <p className="text-sm text-gray-600 leading-relaxed">
-                  {selectedCrew.name} by {selectedCrew.author} is a powerful and inspiring book that has touched millions of readers worldwide.
+                  {selectedCrew.name} by {selectedCrew.author} is a powerful and inspiring book that has touched millions of readers worldwide. 
                   It explores deep themes of life, purpose, and human connection through compelling storytelling and profound insights.
                 </p>
               </div>
-
+              
               <div className="bg-white rounded-xl p-4 border border-gray-200">
                 <h3 className="font-semibold text-gray-900 mb-2">Book Details</h3>
                 <div className="space-y-2 text-sm">
@@ -2044,17 +2055,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             </div>
           )}
 
-          {/* Similar Books Tab */}
           {view === 'similar' && (
             <div className="space-y-3">
               {similarBooks.map((book, i) => (
-                <div
-                  key={i}
-                  className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition"
-                  onClick={() => handleSimilarBookClick(book)}
-                >
+                <div key={i} className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition">
                   <div className="flex items-start gap-3">
-                    <div
+                    <div 
                       className="w-12 h-16 rounded-lg flex items-center justify-center"
                       style={{ backgroundColor: book.cover }}
                     >
@@ -2081,15 +2087,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     );
   }
 
-  // Crews List View
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
       {showJoinMessage && <JoinMessageToast />}
-
-      <TopBar user={user} setPage={setPage} title="Reading Crews" />
-
+      
+      <TopBar user={user} setPage={setPage} title="Reading Crews" showProfile={false} />
+      
       <div className="px-4 py-4">
-        {/* Search and Create */}
         <div className="flex gap-2 mb-5">
           <div className="flex-1 flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm">
             <Search className="w-4 h-4 text-gray-400" />
@@ -2103,7 +2107,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           </button>
         </div>
 
-        {/* My Crews */}
         <div className="mb-6">
           <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
             <Users className="w-5 h-5 text-orange-500" />
@@ -2127,7 +2130,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   </div>
                   <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
                     <div className="absolute inset-0 flex items-center px-4 gap-4">
-                      <div
+                      <div 
                         className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
                         style={{ backgroundColor: crew.cover }}
                       >
@@ -2151,7 +2154,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           </div>
         </div>
 
-        {/* Discover Crews */}
         <div>
           <h2 className="text-lg font-bold text-gray-900 mb-3">Discover Crews</h2>
           <div className="space-y-3">
@@ -2163,7 +2165,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               >
                 <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
                   <div className="absolute inset-0 flex items-center px-4 gap-4">
-                    <div
+                    <div 
                       className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
                       style={{ backgroundColor: crew.cover }}
                     >
@@ -2182,7 +2184,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   </div>
                 </div>
                 <div className="px-4 py-3 flex justify-end">
-                  <button
+                  <button 
                     onClick={(e) => { e.stopPropagation(); handleJoinCrew(crew); }}
                     className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold"
                   >
@@ -2207,7 +2209,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
     postsCreated: 0,
     crewsJoined: 0
   });
-  const [readingGoal, setReadingGoal] = useState(user?.readingGoal || { yearly: 20, monthly: 5 });
+  const [readingGoal, setReadingGoal] = useState(user?.readingGoal || { yearly: 0, monthly: 0 });
   const [showEditGoal, setShowEditGoal] = useState(false);
   const [editGoal, setEditGoal] = useState(readingGoal);
 
@@ -2215,7 +2217,6 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
   const myPosts = posts.filter(p => p.user === user?.name);
 
   useEffect(() => {
-    // Load user stats from localStorage
     const savedStats = localStorage.getItem(`user_${user.email}_stats`);
     if (savedStats) {
       setUserStats(JSON.parse(savedStats));
@@ -2248,7 +2249,6 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
       </div>
 
       <div className="px-4 py-5">
-        {/* Profile Header */}
         <div className="flex items-start gap-4 mb-6">
           <div className="relative">
             <Avatar initials={user?.name?.slice(0, 2)} size="xl" color="#C8622A" />
@@ -2266,14 +2266,13 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           </div>
         </div>
 
-        {/* Reading Goal Card */}
         <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100 mb-5">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Target className="w-4 h-4 text-orange-500" />
               <h3 className="font-semibold text-gray-900">Reading Goal {new Date().getFullYear()}</h3>
             </div>
-            <button
+            <button 
               onClick={() => setShowEditGoal(!showEditGoal)}
               className="text-sm text-orange-500 font-medium"
             >
@@ -2290,8 +2289,9 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
                   value={editGoal.yearly}
                   onChange={(e) => setEditGoal({...editGoal, yearly: parseInt(e.target.value) || 0})}
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
-                  min="1"
+                  min="0"
                   max="100"
+                  placeholder="e.g., 20"
                 />
               </div>
               <div>
@@ -2301,8 +2301,9 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
                   value={editGoal.monthly}
                   onChange={(e) => setEditGoal({...editGoal, monthly: parseInt(e.target.value) || 0})}
                   className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
-                  min="1"
+                  min="0"
                   max="20"
+                  placeholder="e.g., 5"
                 />
               </div>
               <button
@@ -2316,23 +2317,28 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
             <>
               <div className="flex items-center justify-between text-sm mb-1">
                 <span className="text-gray-600">Progress</span>
-                <span className="font-semibold text-gray-900">{userStats.booksRead}/{readingGoal.yearly} books</span>
+                <span className="font-semibold text-gray-900">
+                  {readingGoal.yearly > 0 ? `${userStats.booksRead}/${readingGoal.yearly} books` : 'No goal set'}
+                </span>
               </div>
-              <div className="h-2 bg-orange-200 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-orange-500 rounded-full transition-all duration-500"
-                  style={{ width: `${(userStats.booksRead / readingGoal.yearly) * 100}%` }}
-                />
-              </div>
-              <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
-                <span>Monthly: {userStats.booksRead}/{readingGoal.monthly}</span>
-                <span>{Math.round((userStats.booksRead / readingGoal.yearly) * 100)}% Complete</span>
-              </div>
+              {readingGoal.yearly > 0 && (
+                <>
+                  <div className="h-2 bg-orange-200 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full bg-orange-500 rounded-full transition-all duration-500"
+                      style={{ width: `${(userStats.booksRead / readingGoal.yearly) * 100}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
+                    <span>Monthly: {readingGoal.monthly > 0 ? `${userStats.booksRead}/${readingGoal.monthly}` : 'No goal'}</span>
+                    <span>{Math.round((userStats.booksRead / readingGoal.yearly) * 100)}% Complete</span>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>
 
-        {/* Stats Grid */}
         <div className="grid grid-cols-4 gap-2 bg-white rounded-xl p-3 border border-gray-200 mb-5">
           {[
             { label: 'Books', value: userStats.booksRead, icon: BookOpen, color: 'text-blue-600' },
@@ -2348,15 +2354,14 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           ))}
         </div>
 
-        {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-4">
           {tabs.map(tab => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
               className={`flex-1 text-sm pb-2.5 font-medium border-b-2 transition ${
-                activeTab === tab
-                  ? 'text-orange-500 border-orange-500'
+                activeTab === tab 
+                  ? 'text-orange-500 border-orange-500' 
                   : 'text-gray-500 border-transparent hover:text-gray-700'
               }`}
             >
@@ -2365,14 +2370,13 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           ))}
         </div>
 
-        {/* Posts Tab */}
         {activeTab === 'Posts' && (
           <div className="space-y-4">
             {myPosts.length === 0 ? (
               <div className="text-center py-8">
                 <Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No posts yet</p>
-                <button
+                <button 
                   onClick={() => setPage('post')}
                   className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
                 >
@@ -2415,7 +2419,6 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           </div>
         )}
 
-        {/* Other Tabs */}
         {activeTab !== 'Posts' && (
           <div className="text-center py-12">
             <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
@@ -2423,420 +2426,6 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           </div>
         )}
       </div>
-    </div>
-  );
-};
-
-// ─── RECOMMENDATIONS PAGE ───────────────────────────────────────────────────
-const RecommendationsPage = ({ user, setPage }) => {
-  const [recommendKeywords, setRecommendKeywords] = useState('');
-  const [recommendations, setRecommendations] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const handleAIRecommendation = async () => {
-    if (!recommendKeywords.trim()) {
-      alert('Please enter what you want to read');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      console.log('🤖 Requesting AI recommendations for:', recommendKeywords);
-
-      const response = await axios.post(`${process.env.REACT_APP_API_URL || 'http://localhost:5000'}/api/recommend/ai`, {
-        query: recommendKeywords
-      });
-
-      if (response.data.success) {
-        console.log('✅ AI recommendations received:', response.data);
-
-        // Format for display
-        setRecommendations([{
-          type: 'ai',
-          query: response.data.query,
-          recommendations: response.data.recommendations,
-          source: response.data.source,
-          isAI: response.data.isAI
-        }]);
-
-        alert(`${response.data.isAI ? '🤖 AI' : '📚'} recommendations loaded!`);
-      } else {
-        throw new Error(response.data.message || 'Failed to get recommendations');
-      }
-    } catch (error) {
-      console.error('❌ Error getting AI recommendations:', error);
-
-      // Show error but don't fail completely - fallback to regular search
-      alert('AI unavailable, using database search');
-      handleRecommendation(); // Fallback to regular search
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRecommendation = async () => {
-    if (!recommendKeywords.trim()) {
-      alert('Please enter what you want to read');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // Fallback to old static logic if AI fails
-      const keywords = recommendKeywords.toLowerCase().trim();
-      const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
-        const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
-        return categoryText.includes(keywords) ||
-               category.books.some(book =>
-                 book.title.toLowerCase().includes(keywords) ||
-                 book.author.toLowerCase().includes(keywords)
-               );
-      });
-
-      if (matchingCategories.length > 0) {
-        const results = [];
-        matchingCategories.forEach(category => {
-          results.push({
-            type: 'category',
-            category: category.category,
-            emoji: category.emoji,
-            description: category.description,
-            books: category.books
-          });
-        });
-        setRecommendations(results);
-      } else {
-        const allBooks = BOOK_RECOMMENDATIONS.flatMap(category =>
-          category.books.map(book => ({
-            ...book,
-            category: category.category,
-            emoji: category.emoji
-          }))
-        );
-
-        const filteredBooks = allBooks.filter(book =>
-          book.title.toLowerCase().includes(keywords) ||
-          book.author.toLowerCase().includes(keywords)
-        );
-
-        if (filteredBooks.length > 0) {
-          setRecommendations([
-            {
-              type: 'keyword',
-              keyword: keywords,
-              books: filteredBooks.slice(0, 10)
-            }
-          ]);
-        } else {
-          setRecommendations([
-            {
-              type: 'popular',
-              title: 'Most Popular Books',
-              books: [
-                { title: 'Atomic Habits', author: 'James Clear', category: 'Motivational / Self-Help', rating: 4.8 },
-                { title: 'The Hobbit', author: 'J.R.R. Tolkien', category: 'Fantasy', rating: 4.7 },
-                { title: 'To Kill a Mockingbird', author: 'Harper Lee', category: 'Literary Fiction', rating: 4.8 },
-                { title: 'The Diary of a Young Girl', author: 'Anne Frank', category: 'Biography', rating: 4.8 },
-                { title: 'The Power of Now', author: 'Eckhart Tolle', category: 'Philosophy', rating: 4.3 }
-              ]
-            }
-          ]);
-        }
-      }
-    } catch (error) {
-      console.error('Error in recommendation:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBrowseCategories = () => {
-    setRecommendations(
-      BOOK_RECOMMENDATIONS.map(category => ({
-        type: 'category',
-        category: category.category,
-        emoji: category.emoji,
-        description: category.description,
-        books: category.books.slice(0, 3)
-      }))
-    );
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <button onClick={() => setPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
-        <ChevronLeft className="w-5 h-5" /> Back to Home
-      </button>
-
-      <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-12">
-        <h1 className="text-4xl font-bold text-white mb-2">🤖 AI Book Recommendations</h1>
-        <p className="text-orange-100">Powered by Groq AI - Get personalized suggestions instantly!</p>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
-        <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-orange-500" />
-          Ask AI for Recommendations
-        </h2>
-
-        <div className="grid md:grid-cols-2 gap-8">
-          <div>
-            <div className="relative mb-6">
-              <Sparkles className="absolute left-4 top-4 text-orange-500" />
-              <input
-                type="text"
-                value={recommendKeywords}
-                onChange={(e) => setRecommendKeywords(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAIRecommendation()}
-                className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                placeholder="e.g., books like Harry Potter, mystery thrillers, self-help..."
-              />
-            </div>
-
-            <button
-              onClick={handleAIRecommendation}
-              disabled={!recommendKeywords || loading}
-              className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Getting AI Recommendations...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Get AI Recommendations
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={handleRecommendation}
-              disabled={!recommendKeywords}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4"
-            >
-              📚 Quick Search (Database)
-            </button>
-
-            <button
-              onClick={handleBrowseCategories}
-              className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all"
-            >
-              Browse All Categories
-            </button>
-          </div>
-
-          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-orange-500" />
-              How to Use AI Search:
-            </h3>
-            <ul className="space-y-3 text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Be specific:</strong> "fantasy books with strong female leads"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Describe mood:</strong> "books to help me relax after work"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Compare:</strong> "books like Harry Potter but for adults"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Ask naturally:</strong> "I want to learn about investing"</span>
-              </li>
-            </ul>
-
-            <div className="mt-6 p-4 bg-white rounded-lg border border-orange-200">
-              <p className="text-sm text-gray-600">
-                🤖 <strong>Powered by Groq AI</strong> - Lightning-fast responses with personalized recommendations!
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Recommendations Display */}
-      {recommendations.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                {recommendations[0].isAI ? (
-                  <>
-                    <Sparkles className="w-6 h-6 text-orange-500" />
-                    AI Recommendations for "{recommendations[0].query}"
-                  </>
-                ) : recommendations[0].type === 'category' ? (
-                  'Recommended Categories'
-                ) : recommendations[0].type === 'keyword' ? (
-                  `Results for "${recommendations[0].keyword}"`
-                ) : (
-                  'Popular Recommendations'
-                )}
-              </h2>
-              {recommendations[0].source && (
-                <p className="text-sm text-gray-500 mt-1">
-                  📡 Source: {recommendations[0].source}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => setRecommendations([])}
-              className="text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-100"
-            >
-              Clear Results
-            </button>
-          </div>
-
-          {/* AI Results (new format) */}
-          {recommendations[0].isAI && recommendations[0].recommendations && (
-            <div className="space-y-4">
-              {recommendations[0].recommendations.map((book, idx) => (
-                <div key={idx} className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100 hover:border-orange-300 transition">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center text-white font-bold text-xl">
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900">{book.title}</h3>
-                          <p className="text-gray-600">by {book.author}</p>
-                          <p className="text-sm text-orange-600 font-semibold mt-1">
-                            📚 {book.genre}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full">
-                          <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                          <span className="font-bold">{book.rating}</span>
-                        </div>
-                      </div>
-
-                      {book.description && (
-                        <p className="text-gray-700 mb-3 leading-relaxed">
-                          {book.description}
-                        </p>
-                      )}
-
-                      {book.reason && (
-                        <div className="bg-white rounded-lg p-3 border border-orange-200">
-                          <p className="text-sm text-gray-600">
-                            <span className="font-semibold text-orange-600">💡 Why you'd like it:</span> {book.reason}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Original category/keyword results (keep existing code) */}
-          {!recommendations[0].isAI && (
-            <div className="space-y-8">
-              {recommendations.map((rec, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-2xl overflow-hidden">
-                  {rec.type === 'category' ? (
-                    <div>
-                      <div className="bg-gradient-to-r from-orange-100 to-red-100 p-6">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{rec.emoji}</span>
-                          <div>
-                            <h3 className="text-xl font-bold text-gray-900">{rec.category}</h3>
-                            <p className="text-gray-600">{rec.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="p-6">
-                        <h4 className="font-semibold text-gray-700 mb-4">Recommended Books:</h4>
-                        <div className="grid md:grid-cols-2 gap-4">
-                          {rec.books.map((book, bookIdx) => (
-                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
-                                  <p className="text-sm text-gray-600">by {book.author}</p>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                  <span className="text-sm font-semibold">{book.rating}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-6">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          {rec.type === 'keyword' ? `Books matching "${rec.keyword}"` : rec.title}
-                        </h3>
-                      </div>
-                      <div className="p-6">
-                        <div className="grid md:grid-cols-2 gap-4">
-                          {rec.books.map((book, bookIdx) => (
-                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
-                                  <p className="text-sm text-gray-600">by {book.author}</p>
-                                  {book.category && (
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                                        {book.category}
-                                      </span>
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                  <span className="text-sm font-semibold">{book.rating}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Quick Category Grid */}
-      {recommendations.length === 0 && (
-        <div className="mt-8">
-          <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Categories</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {BOOK_RECOMMENDATIONS.slice(0, 12).map(category => (
-              <button
-                key={category.id}
-                onClick={() => {
-                  setRecommendKeywords(category.category.toLowerCase());
-                  setTimeout(() => handleRecommendation(), 100);
-                }}
-                className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition text-center border border-gray-200 hover:border-orange-300"
-              >
-                <div className="text-2xl mb-2">{category.emoji}</div>
-                <p className="text-sm font-medium text-gray-700 truncate">{category.category}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -2859,7 +2448,6 @@ export default function App() {
   const [notification, setNotification] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
 
-  // Check for saved user on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
     if (savedUser) {
@@ -2876,7 +2464,6 @@ export default function App() {
 
   const loadUserData = async (user) => {
     try {
-      // Load user's posts, donations, etc.
       const userPosts = JSON.parse(localStorage.getItem(`user_${user.email}_posts`) || '[]');
       setPosts(userPosts);
     } catch (error) {
@@ -2903,11 +2490,9 @@ export default function App() {
 
     const updatedPosts = [newPost, ...posts];
     setPosts(updatedPosts);
-
-    // Save to localStorage
+    
     localStorage.setItem(`user_${currentUser.email}_posts`, JSON.stringify(updatedPosts));
-
-    // Update user stats
+    
     const updatedUser = {
       ...currentUser,
       stats: {
@@ -2917,7 +2502,7 @@ export default function App() {
     };
     setCurrentUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-
+    
     showNotification('Post created successfully!', 'success');
   };
 
@@ -2933,7 +2518,7 @@ export default function App() {
       createdBy: currentUser.email,
       createdAt: new Date().toISOString()
     };
-
+    
     setCrews(prev => [newCrew, ...prev]);
     showNotification(`Crew "${book.title}" created! Invite friends to join.`, 'success');
   };
@@ -2960,7 +2545,6 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Notification */}
       {notification && (
         <div className={`fixed top-4 right-4 left-4 max-w-md mx-auto px-4 py-3 rounded-xl text-white text-sm font-medium shadow-lg z-[100] ${
           notification.type === 'success' ? 'bg-green-500' :
@@ -2973,7 +2557,7 @@ export default function App() {
 
       <div className="max-w-md mx-auto relative">
         {currentPage === 'home' && (
-          <HomePage
+          <HomePage 
             user={currentUser}
             posts={posts}
             setPosts={setPosts}
@@ -2984,56 +2568,56 @@ export default function App() {
             onUpdateStats={handleUpdateStats}
           />
         )}
-
+        
         {currentPage === 'explore' && (
-          <ExplorePage
-            user={currentUser}
+          <ExplorePage 
+            user={currentUser} 
             setPage={setCurrentPage}
             onCreateCrew={handleCreateCrew}
           />
         )}
-
+        
         {currentPage === 'post' && (
-          <PostPage
-            user={currentUser}
-            onPost={handlePost}
-            setPage={setCurrentPage}
+          <PostPage 
+            user={currentUser} 
+            onPost={handlePost} 
+            setPage={setCurrentPage} 
           />
         )}
-
+        
         {currentPage === 'crews' && (
-          <CrewsPage
-            user={currentUser}
+          <CrewsPage 
+            user={currentUser} 
             crews={crews}
-            setPage={setCurrentPage}
+            setPage={setCurrentPage} 
           />
         )}
-
-        {currentPage === 'recommend' && (
-          <RecommendationsPage
+        
+        {currentPage === 'reviews' && (
+          <ReviewsPage 
             user={currentUser}
             setPage={setCurrentPage}
           />
         )}
-
+        
         {currentPage === 'profile' && (
-          <ProfilePage
-            user={currentUser}
-            posts={posts}
+          <ProfilePage 
+            user={currentUser} 
+            posts={posts} 
             setPage={setCurrentPage}
             onUpdateStats={handleUpdateStats}
-            onLogout={() => {
-              setIsLoggedIn(false);
-              setCurrentUser(null);
+            onLogout={() => { 
+              setIsLoggedIn(false); 
+              setCurrentUser(null); 
               localStorage.removeItem('currentUser');
               setCurrentPage('home');
-            }}
+            }} 
           />
         )}
-
-        <BottomNav
-          active={currentPage}
-          setPage={setCurrentPage}
+        
+        <BottomNav 
+          active={currentPage} 
+          setPage={setCurrentPage} 
           unreadCount={unreadMessages}
         />
       </div>

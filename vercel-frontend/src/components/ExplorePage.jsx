@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Sparkles, ChevronLeft, Search, BookOpen } from 'lucide-react';
-import { getBookRecommendations } from '../services/api';
-import { getBookDetails, getPlaceholderGradient } from '../utils/bookCoverAPI';
+import { Sparkles, ChevronLeft, Search, BookOpen, UserPlus } from 'lucide-react';
+import axios from 'axios';
+
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
 
 // Smart keyword suggestions based on what user types
 const SUGGESTION_MAP = {
@@ -76,73 +77,23 @@ const getSuggestions = (input) => {
   ];
 };
 
-// Parse AI response into book objects
-const parseBooks = (text) => {
-  const books = [];
-  const sections = text.split(/\n(?=\d+\.|##|\*\*)/);
-  for (const section of sections) {
-    const titleMatch = section.match(/\*\*(.+?)\*\*\s+by\s+(.+?)[\n\*]/);
-    if (titleMatch) {
-      const rest = section.replace(/\*\*.*?\*\*\s+by\s+.+?\n/, '').trim();
-      books.push({
-        title: titleMatch[1].trim(),
-        author: titleMatch[2].trim(),
-        description: rest.replace(/\*+/g, '').replace(/\n/g, ' ').trim().slice(0, 160),
-        coverUrl: null, // Will be fetched
-        loading: true,
-      });
-    }
-  }
-  return books.slice(0, 6);
-};
-
-// Book Card Component with real cover
-const BookCard = ({ book, index, setPage }) => {
-  const [coverUrl, setCoverUrl] = useState(null);
-  const [imageError, setImageError] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Fetch real cover
-    const fetchCover = async () => {
-      const details = await getBookDetails(book.title, book.author);
-      if (details.coverUrl) {
-        setCoverUrl(details.coverUrl);
-      }
-      setLoading(false);
-    };
-    fetchCover();
-  }, [book.title, book.author]);
-
-  const gradient = getPlaceholderGradient(book.title);
+// Book Card Component
+const BookCard = ({ book, onJoinCrew, onInvite }) => {
+  const getBookColor = (title) => {
+    const colors = ['#C8622A', '#7B9EA6', '#8B5E3C', '#C8956C', '#2D2419'];
+    const hash = title.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
+  };
 
   return (
     <div className="bg-white rounded-2xl border border-[#EDE8E3] overflow-hidden shadow-sm hover:shadow-md transition">
       <div className="flex gap-4 p-4">
-        {/* Book cover with real image or gradient fallback */}
-        <div className="relative shrink-0" style={{ width: '80px', height: '120px' }}>
-          {loading ? (
-            <div
-              className="w-full h-full rounded-xl flex items-center justify-center"
-              style={{ background: gradient }}
-            >
-              <div className="w-6 h-6 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-            </div>
-          ) : coverUrl && !imageError ? (
-            <img
-              src={coverUrl}
-              alt={book.title}
-              onError={() => setImageError(true)}
-              className="w-full h-full object-cover rounded-xl shadow-lg"
-            />
-          ) : (
-            <div
-              className="w-full h-full rounded-xl flex items-center justify-center shadow-md"
-              style={{ background: gradient }}
-            >
-              <BookOpen className="w-8 h-8 text-white" />
-            </div>
-          )}
+        {/* Book cover */}
+        <div 
+          className="shrink-0 w-20 h-28 rounded-xl flex items-center justify-center shadow-md"
+          style={{ backgroundColor: getBookColor(book.title) }}
+        >
+          <BookOpen className="w-8 h-8 text-white" />
         </div>
 
         <div className="flex-1 min-w-0">
@@ -150,35 +101,46 @@ const BookCard = ({ book, index, setPage }) => {
             {book.title}
           </h3>
           <p className="text-sm text-[#9B8E84] mt-0.5">by {book.author}</p>
+          {book.genre && (
+            <span className="inline-block text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full mt-1">
+              {book.genre}
+            </span>
+          )}
           {book.description && (
-            <p className="text-xs text-[#6B5D52] mt-2 leading-relaxed line-clamp-3">{book.description}</p>
+            <p className="text-xs text-[#6B5D52] mt-2 leading-relaxed line-clamp-2">{book.description}</p>
+          )}
+          {book.reason && (
+            <p className="text-xs text-[#8B7968] italic mt-1 line-clamp-2">💡 {book.reason}</p>
           )}
         </div>
       </div>
       <div className="px-4 pb-4 flex gap-2">
         <button
-          onClick={() => setPage('crews')}
+          onClick={() => onJoinCrew(book)}
           className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold hover:bg-[#B05520] transition"
         >
           Join Crew
         </button>
-        <button className="px-4 py-2.5 border border-[#EDE8E3] text-[#6B5D52] rounded-xl text-sm font-medium hover:bg-[#FAF6F1] transition">
-          Reviews
+        <button 
+          onClick={() => onInvite(book)}
+          className="px-4 py-2.5 border border-[#EDE8E3] text-[#6B5D52] rounded-xl text-sm font-medium hover:bg-[#FAF6F1] transition"
+        >
+          <UserPlus className="w-4 h-4 inline" />
         </button>
       </div>
     </div>
   );
 };
 
-const ExplorePage = ({ user, setPage }) => {
+const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [query, setQuery] = useState('');
   const [intensity, setIntensity] = useState(50);
   const [suggestions, setSuggestions] = useState(DEFAULT_SUGGESTIONS);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState([]);
-  const [aiText, setAiText] = useState('');
   const [searched, setSearched] = useState(false);
+  const [selectedTags, setSelectedTags] = useState([]);
   const inputRef = useRef();
 
   useEffect(() => {
@@ -194,33 +156,91 @@ const ExplorePage = ({ user, setPage }) => {
   const handleSuggestionClick = (label) => {
     setQuery(label);
     setShowSuggestions(false);
+    if (!selectedTags.includes(label)) {
+      setSelectedTags([...selectedTags, label]);
+    }
     inputRef.current?.focus();
+  };
+
+  const removeTag = (tag) => {
+    setSelectedTags(selectedTags.filter(t => t !== tag));
   };
 
   const handleFindBook = async () => {
     if (!query.trim()) return;
+    
     setLoading(true);
     setSearched(true);
     setResults([]);
-    setAiText('');
     setShowSuggestions(false);
 
-    const intensityLabel = intensity < 33 ? 'light and easy to read' : intensity < 66 ? 'moderately engaging' : 'deep and intellectually intense';
-    const prompt = `${query}, books that are ${intensityLabel}`;
+    const intensityLabel = 
+      intensity < 33 ? 'light and easy to read' : 
+      intensity < 66 ? 'moderately engaging' : 
+      'deep and intellectually intense';
+    
+    const fullQuery = `${query}. Books that are ${intensityLabel}. Recommend 5 books.`;
 
-    let fullText = '';
     try {
-      await getBookRecommendations(
-        prompt,
-        (token) => { fullText += token; setAiText(fullText); },
-        () => {
-          const parsed = parseBooks(fullText);
-          setResults(parsed);
-          setLoading(false);
-        }
-      );
-    } catch {
+      const response = await axios.post(`${API_URL}/api/recommend/ai`, {
+        query: fullQuery
+      });
+
+      if (response.data.success && response.data.recommendations) {
+        setResults(response.data.recommendations);
+      } else {
+        // Fallback to mock data
+        setResults(getMockRecommendations(query));
+      }
+    } catch (error) {
+      console.error('Error fetching AI recommendations:', error);
+      // Fallback to mock data
+      setResults(getMockRecommendations(query));
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const getMockRecommendations = (searchQuery) => {
+    const lower = searchQuery.toLowerCase();
+    
+    if (lower.includes('space') || lower.includes('sci-fi')) {
+      return [
+        { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', description: 'A lone astronaut must save humanity', reason: 'Perfect blend of science and adventure' },
+        { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', description: 'Survival on Mars', reason: 'Humorous and scientifically accurate' },
+        { title: 'Dune', author: 'Frank Herbert', genre: 'Sci-Fi', description: 'Epic space opera', reason: 'Classic worldbuilding and politics' },
+      ];
+    } else if (lower.includes('motivation') || lower.includes('self')) {
+      return [
+        { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', description: 'Tiny changes, remarkable results', reason: 'Practical and easy to implement' },
+        { title: 'The 7 Habits of Highly Effective People', author: 'Stephen Covey', genre: 'Self-Help', description: 'Timeless principles for success', reason: 'Life-changing framework' },
+        { title: 'Can\'t Hurt Me', author: 'David Goggins', genre: 'Motivation', description: 'Master your mind and defy the odds', reason: 'Incredibly inspiring and raw' },
+      ];
+    } else {
+      return [
+        { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', description: 'Between life and death, there is a library', reason: 'Beautiful and thought-provoking' },
+        { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', description: 'A lone astronaut must save humanity', reason: 'Perfect blend of science and adventure' },
+        { title: 'Educated', author: 'Tara Westover', genre: 'Memoir', description: 'A memoir of survival and transformation', reason: 'Powerful and moving story' },
+      ];
+    }
+  };
+
+  const handleJoinCrew = (book) => {
+    if (window.confirm(`Join or create a crew for "${book.title}"?`)) {
+      onCreateCrew(book);
+      setPage('crews');
+    }
+  };
+
+  const handleInvite = (book) => {
+    if (navigator.share) {
+      navigator.share({
+        title: `Let's read ${book.title} together!`,
+        text: `I found this amazing book "${book.title}" by ${book.author}. Want to start a reading crew?`,
+        url: window.location.href,
+      });
+    } else {
+      alert('Invite your friends to read this book together!');
     }
   };
 
@@ -231,7 +251,7 @@ const ExplorePage = ({ user, setPage }) => {
         {/* Header */}
         <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center gap-3 border-b border-[#EDE8E3]">
           <button
-            onClick={() => { setSearched(false); setResults([]); setAiText(''); }}
+            onClick={() => { setSearched(false); setResults([]); }}
             className="p-2 hover:bg-[#F0E8DF] rounded-xl transition"
           >
             <ChevronLeft className="w-5 h-5 text-[#6B5D52]" />
@@ -243,29 +263,22 @@ const ExplorePage = ({ user, setPage }) => {
         </div>
 
         <div className="px-4 py-5">
-          {loading && results.length === 0 && (
+          {loading && (
             <div className="text-center py-16">
               <div className="relative w-16 h-16 mx-auto mb-5">
                 <div className="w-16 h-16 border-4 border-[#F0E8DF] border-t-[#C8622A] rounded-full animate-spin" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <BookOpen className="w-6 h-6 text-[#C8622A]" />
+                  <Sparkles className="w-6 h-6 text-[#C8622A]" />
                 </div>
               </div>
-              <p className="text-[#6B5D52] font-medium" style={{ fontFamily: 'Georgia, serif' }}>Finding your perfect book...</p>
+              <p className="text-[#6B5D52] font-medium" style={{ fontFamily: 'Georgia, serif' }}>
+                Finding your perfect book...
+              </p>
               <p className="text-xs text-[#9B8E84] mt-1">Based on: "{query}"</p>
             </div>
           )}
 
-          {/* Streaming AI text if no parsed books yet */}
-          {loading && aiText && results.length === 0 && (
-            <div className="bg-white rounded-2xl p-5 border border-[#EDE8E3] mb-4">
-              <p className="text-sm text-[#6B5D52] leading-relaxed whitespace-pre-wrap">{aiText}
-                <span className="inline-block w-0.5 h-4 bg-[#C8622A] animate-pulse ml-0.5 align-middle" />
-              </p>
-            </div>
-          )}
-
-          {/* Book Result Cards with REAL covers */}
+          {/* Book Results */}
           {results.length > 0 && (
             <>
               <div className="flex items-center gap-2 mb-4">
@@ -276,12 +289,17 @@ const ExplorePage = ({ user, setPage }) => {
               </div>
               <div className="space-y-4">
                 {results.map((book, i) => (
-                  <BookCard key={i} book={book} index={i} setPage={setPage} />
+                  <BookCard 
+                    key={i} 
+                    book={book} 
+                    onJoinCrew={handleJoinCrew}
+                    onInvite={handleInvite}
+                  />
                 ))}
               </div>
 
               <button
-                onClick={() => { setSearched(false); setResults([]); setAiText(''); setQuery(''); }}
+                onClick={() => { setSearched(false); setResults([]); setQuery(''); setSelectedTags([]); }}
                 className="mt-6 w-full py-3 border border-[#EDE8E3] bg-white rounded-2xl text-sm font-medium text-[#6B5D52] hover:bg-[#F5EDE3] transition"
               >
                 ← Search again
@@ -293,7 +311,7 @@ const ExplorePage = ({ user, setPage }) => {
     );
   }
 
-  // MAIN EXPLORE VIEW
+  // MAIN EXPLORE VIEW (matching the image design)
   return (
     <div
       className="min-h-screen pb-24 relative overflow-hidden"
@@ -301,6 +319,7 @@ const ExplorePage = ({ user, setPage }) => {
         background: 'radial-gradient(ellipse at top center, #F5E6D3 0%, #FAF6F1 60%)',
       }}
     >
+      {/* Subtle texture overlay */}
       <div
         className="absolute inset-0 opacity-30 pointer-events-none"
         style={{
@@ -309,6 +328,7 @@ const ExplorePage = ({ user, setPage }) => {
       />
 
       <div className="relative z-10 px-5 pt-12 max-w-md mx-auto">
+        {/* Title */}
         <div className="text-center mb-8">
           <h1
             className="text-[2rem] font-bold text-[#2D1F14] leading-tight mb-3"
@@ -321,6 +341,7 @@ const ExplorePage = ({ user, setPage }) => {
           </p>
         </div>
 
+        {/* Search Box */}
         <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-5 shadow-lg border border-[#EDE8E3] mb-6">
           <div className="flex items-center gap-2 mb-3">
             <span className="text-lg">✨</span>
@@ -340,6 +361,7 @@ const ExplorePage = ({ user, setPage }) => {
             style={{ fontFamily: 'Georgia, serif' }}
           />
 
+          {/* Dynamic Suggestions Dropdown */}
           {showSuggestions && suggestions.length > 0 && (
             <div className="bg-[#FAF8F5] border border-[#E8E0D8] rounded-2xl overflow-hidden mb-3">
               {suggestions.map((s, i) => (
@@ -355,15 +377,23 @@ const ExplorePage = ({ user, setPage }) => {
             </div>
           )}
 
-          {query.trim() && (
+          {/* Selected Tags */}
+          {selectedTags.length > 0 && (
             <div className="flex gap-2 flex-wrap">
-              <span className="flex items-center gap-1.5 bg-[#F0E8DF] text-[#6B5D52] text-xs px-3 py-1.5 rounded-full">
-                🌙 {query}
-              </span>
+              {selectedTags.map((tag, i) => (
+                <span 
+                  key={i}
+                  className="flex items-center gap-1.5 bg-[#F0E8DF] text-[#6B5D52] text-xs px-3 py-1.5 rounded-full"
+                >
+                  🌙 {tag}
+                  <button onClick={() => removeTag(tag)} className="hover:text-[#C8622A]">×</button>
+                </span>
+              ))}
             </div>
           )}
         </div>
 
+        {/* Intensity Slider */}
         <div className="mb-6">
           <p className="text-center text-[#6B5D52] text-sm font-medium mb-3">
             How intense should it be?
@@ -378,7 +408,7 @@ const ExplorePage = ({ user, setPage }) => {
                 max="100"
                 value={intensity}
                 onChange={(e) => setIntensity(Number(e.target.value))}
-                className="w-full h-1.5 rounded-full outline-none cursor-pointer"
+                className="w-full h-1.5 rounded-full outline-none cursor-pointer appearance-none"
                 style={{
                   background: `linear-gradient(to right, #C8622A ${intensity}%, #E8DDD5 ${intensity}%)`,
                 }}
@@ -394,6 +424,7 @@ const ExplorePage = ({ user, setPage }) => {
           </div>
         </div>
 
+        {/* Find My Book Button */}
         <button
           onClick={handleFindBook}
           disabled={!query.trim() || loading}
@@ -410,12 +441,13 @@ const ExplorePage = ({ user, setPage }) => {
             </span>
           ) : (
             <span className="flex items-center justify-center gap-2">
-              <span>✦</span>
+              <span>✨</span>
               Find My Book
             </span>
           )}
         </button>
 
+        {/* Browse all genres link */}
         <div className="mt-5 text-center">
           <button
             onClick={() => setPage('crews')}
