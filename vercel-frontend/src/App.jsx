@@ -15,9 +15,9 @@ import axios from 'axios';
 
 // API URL
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
+
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
 const validateName = (name) => name && name.trim().length >= 2;
 
 // Book recommendations database
@@ -263,7 +263,7 @@ const BottomNav = ({ active, setPage, unreadCount = 0 }) => {
 };
 
 // ─── TOP BAR ───────────────────────────────────────────────────────────────
-const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true }) => (
+const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true, onNotificationClick }) => (
   <header className="sticky top-0 bg-white/95 backdrop-blur-sm z-40 px-4 py-3 flex items-center justify-between border-b border-gray-200">
     <div className="flex items-center gap-3">
       {showBack && (
@@ -282,17 +282,106 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = 
     </div>
     {showProfile && (
       <div className="flex items-center gap-3">
-        <button className="relative p-1 hover:bg-gray-100 rounded-lg transition">
+        <button 
+          onClick={onNotificationClick}
+          className="relative p-1 hover:bg-gray-100 rounded-lg transition"
+        >
           <Bell className="w-5 h-5 text-gray-600" />
           <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
         </button>
         <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
-          <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
+          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+            {user?.name?.slice(0, 2).toUpperCase()}
+          </div>
         </button>
       </div>
     )}
   </header>
 );
+
+// ─── NOTIFICATIONS PAGE ───────────────────────────────────────────────────
+const NotificationsPage = ({ user, setPage, onClose }) => {
+  const [notifications, setNotifications] = useState([]);
+
+  useEffect(() => {
+    loadNotifications();
+  }, []);
+
+  const loadNotifications = () => {
+    const userNotifications = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    setNotifications(userNotifications);
+  };
+
+  const markAsRead = (notificationId) => {
+    const updated = notifications.map(n => 
+      n.id === notificationId ? { ...n, read: true } : n
+    );
+    setNotifications(updated);
+    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
+  };
+
+  const markAllAsRead = () => {
+    const updated = notifications.map(n => ({ ...n, read: true }));
+    setNotifications(updated);
+    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
+  };
+
+  return (
+    <div className="fixed inset-0 bg-white z-50">
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <h2 className="font-semibold text-gray-900">Notifications</h2>
+        <button 
+          onClick={markAllAsRead}
+          className="text-sm text-orange-500 font-medium"
+        >
+          Mark all read
+        </button>
+      </div>
+
+      <div className="overflow-y-auto h-full pb-20">
+        {notifications.length === 0 ? (
+          <div className="text-center py-12">
+            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No notifications yet</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-gray-100">
+            {notifications.map((notif) => (
+              <div 
+                key={notif.id}
+                className={`p-4 ${notif.read ? 'bg-white' : 'bg-orange-50'}`}
+                onClick={() => markAsRead(notif.id)}
+              >
+                <div className="flex items-start gap-3">
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                    notif.type === 'like' ? 'bg-red-100' : 
+                    notif.type === 'comment' ? 'bg-blue-100' : 'bg-green-100'
+                  }`}>
+                    {notif.type === 'like' && <Heart className="w-4 h-4 text-red-500" />}
+                    {notif.type === 'comment' && <MessageCircle className="w-4 h-4 text-blue-500" />}
+                    {notif.type === 'message' && <MessageSquare className="w-4 h-4 text-green-500" />}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-900">{notif.message}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {new Date(notif.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  {!notif.read && (
+                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ─── LOGIN PAGE ─────────────────────────────────────────────────────────────
 const LoginPage = ({ onLogin }) => {
@@ -301,21 +390,20 @@ const LoginPage = ({ onLogin }) => {
   const [showPass, setShowPass] = useState(false);
   const [isLogin, setIsLogin] = useState(true);
   const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
   const [showOTP, setShowOTP] = useState(false);
   const [otpInput, setOtpInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [readingGoal, setReadingGoal] = useState({ yearly: 20, monthly: 5 });
 
   const handleSendOTP = async () => {
-    if (!validateName(name) || !validateEmail(email) || !validatePhone(phone)) {
+    if (!validateName(name) || !validateEmail(email)) {
       alert('Please fill all fields correctly');
       return;
     }
 
     setLoading(true);
     try {
-      const result = await otpAPI.sendOTP({ name, email, phone });
+      const result = await otpAPI.sendOTP({ name, email });
       if (result.success) {
         setShowOTP(true);
         alert('OTP sent to your email! Check your inbox.');
@@ -348,7 +436,7 @@ const LoginPage = ({ onLogin }) => {
           id: Date.now().toString(),
           name: name,
           email: email,
-          phone: phone,
+          password: password,
           readingGoal: readingGoal,
           isVerified: true,
           createdAt: new Date().toISOString(),
@@ -356,9 +444,14 @@ const LoginPage = ({ onLogin }) => {
           joinedCrews: []
         };
 
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        users.push(userData);
+        localStorage.setItem('users', JSON.stringify(users));
+        
         localStorage.setItem('currentUser', JSON.stringify(userData));
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
         localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_notifications`, JSON.stringify([]));
 
         onLogin(userData);
         setShowOTP(false);
@@ -373,16 +466,23 @@ const LoginPage = ({ onLogin }) => {
           id: Date.now().toString(),
           name: name,
           email: email,
-          phone: phone,
+          password: password,
           readingGoal: readingGoal,
           isVerified: true,
           createdAt: new Date().toISOString(),
           stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
           joinedCrews: []
         };
+        
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        users.push(userData);
+        localStorage.setItem('users', JSON.stringify(users));
+        
         localStorage.setItem('currentUser', JSON.stringify(userData));
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
         localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_notifications`, JSON.stringify([]));
+        
         onLogin(userData);
         setShowOTP(false);
         localStorage.removeItem('devOTP');
@@ -428,151 +528,131 @@ const LoginPage = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center" style={{ fontFamily: "'Georgia', serif" }}>
-      <div className="w-full max-w-md relative overflow-hidden" style={{ height: '240px' }}>
-        <div className="absolute inset-0 bg-gradient-to-b from-orange-100 to-gray-50" />
-        <div className="absolute inset-0 flex items-center justify-center">
-          <div className="relative">
-            <div className="w-32 h-32 bg-gradient-to-br from-orange-500 to-red-500 rounded-3xl shadow-2xl flex items-center justify-center rotate-12 transform hover:rotate-0 transition-transform">
-              <BookOpen className="w-16 h-16 text-white" />
+    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4" style={{ fontFamily: "'Georgia', serif" }}>
+      <div className="w-full max-w-md">
+        {/* Logo Section - Properly oriented */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-3">
+            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl shadow-xl flex items-center justify-center transform hover:scale-105 transition-transform">
+              <BookOpen className="w-10 h-10 text-white" />
             </div>
           </div>
+          <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
+            ReadCrew
+          </h1>
+          <p className="text-gray-500 text-sm mt-2">Read together, grow together.</p>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2 -mt-8 mb-2">
-        <span className="text-4xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent">
-          ReadCrew
-        </span>
-      </div>
-      <p className="text-gray-500 text-sm mb-8">Read together, grow together.</p>
+        <div className="bg-white rounded-3xl shadow-xl p-7 border border-gray-200">
+          <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">
+            {isLogin ? 'Welcome Back!' : 'Join the Crew'}
+          </h2>
 
-      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl mx-4 p-7 border border-gray-200">
-        <h2 className="text-2xl font-bold text-gray-900 text-center mb-6">
-          {isLogin ? 'Welcome Back!' : 'Join the Crew'}
-        </h2>
+          <div className="space-y-4">
+            {!isLogin && (
+              <>
+                <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
+                  <User className="w-5 h-5 text-gray-400" />
+                  <input
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
+                    placeholder="Full Name"
+                  />
+                </div>
 
-        <div className="space-y-4">
-          {!isLogin && (
-            <>
-              <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
-                <User className="w-5 h-5 text-gray-400" />
-                <input
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                  placeholder="Full Name"
-                />
-              </div>
-
-              <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
-                <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
-                  <Target className="w-4 h-4 text-orange-500" />
-                  Set Your Reading Goals (Optional)
-                </h3>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-gray-600 mb-1 block">Yearly Goal (books)</label>
-                    <input
-                      type="number"
-                      value={readingGoal.yearly}
-                      onChange={(e) => setReadingGoal({...readingGoal, yearly: parseInt(e.target.value) || 0})}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
-                      min="0"
-                      max="100"
-                      placeholder="e.g., 20"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-600 mb-1 block">Monthly Goal (books)</label>
-                    <input
-                      type="number"
-                      value={readingGoal.monthly}
-                      onChange={(e) => setReadingGoal({...readingGoal, monthly: parseInt(e.target.value) || 0})}
-                      className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
-                      min="0"
-                      max="20"
-                      placeholder="e.g., 5"
-                    />
+                <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                    <Target className="w-4 h-4 text-orange-500" />
+                    Set Your Reading Goals (Optional)
+                  </h3>
+                  <div className="space-y-3">
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Yearly Goal (books)</label>
+                      <input
+                        type="number"
+                        value={readingGoal.yearly}
+                        onChange={(e) => setReadingGoal({...readingGoal, yearly: parseInt(e.target.value) || 0})}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
+                        min="0"
+                        max="100"
+                        placeholder="e.g., 20"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Monthly Goal (books)</label>
+                      <input
+                        type="number"
+                        value={readingGoal.monthly}
+                        onChange={(e) => setReadingGoal({...readingGoal, monthly: parseInt(e.target.value) || 0})}
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none"
+                        min="0"
+                        max="20"
+                        placeholder="e.g., 5"
+                      />
+                    </div>
                   </div>
                 </div>
+              </>
+            )}
+
+            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
+              <Mail className="w-5 h-5 text-gray-400" />
+              <input
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
+                placeholder="Email"
+              />
+            </div>
+
+            <div>
+              <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
+                <Lock className="w-5 h-5 text-gray-400" />
+                <input
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  type={showPass ? 'text' : 'password'}
+                  className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
+                  placeholder="Password"
+                />
+                <button onClick={() => setShowPass(!showPass)}>
+                  {showPass ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
+                </button>
               </div>
-            </>
-          )}
-
-          <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
-            <Mail className="w-5 h-5 text-gray-400" />
-            <input
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-              placeholder="Email"
-            />
-          </div>
-
-          {!isLogin && (
-            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
-              <Phone className="w-5 h-5 text-gray-400" />
-              <input
-                value={phone}
-                onChange={e => setPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                placeholder="Phone Number"
-                maxLength="10"
-              />
-            </div>
-          )}
-
-          <div>
-            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
-              <Lock className="w-5 h-5 text-gray-400" />
-              <input
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                type={showPass ? 'text' : 'password'}
-                className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                placeholder="Password"
-              />
-              <button onClick={() => setShowPass(!showPass)}>
-                {showPass ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
-              </button>
             </div>
           </div>
-        </div>
 
-        <button
-          onClick={() => {
-            if (isLogin) {
-              // Mock login - in real app, verify with backend
-              const mockUser = {
-                id: Date.now().toString(),
-                name: name || email.split('@')[0],
-                email: email,
-                readingGoal: { yearly: 0, monthly: 0 },
-                stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
-                joinedCrews: []
-              };
-              localStorage.setItem('currentUser', JSON.stringify(mockUser));
-              localStorage.setItem(`user_${mockUser.email}_stats`, JSON.stringify(mockUser.stats));
-              localStorage.setItem(`user_${mockUser.email}_joinedCrews`, JSON.stringify([]));
-              onLogin(mockUser);
-            } else {
-              handleSendOTP();
-            }
-          }}
-          className="w-full mt-5 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold text-base hover:shadow-xl transition-all transform hover:scale-[1.02] disabled:opacity-50"
-        >
-          {loading ? 'Please wait...' : (isLogin ? 'Log In' : 'Create Account')}
-        </button>
-
-        <p className="text-center text-sm text-gray-500 mt-5">
-          {isLogin ? "New to ReadCrew? " : "Already have an account? "}
-          <button onClick={() => setIsLogin(!isLogin)} className="text-orange-500 font-semibold hover:underline">
-            {isLogin ? 'Sign Up' : 'Log In'}
+          <button
+            onClick={() => {
+              if (isLogin) {
+                // Login with password verification
+                const users = JSON.parse(localStorage.getItem('users') || '[]');
+                const foundUser = users.find(u => u.email === email);
+                
+                if (foundUser && foundUser.password === password) {
+                  localStorage.setItem('currentUser', JSON.stringify(foundUser));
+                  onLogin(foundUser);
+                } else {
+                  alert('Invalid email or password');
+                }
+              } else {
+                handleSendOTP();
+              }
+            }}
+            className="w-full mt-5 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold text-base hover:shadow-xl transition-all transform hover:scale-[1.02] disabled:opacity-50"
+          >
+            {loading ? 'Please wait...' : (isLogin ? 'Log In' : 'Create Account')}
           </button>
-        </p>
+
+          <p className="text-center text-sm text-gray-500 mt-5">
+            {isLogin ? "New to ReadCrew? " : "Already have an account? "}
+            <button onClick={() => setIsLogin(!isLogin)} className="text-orange-500 font-semibold hover:underline">
+              {isLogin ? 'Sign Up' : 'Log In'}
+            </button>
+          </p>
+        </div>
       </div>
-      <div className="h-8" />
     </div>
   );
 };
@@ -583,12 +663,30 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [readingProgress, setReadingProgress] = useState(0);
   const [feedPosts, setFeedPosts] = useState([]);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [showBookDetails, setShowBookDetails] = useState(false);
+  const [bookDetails, setBookDetails] = useState(null);
+  const [loadingBookDetails, setLoadingBookDetails] = useState(false);
+
+  // Real-time stats
+  const [userStats, setUserStats] = useState({
+    booksRead: user?.stats?.booksRead || 0,
+    reviewsGiven: user?.stats?.reviewsGiven || 0,
+    postsCreated: user?.stats?.postsCreated || 0,
+    crewsJoined: user?.joinedCrews?.length || 0
+  });
 
   useEffect(() => {
     loadTrendingBooks();
     loadFeedPosts();
     calculateReadingProgress();
-  }, [user?.stats?.booksRead]);
+    
+    // Update stats from localStorage
+    const savedStats = localStorage.getItem(`user_${user.email}_stats`);
+    if (savedStats) {
+      setUserStats(JSON.parse(savedStats));
+    }
+  }, [user?.stats?.booksRead, user?.joinedCrews]);
 
   const loadTrendingBooks = async () => {
     setLoadingTrending(true);
@@ -609,7 +707,6 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       }
     } catch (error) {
       console.error('Error loading trending books:', error);
-      // Fallback to mock data
       setTrendingBooks([
         { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
         { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
@@ -632,7 +729,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
   const calculateReadingProgress = () => {
     if (user?.readingGoal?.yearly > 0) {
-      const progress = (user.stats?.booksRead || 0) / user.readingGoal.yearly * 100;
+      const progress = (userStats.booksRead) / user.readingGoal.yearly * 100;
       setReadingProgress(Math.min(progress, 100));
     } else {
       setReadingProgress(0);
@@ -641,15 +738,102 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
   const handleLikePost = async (postId, type) => {
     try {
-      if (type === 'donation') {
-        await donationAPI.like(postId);
-      }
+      // Update post likes
       setFeedPosts(prev => prev.map(p => 
         p._id === postId ? { ...p, likes: (p.likes || 0) + 1, liked: true } : p
       ));
+      
+      // Create notification for post owner
+      const post = feedPosts.find(p => p._id === postId);
+      if (post && post.userEmail !== user.email) {
+        const notification = {
+          id: Date.now(),
+          type: 'like',
+          fromUser: user.name,
+          fromUserEmail: user.email,
+          postId: postId,
+          message: `${user.name} liked your post`,
+          timestamp: new Date().toISOString(),
+          read: false
+        };
+        
+        const userNotifications = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
+        userNotifications.unshift(notification);
+        localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(userNotifications));
+      }
     } catch (error) {
       console.error('Error liking post:', error);
     }
+  };
+
+  const handleComment = (postId) => {
+    const comment = prompt('Enter your comment:');
+    if (comment) {
+      setFeedPosts(prev => prev.map(p => 
+        p._id === postId ? { ...p, comments: (p.comments || 0) + 1 } : p
+      ));
+      
+      // Create notification
+      const post = feedPosts.find(p => p._id === postId);
+      if (post && post.userEmail !== user.email) {
+        const notification = {
+          id: Date.now(),
+          type: 'comment',
+          fromUser: user.name,
+          fromUserEmail: user.email,
+          postId: postId,
+          comment: comment,
+          message: `${user.name} commented on your post`,
+          timestamp: new Date().toISOString(),
+          read: false
+        };
+        
+        const userNotifications = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
+        userNotifications.unshift(notification);
+        localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(userNotifications));
+      }
+    }
+  };
+
+  const handleShare = (postId) => {
+    setFeedPosts(prev => prev.map(p => 
+      p._id === postId ? { ...p, shares: (p.shares || 0) + 1 } : p
+    ));
+    alert('Post shared!');
+  };
+
+  const handleBookClick = async (book) => {
+    setSelectedBook(book);
+    setShowBookDetails(true);
+    setLoadingBookDetails(true);
+    
+    try {
+      // Fetch book details from Groq API via your backend
+      const response = await axios.post(`${API_URL}/api/recommend/ai`, {
+        query: `Tell me about the book "${book.title}" by ${book.author}. Include summary, themes, and why people like it.`
+      });
+      
+      if (response.data.success) {
+        setBookDetails(response.data.recommendations[0]);
+      } else {
+        throw new Error('Failed to fetch book details');
+      }
+    } catch (error) {
+      console.error('Error fetching book details:', error);
+      setBookDetails({
+        title: book.title,
+        author: book.author,
+        description: `${book.title} is a popular book by ${book.author}. It has received great reviews from readers worldwide.`,
+        genre: 'General',
+        rating: book.rating
+      });
+    } finally {
+      setLoadingBookDetails(false);
+    }
+  };
+
+  const handleViewAllTrending = () => {
+    setPage('explore');
   };
 
   const hasReadingGoal = user?.readingGoal?.yearly > 0 || user?.readingGoal?.monthly > 0;
@@ -658,23 +842,121 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     <div className="pb-24 bg-gray-50 min-h-screen">
       <TopBar user={user} setPage={setPage} title="ReadCrew" />
       
+      {/* Book Details Modal */}
+      {showBookDetails && selectedBook && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+              <h3 className="font-bold text-gray-900">Book Details</h3>
+              <button onClick={() => setShowBookDetails(false)} className="p-2 hover:bg-gray-100 rounded-full">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-4">
+              {loadingBookDetails ? (
+                <div className="flex justify-center py-8">
+                  <LoadingSpinner />
+                </div>
+              ) : bookDetails && (
+                <div className="space-y-4">
+                  <div className="flex gap-4">
+                    <div 
+                      className="w-24 h-32 rounded-xl flex items-center justify-center"
+                      style={{ backgroundColor: selectedBook.cover || '#C8622A' }}
+                    >
+                      <BookOpen className="w-10 h-10 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <h2 className="text-xl font-bold text-gray-900">{bookDetails.title}</h2>
+                      <p className="text-gray-600">by {bookDetails.author}</p>
+                      {bookDetails.genre && (
+                        <span className="inline-block mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">
+                          {bookDetails.genre}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {bookDetails.description && (
+                    <div className="bg-gray-50 rounded-xl p-4">
+                      <p className="text-gray-700 text-sm leading-relaxed">{bookDetails.description}</p>
+                    </div>
+                  )}
+                  
+                  {bookDetails.reason && (
+                    <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
+                      <p className="text-sm text-orange-800">
+                        <span className="font-bold">Why you might like it:</span> {bookDetails.reason}
+                      </p>
+                    </div>
+                  )}
+                  
+                  <div className="flex gap-2 pt-4">
+                    <button 
+                      onClick={() => {
+                        setShowBookDetails(false);
+                        // Create crew for this book
+                        const newCrew = {
+                          id: Date.now(),
+                          name: selectedBook.title,
+                          author: selectedBook.author,
+                          genre: bookDetails.genre || 'General',
+                          members: 1,
+                          chats: 0,
+                          cover: selectedBook.cover || '#C8622A',
+                          createdBy: user.email,
+                          createdAt: new Date().toISOString(),
+                          messages: []
+                        };
+                        
+                        const existingCrews = JSON.parse(localStorage.getItem('crews') || '[]');
+                        existingCrews.push(newCrew);
+                        localStorage.setItem('crews', JSON.stringify(existingCrews));
+                        
+                        alert(`Crew for "${selectedBook.title}" created!`);
+                        setPage('crews');
+                      }}
+                      className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-medium"
+                    >
+                      Create Crew
+                    </button>
+                    <button 
+                      onClick={() => {
+                        alert('Share feature coming soon!');
+                      }}
+                      className="px-4 py-3 border border-gray-200 rounded-xl"
+                    >
+                      <Share2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="px-4 py-4 space-y-5">
-        {/* Welcome Card */}
+        {/* Welcome Card - Without the white circle and avatar */}
         <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Welcome, {user?.name?.split(' ')[0]}! 📚</h2>
-              <p className="text-orange-100 text-sm mt-1">Read together, grow together</p>
+              <p className="text-orange-100 text-sm mt-1">Ready for your next reading adventure?</p>
             </div>
-            <Avatar initials={user?.name?.slice(0, 2)} size="md" color="white" />
+            {/* Removed the Avatar circle as requested */}
+            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+              <BookOpen className="w-6 h-6 text-white" />
+            </div>
           </div>
           
           {/* Reading Progress - Only show if goals are set */}
           {hasReadingGoal && (
-            <div className="bg-white/20 rounded-xl p-3 backdrop-blur-sm">
+            <div className="mt-4 bg-white/20 rounded-xl p-3 backdrop-blur-sm">
               <div className="flex items-center justify-between text-sm mb-2">
                 <span>Yearly Goal Progress</span>
-                <span className="font-semibold">{user?.stats?.booksRead || 0}/{user?.readingGoal?.yearly || 0} books</span>
+                <span className="font-semibold">{userStats.booksRead}/{user?.readingGoal?.yearly || 0} books</span>
               </div>
               <div className="h-2 bg-white/30 rounded-full overflow-hidden">
                 <div 
@@ -683,7 +965,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                 />
               </div>
               <div className="flex items-center justify-between mt-2 text-xs text-orange-100">
-                <span>Monthly: {user?.stats?.booksRead || 0}/{user?.readingGoal?.monthly || 0}</span>
+                <span>Monthly: {userStats.booksRead}/{user?.readingGoal?.monthly || 0}</span>
                 <span>{Math.round(readingProgress)}% Complete</span>
               </div>
             </div>
@@ -700,15 +982,19 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           )}
         </div>
 
-        {/* Quick Stats */}
+        {/* Quick Stats - Real-time updates */}
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: 'Books', value: user?.stats?.booksRead || 0, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100' },
-            { label: 'Reviews', value: user?.stats?.reviewsGiven || 0, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100' },
-            { label: 'Posts', value: user?.stats?.postsCreated || 0, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100' },
-            { label: 'Crews', value: user?.stats?.crewsJoined || 0, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100' }
-          ].map(({ label, value, icon: Icon, color, bg }, idx) => (
-            <div key={idx} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200">
+            { label: 'Books', value: userStats.booksRead, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100', page: 'profile' },
+            { label: 'Reviews', value: userStats.reviewsGiven, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100', page: 'reviews' },
+            { label: 'Posts', value: userStats.postsCreated, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100', page: 'post' },
+            { label: 'Crews', value: userStats.crewsJoined, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100', page: 'crews' }
+          ].map(({ label, value, icon: Icon, color, bg, page }, idx) => (
+            <div 
+              key={idx} 
+              className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition"
+              onClick={() => setPage(page)}
+            >
               <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}>
                 <Icon className={`w-4 h-4 ${color}`} />
               </div>
@@ -727,7 +1013,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
             <Edit3 className="w-5 h-5 text-orange-500" />
           </div>
           <span className="text-gray-600">Share your reading journey...</span>
-          <Avatar initials={user?.name?.slice(0, 2)} size="xs" color="#C8622A" className="ml-auto" />
+          <span className="ml-auto text-xs text-gray-400">Post</span>
         </button>
 
         {/* Live Feed */}
@@ -737,7 +1023,12 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               <MessageSquare className="w-5 h-5 text-orange-500" />
               Community Feed
             </h2>
-            <button className="text-sm text-orange-500 font-semibold">View All</button>
+            <button 
+              onClick={() => setPage('reviews')}
+              className="text-sm text-orange-500 font-semibold"
+            >
+              View All
+            </button>
           </div>
 
           <div className="space-y-4">
@@ -745,12 +1036,20 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               <div className="bg-white rounded-xl p-8 text-center border border-gray-200">
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No posts yet. Be the first to share!</p>
+                <button 
+                  onClick={() => setPage('post')}
+                  className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                >
+                  Create Post
+                </button>
               </div>
             ) : (
               feedPosts.map((post, idx) => (
                 <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                   <div className="flex items-start gap-3 mb-3">
-                    <Avatar initials={post.userName?.slice(0, 2) || 'U'} size="sm" color="#C8622A" />
+                    <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                      {post.userName?.slice(0, 2) || 'U'}
+                    </div>
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
@@ -787,11 +1086,17 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                       <Heart className={`w-4 h-4 ${post.liked ? 'fill-red-500 text-red-500' : ''}`} />
                       <span>{post.likes || 0}</span>
                     </button>
-                    <button className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <button 
+                      onClick={() => handleComment(post._id)}
+                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
+                    >
                       <MessageCircle className="w-4 h-4" />
                       <span>{post.comments || 0}</span>
                     </button>
-                    <button className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <button 
+                      onClick={() => handleShare(post._id)}
+                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
+                    >
                       <Share2 className="w-4 h-4" />
                       <span>{post.shares || 0}</span>
                     </button>
@@ -809,7 +1114,12 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               <TrendingUp className="w-5 h-5 text-orange-500" />
               Top Trending Books
             </h2>
-            <button className="text-sm text-orange-500 font-semibold">See All</button>
+            <button 
+              onClick={handleViewAllTrending}
+              className="text-sm text-orange-500 font-semibold"
+            >
+              View All
+            </button>
           </div>
 
           {loadingTrending ? (
@@ -819,7 +1129,11 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           ) : (
             <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
               {trendingBooks.map((book, i) => (
-                <div key={i} className="shrink-0 w-32">
+                <div 
+                  key={i} 
+                  className="shrink-0 w-32 cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => handleBookClick(book)}
+                >
                   <div 
                     className="w-32 h-40 rounded-xl shadow-lg flex items-end justify-center pb-3 mb-2"
                     style={{ backgroundColor: book.cover }}
@@ -839,12 +1153,12 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           )}
         </div>
 
-        {/* Popular Crews */}
+        {/* Your Crews */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
               <Users className="w-5 h-5 text-orange-500" />
-              Popular Crews
+              Your Crews
             </h2>
             <button onClick={() => setPage('crews')} className="text-sm text-orange-500 font-semibold">
               View All
@@ -852,7 +1166,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            {(crews || []).slice(0, 2).map(crew => (
+            {(crews || []).filter(crew => user?.joinedCrews?.includes(crew.id)).slice(0, 2).map(crew => (
               <div 
                 key={crew.id} 
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer"
@@ -871,13 +1185,25 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                       <Users className="w-3 h-3" />
                       <span>{crew.members || 1}</span>
                     </div>
-                    <button className="px-3 py-1 bg-orange-500 text-white rounded-lg text-xs font-medium">
-                      Join
-                    </button>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-lg text-xs">
+                      Joined
+                    </span>
                   </div>
                 </div>
               </div>
             ))}
+            
+            {(!user?.joinedCrews || user.joinedCrews.length === 0) && (
+              <div className="col-span-2 bg-white rounded-xl p-6 text-center border border-gray-200">
+                <p className="text-gray-500 text-sm">You haven't joined any crews yet</p>
+                <button 
+                  onClick={() => setPage('crews')}
+                  className="mt-2 text-orange-500 text-sm font-medium"
+                >
+                  Browse Crews →
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -885,7 +1211,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   );
 };
 
-// ─── ENHANCED EXPLORE PAGE (Beautiful UI like image) ────────────────────────
+// ─── ENHANCED EXPLORE PAGE ─────────────────────────────────────────────────
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [query, setQuery] = useState('');
   const [intensity, setIntensity] = useState(50);
@@ -902,7 +1228,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [selectedTags, setSelectedTags] = useState([]);
   const inputRef = useRef();
 
-  // Dynamic suggestions based on input
   const SUGGESTION_MAP = {
     space: [
       { emoji: '🚀', label: 'Space exploration' },
@@ -1174,6 +1499,7 @@ const PostPage = ({ user, onPost, setPage }) => {
     if (!content.trim()) return;
 
     const postData = {
+      id: Date.now(),
       content,
       bookName,
       author,
@@ -1182,13 +1508,13 @@ const PostPage = ({ user, onPost, setPage }) => {
       type: isDonation ? 'donation' : 'post',
       userName: user.name,
       userEmail: user.email,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      likes: 0,
+      comments: 0,
+      shares: 0
     };
 
     try {
-      if (isDonation) {
-        await donationAPI.create(postData);
-      }
       onPost(postData);
       setPage('home');
     } catch (error) {
@@ -1215,7 +1541,9 @@ const PostPage = ({ user, onPost, setPage }) => {
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="flex gap-3 mb-4">
-          <Avatar initials={user?.name?.slice(0, 2)} size="md" color="#C8622A" />
+          <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold">
+            {user?.name?.slice(0, 2).toUpperCase()}
+          </div>
           <div className="flex-1">
             <textarea
               value={content}
@@ -1324,12 +1652,8 @@ const ReviewsPage = ({ user, setPage }) => {
   const loadReviews = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/reviews`);
-      const data = await response.json();
-      
-      if (data.success) {
-        setReviews(data.reviews);
-      }
+      const savedReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+      setReviews(savedReviews);
     } catch (error) {
       console.error('Error loading reviews:', error);
     } finally {
@@ -1344,39 +1668,55 @@ const ReviewsPage = ({ user, setPage }) => {
     }
 
     try {
-      const response = await fetch(`${API_URL}/api/reviews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...newReview,
-          userName: user.name,
-          userEmail: user.email
-        })
-      });
+      const reviewData = {
+        id: Date.now(),
+        ...newReview,
+        userName: user.name,
+        userEmail: user.email,
+        createdAt: new Date().toISOString()
+      };
 
-      const data = await response.json();
+      const savedReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+      savedReviews.unshift(reviewData);
+      localStorage.setItem('reviews', JSON.stringify(savedReviews));
       
-      if (data.success) {
-        setReviews([data.review, ...reviews]);
-        setShowCreateForm(false);
-        setNewReview({
-          bookName: '',
-          author: '',
-          rating: 5,
-          review: '',
-          sentiment: 'positive'
-        });
-        
-        // Update user stats
-        const updatedUser = {
-          ...user,
-          stats: {
-            ...user.stats,
-            reviewsGiven: (user.stats?.reviewsGiven || 0) + 1
-          }
-        };
-        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-      }
+      setReviews([reviewData, ...reviews]);
+      setShowCreateForm(false);
+      setNewReview({
+        bookName: '',
+        author: '',
+        rating: 5,
+        review: '',
+        sentiment: 'positive'
+      });
+      
+      // Update user stats
+      const updatedStats = {
+        ...user.stats,
+        reviewsGiven: (user.stats?.reviewsGiven || 0) + 1
+      };
+      
+      const updatedUser = {
+        ...user,
+        stats: updatedStats
+      };
+      
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(updatedStats));
+      
+      // Trigger notification
+      const notification = {
+        id: Date.now(),
+        type: 'review',
+        message: `You wrote a review for "${newReview.bookName}"`,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
+      
+      const userNotifications = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+      userNotifications.unshift(notification);
+      localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(userNotifications));
+      
     } catch (error) {
       console.error('Error creating review:', error);
       alert('Failed to create review');
@@ -1484,7 +1824,9 @@ const ReviewsPage = ({ user, setPage }) => {
                 
                 <div className="flex items-center justify-between pt-2 border-t border-gray-100">
                   <div className="flex items-center gap-2">
-                    <Avatar initials={review.userName?.slice(0, 2)} size="xs" color="#C8622A" />
+                    <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                      {review.userName?.slice(0, 2) || 'U'}
+                    </div>
                     <span className="text-xs text-gray-500">{review.userName}</span>
                   </div>
                   <span className={`text-xs px-2 py-1 rounded-full ${
@@ -1511,18 +1853,29 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   const [isTyping, setIsTyping] = useState(false);
   const [crewMembers, setCrewMembers] = useState([]);
   const [similarBooks, setSimilarBooks] = useState([]);
-  const [crews, setCrews] = useState(initialCrews || []);
+  const [crews, setCrews] = useState([]);
   const [joinedCrews, setJoinedCrews] = useState([]);
   const [showJoinMessage, setShowJoinMessage] = useState(false);
   const [joinMessage, setJoinMessage] = useState('');
+  const [showCreateCrewForm, setShowCreateCrewForm] = useState(false);
+  const [newCrewData, setNewCrewData] = useState({
+    name: '',
+    author: '',
+    genre: '',
+    cover: '#C8622A'
+  });
+  
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
 
   useEffect(() => {
-    const savedJoinedCrews = localStorage.getItem(`user_${user.email}_joinedCrews`);
-    if (savedJoinedCrews) {
-      setJoinedCrews(JSON.parse(savedJoinedCrews));
-    }
+    // Load crews from localStorage
+    const savedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
+    setCrews(savedCrews.length > 0 ? savedCrews : initialCrews);
+    
+    // Load joined crews
+    const savedJoinedCrews = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
+    setJoinedCrews(savedJoinedCrews);
   }, [user.email]);
 
   useEffect(() => {
@@ -1541,65 +1894,26 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
-  const loadCrewMessages = async () => {
-    try {
-      const mockMessages = [
-        {
-          id: 1,
-          userId: 'user1',
-          userName: 'Aman',
-          userInitials: 'AM',
-          content: 'This book is amazing! The way it explores deep themes is incredible.',
-          timestamp: new Date(Date.now() - 3600000),
-          color: '#7B9EA6'
-        },
-        {
-          id: 2,
-          userId: 'user2',
-          userName: 'Vikram',
-          userInitials: 'VK',
-          content: 'I love how the author builds the characters. So relatable!',
-          timestamp: new Date(Date.now() - 1800000),
-          color: '#8B5E3C'
-        },
-        {
-          id: 3,
-          userId: 'user3',
-          userName: 'Deepika',
-          userInitials: 'DP',
-          content: 'Has anyone read the sequel? Is it as good as this one?',
-          timestamp: new Date(Date.now() - 900000),
-          color: '#C8956C'
-        }
-      ];
-      setMessages(mockMessages);
-    } catch (error) {
-      console.error('Error loading messages:', error);
-    }
+  const loadCrewMessages = () => {
+    // Load messages from localStorage for this crew
+    const crewMessages = JSON.parse(localStorage.getItem(`crew_${selectedCrew.id}_messages`) || '[]');
+    setMessages(crewMessages.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
   };
 
-  const loadCrewMembers = async () => {
-    try {
-      const mockMembers = [
-        { id: 'user1', name: 'Aman', initials: 'AM', color: '#7B9EA6', online: true },
-        { id: 'user2', name: 'Vikram', initials: 'VK', color: '#8B5E3C', online: false },
-        { id: 'user3', name: 'Deepika', initials: 'DP', color: '#C8956C', online: true }
-      ];
-
-      if (isUserJoined(selectedCrew?.id)) {
-        mockMembers.push({
-          id: user.id,
-          name: user.name,
-          initials: user.name?.slice(0, 2),
-          color: '#C8622A',
-          online: true
-        });
-      }
-
-      setCrewMembers(mockMembers);
-    } catch (error) {
-      console.error('Error loading members:', error);
-    }
+  const loadCrewMembers = () => {
+    // Get all users who joined this crew
+    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+    const members = allUsers
+      .filter(u => u.joinedCrews?.includes(selectedCrew.id))
+      .map(u => ({
+        id: u.id,
+        name: u.name,
+        initials: u.name?.slice(0, 2),
+        color: '#C8622A',
+        online: Math.random() > 0.5 // Random online status for demo
+      }));
+    
+    setCrewMembers(members);
   };
 
   const loadSimilarBooks = async () => {
@@ -1625,12 +1939,39 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       userName: user.name,
       userInitials: user.name?.slice(0, 2),
       content: newMessage,
-      timestamp: new Date(),
+      timestamp: new Date().toISOString(),
       color: '#C8622A'
     };
 
-    setMessages(prev => [...prev, message]);
+    // Save to localStorage
+    const existingMessages = JSON.parse(localStorage.getItem(`crew_${selectedCrew.id}_messages`) || '[]');
+    existingMessages.push(message);
+    localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existingMessages));
+
+    setMessages(prev => [...prev, { ...message, timestamp: new Date(message.timestamp) }]);
     setNewMessage('');
+
+    // Notify other crew members (simulated)
+    const notification = {
+      id: Date.now(),
+      type: 'message',
+      fromUser: user.name,
+      fromUserEmail: user.email,
+      crewId: selectedCrew.id,
+      crewName: selectedCrew.name,
+      message: `${user.name} sent a message in ${selectedCrew.name}`,
+      timestamp: new Date().toISOString(),
+      read: false
+    };
+
+    // Store notifications for all members except sender
+    crewMembers.forEach(member => {
+      if (member.id !== user.id) {
+        const memberNotifications = JSON.parse(localStorage.getItem(`user_${member.email}_notifications`) || '[]');
+        memberNotifications.unshift(notification);
+        localStorage.setItem(`user_${member.email}_notifications`, JSON.stringify(memberNotifications));
+      }
+    });
   };
 
   const handleTyping = () => {
@@ -1648,18 +1989,34 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     setJoinedCrews(updatedJoinedCrews);
     localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updatedJoinedCrews));
 
-    setCrews(prev => prev.map(c =>
+    // Update crew members count
+    const updatedCrews = crews.map(c =>
       c.id === crew.id ? { ...c, members: (c.members || 1) + 1 } : c
-    ));
+    );
+    setCrews(updatedCrews);
+    localStorage.setItem('crews', JSON.stringify(updatedCrews));
 
+    // Update user's joinedCrews in users list
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const updatedUsers = users.map(u => 
+      u.email === user.email ? { ...u, joinedCrews: updatedJoinedCrews } : u
+    );
+    localStorage.setItem('users', JSON.stringify(updatedUsers));
+
+    // Update user stats
+    const updatedStats = {
+      ...user.stats,
+      crewsJoined: (user.stats?.crewsJoined || 0) + 1
+    };
+    
     const updatedUser = {
       ...user,
-      stats: {
-        ...user.stats,
-        crewsJoined: (user.stats?.crewsJoined || 0) + 1
-      }
+      stats: updatedStats,
+      joinedCrews: updatedJoinedCrews
     };
+    
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(updatedStats));
 
     setJoinMessage(`You've joined the ${crew.name} crew! 🎉`);
     setShowJoinMessage(true);
@@ -1672,23 +2029,98 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       setJoinedCrews(updatedJoinedCrews);
       localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updatedJoinedCrews));
 
-      setCrews(prev => prev.map(c =>
+      // Update crew members count
+      const updatedCrews = crews.map(c =>
         c.id === crew.id ? { ...c, members: Math.max(0, (c.members || 1) - 1) } : c
-      ));
+      );
+      setCrews(updatedCrews);
+      localStorage.setItem('crews', JSON.stringify(updatedCrews));
 
+      // Update user's joinedCrews in users list
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const updatedUsers = users.map(u => 
+        u.email === user.email ? { ...u, joinedCrews: updatedJoinedCrews } : u
+      );
+      localStorage.setItem('users', JSON.stringify(updatedUsers));
+
+      // Update user stats
+      const updatedStats = {
+        ...user.stats,
+        crewsJoined: Math.max(0, (user.stats?.crewsJoined || 1) - 1)
+      };
+      
       const updatedUser = {
         ...user,
-        stats: {
-          ...user.stats,
-          crewsJoined: Math.max(0, (user.stats?.crewsJoined || 1) - 1)
-        }
+        stats: updatedStats,
+        joinedCrews: updatedJoinedCrews
       };
+      
       localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(updatedStats));
 
       if (selectedCrew?.id === crew.id) {
         setView('list');
         setSelectedCrew(null);
       }
+    }
+  };
+
+  const handleCreateCrew = () => {
+    if (!newCrewData.name || !newCrewData.author) {
+      alert('Please fill in the book name and author');
+      return;
+    }
+
+    const newCrew = {
+      id: Date.now(),
+      ...newCrewData,
+      members: 1,
+      chats: 0,
+      createdBy: user.email,
+      createdAt: new Date().toISOString(),
+      messages: []
+    };
+
+    const updatedCrews = [newCrew, ...crews];
+    setCrews(updatedCrews);
+    localStorage.setItem('crews', JSON.stringify(updatedCrews));
+
+    // Auto-join the creator
+    handleJoinCrew(newCrew);
+
+    setShowCreateCrewForm(false);
+    setNewCrewData({
+      name: '',
+      author: '',
+      genre: '',
+      cover: '#C8622A'
+    });
+
+    setJoinMessage(`Crew "${newCrew.name}" created! 🎉`);
+    setShowJoinMessage(true);
+    setTimeout(() => setShowJoinMessage(false), 3000);
+  };
+
+  const handleAddFriend = (crew) => {
+    const friendEmail = prompt("Enter your friend's email to invite them:");
+    if (friendEmail) {
+      const notification = {
+        id: Date.now(),
+        type: 'invite',
+        fromUser: user.name,
+        fromUserEmail: user.email,
+        crewId: crew.id,
+        crewName: crew.name,
+        message: `${user.name} invited you to join the "${crew.name}" crew!`,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
+
+      const friendNotifications = JSON.parse(localStorage.getItem(`user_${friendEmail}_notifications`) || '[]');
+      friendNotifications.unshift(notification);
+      localStorage.setItem(`user_${friendEmail}_notifications`, JSON.stringify(friendNotifications));
+
+      alert(`Invitation sent to ${friendEmail}!`);
     }
   };
 
@@ -1730,12 +2162,20 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             </div>
           </div>
           {hasJoined && (
-            <button
-              onClick={() => handleLeaveCrew(selectedCrew)}
-              className="text-xs text-red-500 px-2 py-1 border border-red-200 rounded-lg"
-            >
-              Leave
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => handleAddFriend(selectedCrew)}
+                className="text-xs text-blue-500 px-2 py-1 border border-blue-200 rounded-lg"
+              >
+                Add Friend
+              </button>
+              <button
+                onClick={() => handleLeaveCrew(selectedCrew)}
+                className="text-xs text-red-500 px-2 py-1 border border-red-200 rounded-lg"
+              >
+                Leave
+              </button>
+            </div>
           )}
         </div>
 
@@ -1758,12 +2198,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                 return (
                   <div key={message.id} className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
                     {!isOwn && (
-                      <Avatar 
-                        initials={message.userInitials} 
-                        size="sm" 
-                        color={message.color}
-                        online={crewMembers.find(m => m.id === message.userId)?.online}
-                      />
+                      <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        {message.userInitials}
+                      </div>
                     )}
                     <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
                       {!isOwn && (
@@ -1777,7 +2214,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                         <p className="text-sm leading-relaxed">{message.content}</p>
                       </div>
                       <p className="text-[10px] text-gray-400 mt-1 px-1">
-                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </p>
                     </div>
                   </div>
@@ -1786,7 +2223,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               
               {isTyping && (
                 <div className="flex gap-2">
-                  <Avatar initials="..." size="sm" color="#C8622A" />
+                  <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                    ...
+                  </div>
                   <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2">
                     <div className="flex gap-1">
                       <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -1805,7 +2244,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
         {hasJoined && (
           <div className="bg-white border-t border-gray-200 px-4 py-3 pb-safe">
             <div className="flex items-center gap-2">
-              <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
+              <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                {user?.name?.slice(0, 2).toUpperCase()}
+              </div>
               <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2.5">
                 <input
                   type="text"
@@ -1848,6 +2289,15 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
           <span className="font-semibold text-gray-900 flex-1">{selectedCrew.name}</span>
+          {hasJoined && (
+            <button 
+              onClick={() => handleAddFriend(selectedCrew)}
+              className="p-2 hover:bg-gray-100 rounded-full"
+              title="Invite Friend"
+            >
+              <UserPlus className="w-5 h-5 text-gray-600" />
+            </button>
+          )}
           <button className="p-2 hover:bg-gray-100 rounded-full">
             <Bookmark className="w-5 h-5 text-gray-600" />
           </button>
@@ -1892,12 +2342,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             </div>
           </div>
 
-          <div className="flex gap-4 border-b border-gray-200 mb-4">
+          <div className="flex gap-4 border-b border-gray-200 mb-4 overflow-x-auto pb-1">
             {['Reviews', 'Crew Chat', 'About', 'Similar'].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setView(tab.toLowerCase().replace(' ', ''))}
-                className={`text-sm pb-2 font-medium border-b-2 transition ${
+                className={`text-sm pb-2 font-medium whitespace-nowrap border-b-2 transition ${
                   view === tab.toLowerCase().replace(' ', '')
                     ? 'text-orange-500 border-orange-500'
                     : 'text-gray-500 border-transparent hover:text-gray-700'
@@ -1921,7 +2371,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               {[1, 2, 3].map((i) => (
                 <div key={i} className="bg-white rounded-xl p-4 border border-gray-200">
                   <div className="flex items-center gap-3 mb-2">
-                    <Avatar initials={`R${i}`} size="sm" color={['#C8622A', '#7B9EA6', '#C8956C'][i-1]} />
+                    <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                      R{i}
+                    </div>
                     <div>
                       <p className="font-semibold text-gray-900">Reader {i}</p>
                       <StarRating rating={4} size="xs" />
@@ -1962,12 +2414,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   
                   {messages.slice(-3).map((msg) => (
                     <div key={msg.id} className="flex gap-3">
-                      <Avatar initials={msg.userInitials} size="sm" color={msg.color} />
+                      <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        {msg.userInitials}
+                      </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-semibold text-sm">{msg.userName}</span>
                           <span className="text-xs text-gray-400">
-                            {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                         <p className="text-sm text-gray-600">{msg.content}</p>
@@ -2049,9 +2503,66 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     <div className="pb-24 bg-gray-50 min-h-screen">
       {showJoinMessage && <JoinMessageToast />}
       
-      <TopBar user={user} setPage={setPage} title="Reading Crews" showProfile={false} />
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-md flex items-center justify-center">
+            <BookOpen className="w-3.5 h-3.5 text-white" />
+          </div>
+          <span className="font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Reading Crews</span>
+        </div>
+        <button
+          onClick={() => setShowCreateCrewForm(true)}
+          className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
+        >
+          Create Crew
+        </button>
+      </div>
       
       <div className="px-4 py-4">
+        {/* Create Crew Form */}
+        {showCreateCrewForm && (
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-4">
+            <h3 className="font-semibold text-gray-900 mb-3">Create New Crew</h3>
+            <div className="space-y-3">
+              <input
+                type="text"
+                value={newCrewData.name}
+                onChange={(e) => setNewCrewData({...newCrewData, name: e.target.value})}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                placeholder="Book name"
+              />
+              <input
+                type="text"
+                value={newCrewData.author}
+                onChange={(e) => setNewCrewData({...newCrewData, author: e.target.value})}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                placeholder="Author"
+              />
+              <input
+                type="text"
+                value={newCrewData.genre}
+                onChange={(e) => setNewCrewData({...newCrewData, genre: e.target.value})}
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                placeholder="Genre"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={handleCreateCrew}
+                  className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                >
+                  Create
+                </button>
+                <button
+                  onClick={() => setShowCreateCrewForm(false)}
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2 mb-5">
           <div className="flex-1 flex items-center gap-2 bg-white border border-gray-200 rounded-xl px-3 py-2.5 shadow-sm">
             <Search className="w-4 h-4 text-gray-400" />
@@ -2060,9 +2571,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               placeholder="Search crews..."
             />
           </div>
-          <button className="px-4 py-2.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-semibold shadow-sm">
-            Create
-          </button>
         </div>
 
         <div className="mb-6">
@@ -2106,6 +2614,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                       </div>
                     </div>
                   </div>
+                  <div className="px-4 py-2 flex justify-end gap-2">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleAddFriend(crew); }}
+                      className="px-3 py-1 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium"
+                    >
+                      Invite
+                    </button>
+                  </div>
                 </div>
               ))
             )}
@@ -2141,7 +2657,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                     </div>
                   </div>
                 </div>
-                <div className="px-4 py-3 flex justify-end">
+                <div className="px-4 py-3 flex justify-between items-center">
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); handleAddFriend(crew); }}
+                    className="px-3 py-1 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium"
+                  >
+                    Invite
+                  </button>
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleJoinCrew(crew); }}
                     className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold"
@@ -2170,14 +2692,21 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
   const [readingGoal, setReadingGoal] = useState(user?.readingGoal || { yearly: 0, monthly: 0 });
   const [showEditGoal, setShowEditGoal] = useState(false);
   const [editGoal, setEditGoal] = useState(readingGoal);
+  const [profileImage, setProfileImage] = useState(null);
+  const fileRef = useRef();
 
   const tabs = ['Posts', 'Reviews', 'Crews', 'Saved'];
-  const myPosts = posts.filter(p => p.user === user?.name);
+  const myPosts = posts.filter(p => p.userEmail === user?.email);
 
   useEffect(() => {
     const savedStats = localStorage.getItem(`user_${user.email}_stats`);
     if (savedStats) {
       setUserStats(JSON.parse(savedStats));
+    }
+    
+    const savedImage = localStorage.getItem(`user_${user.email}_profile_image`);
+    if (savedImage) {
+      setProfileImage(savedImage);
     }
   }, [user.email]);
 
@@ -2190,6 +2719,18 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
     setReadingGoal(editGoal);
     setShowEditGoal(false);
     onUpdateStats?.(updatedUser);
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setProfileImage(ev.target.result);
+        localStorage.setItem(`user_${user.email}_profile_image`, ev.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   return (
@@ -2209,10 +2750,26 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
       <div className="px-4 py-5">
         <div className="flex items-start gap-4 mb-6">
           <div className="relative">
-            <Avatar initials={user?.name?.slice(0, 2)} size="xl" color="#C8622A" />
-            <button className="absolute bottom-0 right-0 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white hover:bg-orange-600 transition">
+            {profileImage ? (
+              <img src={profileImage} alt={user?.name} className="w-20 h-20 rounded-full object-cover" />
+            ) : (
+              <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
+                {user?.name?.slice(0, 2).toUpperCase()}
+              </div>
+            )}
+            <button 
+              onClick={() => fileRef.current?.click()}
+              className="absolute bottom-0 right-0 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white hover:bg-orange-600 transition"
+            >
               <Camera className="w-3 h-3 text-white" />
             </button>
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+            />
           </div>
           <div className="flex-1">
             <h2 className="text-xl font-bold text-gray-900">{user?.name}</h2>
@@ -2345,21 +2902,32 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
               myPosts.map(post => (
                 <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                   <div className="flex items-start gap-3 mb-3">
-                    <Avatar initials={user?.name?.slice(0, 2)} size="sm" color="#C8622A" />
+                    {profileImage ? (
+                      <img src={profileImage} alt={user?.name} className="w-8 h-8 rounded-full object-cover" />
+                    ) : (
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        {user?.name?.slice(0, 2).toUpperCase()}
+                      </div>
+                    )}
                     <div className="flex-1">
                       <div className="flex items-center justify-between">
                         <div>
                           <p className="font-semibold text-gray-900">{user?.name}</p>
                           <div className="flex items-center gap-1 mt-0.5">
                             <BookOpen className="w-3 h-3 text-orange-500" />
-                            <p className="text-xs text-gray-500">{post.book || 'General'}</p>
+                            <p className="text-xs text-gray-500">{post.bookName || 'General'}</p>
                           </div>
                         </div>
-                        <span className="text-xs text-gray-400">{post.time || 'Just now'}</span>
+                        <span className="text-xs text-gray-400">
+                          {new Date(post.createdAt).toLocaleDateString()}
+                        </span>
                       </div>
                     </div>
                   </div>
                   <p className="text-sm text-gray-700 leading-relaxed mb-3">{post.content}</p>
+                  {post.image && (
+                    <img src={post.image} alt="post" className="w-full rounded-xl mb-3" />
+                  )}
                   <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
                     <div className="flex items-center gap-1 text-xs text-gray-500">
                       <Heart className="w-4 h-4" /> {post.likes || 0}
@@ -2377,427 +2945,51 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           </div>
         )}
 
-        {activeTab !== 'Posts' && (
+        {activeTab === 'Reviews' && (
+          <div className="space-y-4">
+            {userStats.reviewsGiven === 0 ? (
+              <div className="text-center py-8">
+                <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No reviews yet</p>
+                <button 
+                  onClick={() => setPage('reviews')}
+                  className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                >
+                  Write a Review
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center">Your reviews will appear here</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'Crews' && (
+          <div className="space-y-4">
+            {userStats.crewsJoined === 0 ? (
+              <div className="text-center py-8">
+                <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500">No crews joined yet</p>
+                <button 
+                  onClick={() => setPage('crews')}
+                  className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                >
+                  Browse Crews
+                </button>
+              </div>
+            ) : (
+              <p className="text-gray-500 text-center">Your crews will appear here</p>
+            )}
+          </div>
+        )}
+
+        {activeTab === 'Saved' && (
           <div className="text-center py-12">
-            <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500 text-sm">No {activeTab.toLowerCase()} yet</p>
+            <Bookmark className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500 text-sm">No saved items yet</p>
           </div>
         )}
       </div>
-    </div>
-  );
-};
-
-// ─── RECOMMENDATIONS PAGE ───────────────────────────────────────────────────
-const RecommendationsPage = ({ user, setPage }) => {
-  const [recommendKeywords, setRecommendKeywords] = useState('');
-  const [recommendations, setRecommendations] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const handleAIRecommendation = async () => {
-    if (!recommendKeywords.trim()) {
-      alert('Please enter what you want to read');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      console.log('🤖 Requesting AI recommendations for:', recommendKeywords);
-
-      const response = await axios.post(`${API_URL}/api/recommend/ai`, {
-        query: recommendKeywords
-      });
-
-      if (response.data.success) {
-        console.log('✅ AI recommendations received:', response.data);
-
-        // Format for display
-        setRecommendations([{
-          type: 'ai',
-          query: response.data.query,
-          recommendations: response.data.recommendations,
-          source: response.data.source,
-          isAI: response.data.isAI
-        }]);
-
-        alert(`${response.data.isAI ? '🤖 AI' : '📚'} recommendations loaded!`);
-      } else {
-        throw new Error(response.data.message || 'Failed to get recommendations');
-      }
-    } catch (error) {
-      console.error('❌ Error getting AI recommendations:', error);
-
-      // Show error but don't fail completely - fallback to regular search
-      alert('AI unavailable, using database search');
-      handleRecommendation(); // Fallback to regular search
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRecommendation = async () => {
-    if (!recommendKeywords.trim()) {
-      alert('Please enter what you want to read');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // Fallback to old static logic if AI fails
-      const keywords = recommendKeywords.toLowerCase().trim();
-      const matchingCategories = BOOK_RECOMMENDATIONS.filter(category => {
-        const categoryText = `${category.category} ${category.description} ${category.emoji}`.toLowerCase();
-        return categoryText.includes(keywords) ||
-               category.books.some(book =>
-                 book.title.toLowerCase().includes(keywords) ||
-                 book.author.toLowerCase().includes(keywords)
-               );
-      });
-
-      if (matchingCategories.length > 0) {
-        const results = [];
-        matchingCategories.forEach(category => {
-          results.push({
-            type: 'category',
-            category: category.category,
-            emoji: category.emoji,
-            description: category.description,
-            books: category.books
-          });
-        });
-        setRecommendations(results);
-      } else {
-        const allBooks = BOOK_RECOMMENDATIONS.flatMap(category =>
-          category.books.map(book => ({
-            ...book,
-            category: category.category,
-            emoji: category.emoji
-          }))
-        );
-
-        const filteredBooks = allBooks.filter(book =>
-          book.title.toLowerCase().includes(keywords) ||
-          book.author.toLowerCase().includes(keywords)
-        );
-
-        if (filteredBooks.length > 0) {
-          setRecommendations([
-            {
-              type: 'keyword',
-              keyword: keywords,
-              books: filteredBooks.slice(0, 10)
-            }
-          ]);
-        } else {
-          setRecommendations([
-            {
-              type: 'popular',
-              title: 'Most Popular Books',
-              books: [
-                { title: 'Atomic Habits', author: 'James Clear', category: 'Motivational / Self-Help', rating: 4.8 },
-                { title: 'The Hobbit', author: 'J.R.R. Tolkien', category: 'Fantasy', rating: 4.7 },
-                { title: 'To Kill a Mockingbird', author: 'Harper Lee', category: 'Literary Fiction', rating: 4.8 },
-                { title: 'The Diary of a Young Girl', author: 'Anne Frank', category: 'Biography', rating: 4.8 },
-                { title: 'The Power of Now', author: 'Eckhart Tolle', category: 'Philosophy', rating: 4.3 }
-              ]
-            }
-          ]);
-        }
-      }
-    } catch (error) {
-      console.error('Error in recommendation:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBrowseCategories = () => {
-    setRecommendations(
-      BOOK_RECOMMENDATIONS.map(category => ({
-        type: 'category',
-        category: category.category,
-        emoji: category.emoji,
-        description: category.description,
-        books: category.books.slice(0, 3)
-      }))
-    );
-  };
-
-  return (
-    <div className="max-w-7xl mx-auto px-6 py-8">
-      <button onClick={() => setPage('home')} className="mb-6 flex items-center gap-2 text-orange-600 hover:text-orange-700 font-semibold">
-        <ChevronLeft className="w-5 h-5" /> Back to Home
-      </button>
-
-      <div className="mb-8 rounded-2xl overflow-hidden bg-gradient-to-r from-orange-900 to-red-900 p-12">
-        <h1 className="text-4xl font-bold text-white mb-2">🤖 AI Book Recommendations</h1>
-        <p className="text-orange-100">Powered by Groq AI - Get personalized suggestions instantly!</p>
-      </div>
-
-      <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100 mb-8">
-        <h2 className="text-2xl font-bold mb-6 text-gray-900 flex items-center gap-2">
-          <Sparkles className="w-6 h-6 text-orange-500" />
-          Ask AI for Recommendations
-        </h2>
-
-        <div className="grid md:grid-cols-2 gap-8">
-          <div>
-            <div className="relative mb-6">
-              <Sparkles className="absolute left-4 top-4 text-orange-500" />
-              <input
-                type="text"
-                value={recommendKeywords}
-                onChange={(e) => setRecommendKeywords(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && handleAIRecommendation()}
-                className="w-full pl-12 pr-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none transition"
-                placeholder="e.g., books like Harry Potter, mystery thrillers, self-help..."
-              />
-            </div>
-
-            <button
-              onClick={handleAIRecommendation}
-              disabled={!recommendKeywords || loading}
-              className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Getting AI Recommendations...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-5 h-5" />
-                  Get AI Recommendations
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={handleRecommendation}
-              disabled={!recommendKeywords}
-              className="w-full bg-gradient-to-r from-blue-500 to-purple-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all disabled:opacity-50 mb-4"
-            >
-              📚 Quick Search (Database)
-            </button>
-
-            <button
-              onClick={handleBrowseCategories}
-              className="w-full bg-gradient-to-r from-green-500 to-teal-500 text-white py-4 rounded-xl font-bold text-lg hover:shadow-xl transition-all"
-            >
-              Browse All Categories
-            </button>
-          </div>
-
-          <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-6">
-            <h3 className="text-xl font-bold mb-4 text-gray-900 flex items-center gap-2">
-              <Sparkles className="w-5 h-5 text-orange-500" />
-              How to Use AI Search:
-            </h3>
-            <ul className="space-y-3 text-gray-700">
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Be specific:</strong> "fantasy books with strong female leads"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Describe mood:</strong> "books to help me relax after work"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Compare:</strong> "books like Harry Potter but for adults"</span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-orange-500 font-bold">💡</span>
-                <span><strong>Ask naturally:</strong> "I want to learn about investing"</span>
-              </li>
-            </ul>
-
-            <div className="mt-6 p-4 bg-white rounded-lg border border-orange-200">
-              <p className="text-sm text-gray-600">
-                🤖 <strong>Powered by Groq AI</strong> - Lightning-fast responses with personalized recommendations!
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* AI Recommendations Display */}
-      {recommendations.length > 0 && (
-        <div className="bg-white rounded-2xl shadow-xl p-8 border border-gray-100">
-          <div className="flex items-center justify-between mb-8">
-            <div>
-              <h2 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                {recommendations[0].isAI ? (
-                  <>
-                    <Sparkles className="w-6 h-6 text-orange-500" />
-                    AI Recommendations for "{recommendations[0].query}"
-                  </>
-                ) : recommendations[0].type === 'category' ? (
-                  'Recommended Categories'
-                ) : recommendations[0].type === 'keyword' ? (
-                  `Results for "${recommendations[0].keyword}"`
-                ) : (
-                  'Popular Recommendations'
-                )}
-              </h2>
-              {recommendations[0].source && (
-                <p className="text-sm text-gray-500 mt-1">
-                  📡 Source: {recommendations[0].source}
-                </p>
-              )}
-            </div>
-            <button
-              onClick={() => setRecommendations([])}
-              className="text-gray-500 hover:text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-100"
-            >
-              Clear Results
-            </button>
-          </div>
-
-          {/* AI Results (new format) */}
-          {recommendations[0].isAI && recommendations[0].recommendations && (
-            <div className="space-y-4">
-              {recommendations[0].recommendations.map((book, idx) => (
-                <div key={idx} className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-6 border border-orange-100 hover:border-orange-300 transition">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-orange-500 to-red-500 rounded-xl flex items-center justify-center text-white font-bold text-xl">
-                      {idx + 1}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900">{book.title}</h3>
-                          <p className="text-gray-600">by {book.author}</p>
-                          <p className="text-sm text-orange-600 font-semibold mt-1">
-                            📚 {book.genre}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1 bg-white px-3 py-1 rounded-full">
-                          <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                          <span className="font-bold">{book.rating}</span>
-                        </div>
-                      </div>
-
-                      {book.description && (
-                        <p className="text-gray-700 mb-3 leading-relaxed">
-                          {book.description}
-                        </p>
-                      )}
-
-                      {book.reason && (
-                        <div className="bg-white rounded-lg p-3 border border-orange-200">
-                          <p className="text-sm text-gray-600">
-                            <span className="font-semibold text-orange-600">💡 Why you'd like it:</span> {book.reason}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Original category/keyword results (keep existing code) */}
-          {!recommendations[0].isAI && (
-            <div className="space-y-8">
-              {recommendations.map((rec, idx) => (
-                <div key={idx} className="border border-gray-200 rounded-2xl overflow-hidden">
-                  {rec.type === 'category' ? (
-                    <div>
-                      <div className="bg-gradient-to-r from-orange-100 to-red-100 p-6">
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl">{rec.emoji}</span>
-                          <div>
-                            <h3 className="text-xl font-bold text-gray-900">{rec.category}</h3>
-                            <p className="text-gray-600">{rec.description}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="p-6">
-                        <h4 className="font-semibold text-gray-700 mb-4">Recommended Books:</h4>
-                        <div className="grid md:grid-cols-2 gap-4">
-                          {rec.books.map((book, bookIdx) => (
-                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
-                                  <p className="text-sm text-gray-600">by {book.author}</p>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                  <span className="text-sm font-semibold">{book.rating}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div>
-                      <div className="bg-gradient-to-r from-blue-100 to-purple-100 p-6">
-                        <h3 className="text-xl font-bold text-gray-900">
-                          {rec.type === 'keyword' ? `Books matching "${rec.keyword}"` : rec.title}
-                        </h3>
-                      </div>
-                      <div className="p-6">
-                        <div className="grid md:grid-cols-2 gap-4">
-                          {rec.books.map((book, bookIdx) => (
-                            <div key={bookIdx} className="bg-gray-50 rounded-xl p-4 hover:bg-gray-100 transition">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h5 className="font-bold text-gray-900">{book.title}</h5>
-                                  <p className="text-sm text-gray-600">by {book.author}</p>
-                                  {book.category && (
-                                    <p className="text-xs text-gray-500 mt-1">
-                                      <span className="bg-orange-100 text-orange-800 px-2 py-1 rounded-full">
-                                        {book.category}
-                                      </span>
-                                    </p>
-                                  )}
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Star className="w-4 h-4 text-yellow-500 fill-current" />
-                                  <span className="text-sm font-semibold">{book.rating}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Quick Category Grid */}
-      {recommendations.length === 0 && (
-        <div className="mt-8">
-          <h2 className="text-2xl font-bold mb-6 text-gray-900">Popular Categories</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-            {BOOK_RECOMMENDATIONS.slice(0, 12).map(category => (
-              <button
-                key={category.id}
-                onClick={() => {
-                  setRecommendKeywords(category.category.toLowerCase());
-                  setTimeout(() => handleRecommendation(), 100);
-                }}
-                className="bg-white rounded-xl p-4 shadow-sm hover:shadow-md transition text-center border border-gray-200 hover:border-orange-300"
-              >
-                <div className="text-2xl mb-2">{category.emoji}</div>
-                <p className="text-sm font-medium text-gray-700 truncate">{category.category}</p>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 };
@@ -2810,6 +3002,7 @@ export default function App() {
   const [posts, setPosts] = useState([]);
   const [donations, setDonations] = useState([]);
   const [reviews, setReviews] = useState([]);
+  const [showNotifications, setShowNotifications] = useState(false);
   const [crews, setCrews] = useState([
     { id: 1, name: 'Atomic Habits', author: 'James Clear', genre: 'Self Improvement', members: 1, chats: 0, cover: '#E8A87C' },
     { id: 2, name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 1, chats: 0, cover: '#C8622A' },
@@ -2828,6 +3021,12 @@ export default function App() {
         setCurrentUser(user);
         setIsLoggedIn(true);
         loadUserData(user);
+        
+        // Load crews from localStorage
+        const savedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
+        if (savedCrews.length > 0) {
+          setCrews(savedCrews);
+        }
       } catch (error) {
         console.error('Error loading saved user:', error);
       }
@@ -2838,6 +3037,11 @@ export default function App() {
     try {
       const userPosts = JSON.parse(localStorage.getItem(`user_${user.email}_posts`) || '[]');
       setPosts(userPosts);
+      
+      // Check for unread notifications
+      const notifications = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+      const unread = notifications.filter(n => !n.read).length;
+      setUnreadMessages(unread);
     } catch (error) {
       console.error('Error loading user data:', error);
     }
@@ -2847,33 +3051,28 @@ export default function App() {
     setCurrentUser(userData);
     setIsLoggedIn(true);
     setCurrentPage('home');
+    loadUserData(userData);
   };
 
   const handlePost = (postData) => {
-    const newPost = {
-      id: Date.now(),
-      ...postData,
-      user: currentUser.name,
-      time: 'Just now',
-      likes: 0,
-      comments: 0,
-      shares: 0
-    };
-
-    const updatedPosts = [newPost, ...posts];
+    const updatedPosts = [postData, ...posts];
     setPosts(updatedPosts);
     
     localStorage.setItem(`user_${currentUser.email}_posts`, JSON.stringify(updatedPosts));
     
+    const updatedStats = {
+      ...currentUser.stats,
+      postsCreated: (currentUser.stats?.postsCreated || 0) + 1
+    };
+    
     const updatedUser = {
       ...currentUser,
-      stats: {
-        ...currentUser.stats,
-        postsCreated: (currentUser.stats?.postsCreated || 0) + 1
-      }
+      stats: updatedStats
     };
+    
     setCurrentUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(updatedStats));
     
     showNotification('Post created successfully!', 'success');
   };
@@ -2888,10 +3087,14 @@ export default function App() {
       chats: 0,
       cover: '#C8622A',
       createdBy: currentUser.email,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      messages: []
     };
     
-    setCrews(prev => [newCrew, ...prev]);
+    const updatedCrews = [newCrew, ...crews];
+    setCrews(updatedCrews);
+    localStorage.setItem('crews', JSON.stringify(updatedCrews));
+    
     showNotification(`Crew "${book.title}" created! Invite friends to join.`, 'success');
   };
 
@@ -2903,6 +3106,10 @@ export default function App() {
   const handleUpdateStats = (updatedUser) => {
     setCurrentUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+  };
+
+  const handleNotificationClick = () => {
+    setShowNotifications(true);
   };
 
   if (!isLoggedIn) {
@@ -2925,6 +3132,17 @@ export default function App() {
         }`}>
           {notification.message}
         </div>
+      )}
+
+      {showNotifications && (
+        <NotificationsPage 
+          user={currentUser} 
+          setPage={setCurrentPage}
+          onClose={() => {
+            setShowNotifications(false);
+            setUnreadMessages(0);
+          }} 
+        />
       )}
 
       <div className="max-w-md mx-auto relative">
