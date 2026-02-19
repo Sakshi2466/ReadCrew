@@ -429,3 +429,212 @@ setInterval(async () => {
 }, 60 * 1000); // Check every minute
 
 module.exports = router;
+// Get book details from Groq AI
+router.post('/book-details', async (req, res) => {
+  try {
+    const { bookName, author } = req.body;
+    
+    if (!bookName || !author) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide book name and author'
+      });
+    }
+
+    console.log(`📖 Fetching details for: ${bookName} by ${author}`);
+
+    if (!groq) {
+      console.warn('⚠️ Groq client not initialized, using fallback');
+      return res.json({
+        success: true,
+        details: {
+          description: `${bookName} by ${author} is a compelling work that has resonated with readers worldwide. This book explores profound themes through engaging storytelling and memorable characters.`,
+          pages: 250,
+          published: '2020',
+          publisher: 'Unknown',
+          isbn: 'N/A'
+        },
+        source: 'fallback'
+      });
+    }
+
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: `You are a book expert. Provide detailed information about books.
+
+CRITICAL: Return ONLY a valid JSON object, nothing else. No markdown, no explanation, no code blocks.
+
+Format:
+{
+  "description": "2-3 paragraph book description",
+  "pages": 250,
+  "published": "2020",
+  "publisher": "Publisher Name",
+  "isbn": "ISBN number or N/A",
+  "genres": ["Genre1", "Genre2"],
+  "themes": ["Theme1", "Theme2"]
+}`
+        },
+        {
+          role: "user",
+          content: `Tell me about the book "${bookName}" by ${author}. Return ONLY the JSON object.`
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.5,
+      max_tokens: 1000
+    });
+
+    let responseText = completion.choices[0].message.content;
+    console.log('📥 Raw Groq response:', responseText.substring(0, 200));
+    
+    // Clean response
+    responseText = responseText
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .replace(/`/g, '')
+      .trim();
+    
+    // Find JSON object
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      throw new Error('No JSON object found in response');
+    }
+    
+    const details = JSON.parse(jsonMatch[0]);
+
+    console.log(`✅ Book details fetched successfully`);
+
+    res.json({
+      success: true,
+      details: details,
+      source: 'groq-ai'
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching book details:', error.message);
+    res.json({
+      success: true,
+      details: {
+        description: `${req.body.bookName} by ${req.body.author} is a remarkable book that has captivated readers with its unique perspective and engaging narrative.`,
+        pages: 250,
+        published: '2020',
+        publisher: 'Unknown',
+        isbn: 'N/A'
+      },
+      source: 'error-fallback'
+    });
+  }
+});
+
+// Get similar books from Groq AI
+router.post('/similar-books', async (req, res) => {
+  try {
+    const { bookName, author, genre } = req.body;
+    
+    if (!bookName || !author) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide book name and author'
+      });
+    }
+
+    console.log(`🔍 Finding similar books to: ${bookName} by ${author}`);
+
+    if (!groq) {
+      console.warn('⚠️ Groq client not initialized, using fallback');
+      return res.json({
+        success: true,
+        books: getMockSimilarBooks(genre),
+        source: 'fallback'
+      });
+    }
+
+    const completion = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: `You are a book recommendation expert. Find similar books.
+
+CRITICAL: Return ONLY a valid JSON array, nothing else. No markdown, no explanation, no code blocks.
+
+Format:
+[
+  {
+    "title": "Book Title",
+    "author": "Author Name",
+    "genre": "Genre",
+    "rating": 4.5,
+    "similarity": "Brief explanation of why it's similar"
+  }
+]
+
+Return exactly 5 similar books.`
+        },
+        {
+          role: "user",
+          content: `Find 5 books similar to "${bookName}" by ${author}${genre ? ` (Genre: ${genre})` : ''}. Return ONLY the JSON array.`
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      temperature: 0.7,
+      max_tokens: 2000
+    });
+
+    let responseText = completion.choices[0].message.content;
+    console.log('📥 Raw Groq response:', responseText.substring(0, 200));
+    
+    // Clean response
+    responseText = responseText
+      .replace(/```json\n?/g, '')
+      .replace(/```\n?/g, '')
+      .replace(/`/g, '')
+      .trim();
+    
+    // Find JSON array
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      throw new Error('No JSON array found in response');
+    }
+    
+    const similarBooks = JSON.parse(jsonMatch[0]);
+
+    // Add colors
+    const colors = ['#E8A87C', '#7B9EA6', '#C8622A', '#C8956C', '#C4A882'];
+    similarBooks.forEach((book, idx) => {
+      book.cover = colors[idx % colors.length];
+    });
+
+    console.log(`✅ Found ${similarBooks.length} similar books`);
+
+    res.json({
+      success: true,
+      books: similarBooks,
+      source: 'groq-ai'
+    });
+
+  } catch (error) {
+    console.error('❌ Error fetching similar books:', error.message);
+    res.json({
+      success: true,
+      books: getMockSimilarBooks(req.body.genre),
+      source: 'error-fallback'
+    });
+  }
+});
+
+// Mock similar books fallback
+function getMockSimilarBooks(genre) {
+  const colors = ['#E8A87C', '#7B9EA6', '#C8622A', '#C8956C', '#C4A882'];
+  return [
+    { title: 'The Alchemist', author: 'Paulo Coelho', genre: genre || 'Fiction', rating: 4.7, similarity: 'Similar inspirational themes', cover: colors[0] },
+    { title: 'The Five People You Meet in Heaven', author: 'Mitch Albom', genre: genre || 'Fiction', rating: 4.5, similarity: 'Same author, similar style', cover: colors[1] },
+    { title: 'Life of Pi', author: 'Yann Martel', genre: genre || 'Fiction', rating: 4.3, similarity: 'Spiritual journey theme', cover: colors[2] },
+    { title: 'The Kite Runner', author: 'Khaled Hosseini', genre: genre || 'Fiction', rating: 4.6, similarity: 'Emotional depth', cover: colors[3] },
+    { title: 'A Man Called Ove', author: 'Fredrik Backman', genre: genre || 'Fiction', rating: 4.5, similarity: 'Heartwarming story', cover: colors[4] }
+  ];
+}
+
+module.exports = router;
