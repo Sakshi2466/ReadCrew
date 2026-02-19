@@ -13,6 +13,9 @@ import {
 import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, chatAPI, crewAPI, userAPI, bookCrewAPI, getTrendingBooks, aiChatAPI } from './services/api';
 import axios from 'axios';
 
+// Import BookCover component
+import BookCover from './components/BookCover';
+
 // API URL
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 
@@ -667,6 +670,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const [showBookDetails, setShowBookDetails] = useState(false);
   const [bookDetails, setBookDetails] = useState(null);
   const [loadingBookDetails, setLoadingBookDetails] = useState(false);
+  const [bookCovers, setBookCovers] = useState({});
 
   // Real-time stats
   const [userStats, setUserStats] = useState({
@@ -696,26 +700,47 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       
       if (data.success) {
         setTrendingBooks(data.books);
+        // Fetch covers for trending books
+        fetchBookCovers(data.books);
       } else {
         // Fallback to mock data
-        setTrendingBooks([
+        const mockBooks = [
           { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
           { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
           { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D' },
           { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882' },
-        ]);
+        ];
+        setTrendingBooks(mockBooks);
+        fetchBookCovers(mockBooks);
       }
     } catch (error) {
       console.error('Error loading trending books:', error);
-      setTrendingBooks([
+      const mockBooks = [
         { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
         { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
         { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D' },
         { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882' },
-      ]);
+      ];
+      setTrendingBooks(mockBooks);
+      fetchBookCovers(mockBooks);
     } finally {
       setLoadingTrending(false);
     }
+  };
+
+  // Function to fetch book covers
+  const fetchBookCovers = async (books) => {
+    const coverMap = {};
+    for (const book of books) {
+      try {
+        // You'll need to import getCoverByTitle from your bookCoverAPI
+        // For now, we'll just use placeholder colors
+        coverMap[book.title] = null;
+      } catch (error) {
+        console.error('Error fetching cover:', error);
+      }
+    }
+    setBookCovers(coverMap);
   };
 
   const loadFeedPosts = () => {
@@ -861,12 +886,12 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               ) : bookDetails && (
                 <div className="space-y-4">
                   <div className="flex gap-4">
-                    <div 
-                      className="w-24 h-32 rounded-xl flex items-center justify-center"
-                      style={{ backgroundColor: selectedBook.cover || '#C8622A' }}
-                    >
-                      <BookOpen className="w-10 h-10 text-white" />
-                    </div>
+                    <BookCover 
+                      title={selectedBook.title}
+                      author={selectedBook.author}
+                      coverUrl={selectedBook.coverUrl}
+                      size="lg"
+                    />
                     <div className="flex-1">
                       <h2 className="text-xl font-bold text-gray-900">{bookDetails.title}</h2>
                       <p className="text-gray-600">by {bookDetails.author}</p>
@@ -1134,12 +1159,13 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                   className="shrink-0 w-32 cursor-pointer hover:scale-105 transition-transform"
                   onClick={() => handleBookClick(book)}
                 >
-                  <div 
-                    className="w-32 h-40 rounded-xl shadow-lg flex items-end justify-center pb-3 mb-2"
-                    style={{ backgroundColor: book.cover }}
-                  >
-                    <BookOpen className="w-8 h-8 text-white opacity-50" />
-                  </div>
+                  <BookCover 
+                    title={book.title}
+                    author={book.author}
+                    coverUrl={book.coverUrl}
+                    size="md"
+                    className="mb-2"
+                  />
                   <p className="text-sm font-semibold text-gray-900 leading-tight">{book.title}</p>
                   <p className="text-xs text-gray-500">{book.author}</p>
                   <div className="flex items-center gap-1 mt-1">
@@ -1172,10 +1198,13 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer"
                 onClick={() => setPage('crews')}
               >
-                <div className="h-16 flex items-center justify-center" style={{ backgroundColor: crew.cover + '20' }}>
-                  <div className="w-10 h-12 rounded-lg shadow-md flex items-center justify-center" style={{ backgroundColor: crew.cover }}>
-                    <BookOpen className="w-5 h-5 text-white" />
-                  </div>
+                <div className="h-16 flex items-center justify-center p-2" style={{ backgroundColor: crew.cover + '20' }}>
+                  <BookCover 
+                    title={crew.name}
+                    author={crew.author}
+                    coverUrl={crew.coverUrl}
+                    size="xs"
+                  />
                 </div>
                 <div className="p-3">
                   <h3 className="font-semibold text-gray-900 text-sm leading-tight">{crew.name}</h3>
@@ -1226,6 +1255,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [results, setResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [selectedTags, setSelectedTags] = useState([]);
+  const [bookCovers, setBookCovers] = useState({});
   const inputRef = useRef();
 
   const SUGGESTION_MAP = {
@@ -1311,19 +1341,37 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
       if (response.data.success && response.data.recommendations) {
         setResults(response.data.recommendations);
+        fetchBookCovers(response.data.recommendations);
       } else {
         throw new Error('No recommendations');
       }
     } catch (error) {
       console.error('Error fetching recommendations:', error);
       // Fallback
-      setResults([
+      const fallbackBooks = [
         { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', description: 'Tiny changes, remarkable results', rating: 4.8 },
         { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', description: 'Survival on Mars', rating: 4.7 },
-      ]);
+      ];
+      setResults(fallbackBooks);
+      fetchBookCovers(fallbackBooks);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Function to fetch book covers
+  const fetchBookCovers = async (books) => {
+    const coverMap = {};
+    for (const book of books) {
+      try {
+        // You'll need to import getCoverByTitle from your bookCoverAPI
+        // For now, we'll just use placeholder colors
+        coverMap[book.title] = null;
+      } catch (error) {
+        console.error('Error fetching cover:', error);
+      }
+    }
+    setBookCovers(coverMap);
   };
 
   const handleJoinCrew = (book) => {
@@ -1372,9 +1420,12 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                 {results.map((book, i) => (
                   <div key={i} className="bg-white rounded-2xl border border-[#EDE8E3] p-4">
                     <div className="flex gap-4">
-                      <div className="w-20 h-28 rounded-xl flex items-center justify-center" style={{ backgroundColor: getBookColor(book.title) }}>
-                        <BookOpen className="w-8 h-8 text-white" />
-                      </div>
+                      <BookCover 
+                        title={book.title}
+                        author={book.author}
+                        coverUrl={book.coverUrl || bookCovers[book.title]}
+                        size="md"
+                      />
                       <div className="flex-1">
                         <h3 className="font-bold text-[#2D2419]">{book.title}</h3>
                         <p className="text-sm text-[#9B8E84]">by {book.author}</p>
@@ -1864,6 +1915,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     genre: '',
     cover: '#C8622A'
   });
+  const [bookCovers, setBookCovers] = useState({});
   
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -1872,11 +1924,27 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     // Load crews from localStorage
     const savedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
     setCrews(savedCrews.length > 0 ? savedCrews : initialCrews);
+    fetchBookCovers(savedCrews.length > 0 ? savedCrews : initialCrews);
     
     // Load joined crews
     const savedJoinedCrews = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
     setJoinedCrews(savedJoinedCrews);
   }, [user.email]);
+
+  // Function to fetch book covers
+  const fetchBookCovers = async (crews) => {
+    const coverMap = {};
+    for (const crew of crews) {
+      try {
+        // You'll need to import getCoverByTitle from your bookCoverAPI
+        // For now, we'll just use placeholder colors
+        coverMap[crew.name] = null;
+      } catch (error) {
+        console.error('Error fetching cover:', error);
+      }
+    }
+    setBookCovers(coverMap);
+  };
 
   useEffect(() => {
     if (selectedCrew) {
@@ -2143,12 +2211,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           </button>
           <div className="flex items-center gap-2 flex-1 mx-3">
             <div className="relative">
-              <div 
-                className="w-8 h-8 rounded-lg flex items-center justify-center"
-                style={{ backgroundColor: selectedCrew.cover }}
-              >
-                <BookOpen className="w-4 h-4 text-white" />
-              </div>
+              <BookCover 
+                title={selectedCrew.name}
+                author={selectedCrew.author}
+                coverUrl={selectedCrew.coverUrl || bookCovers[selectedCrew.name]}
+                size="xs"
+              />
               {hasJoined && (
                 <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
               )}
@@ -2305,12 +2373,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="flex gap-4 mb-6">
-            <div 
-              className="w-24 h-32 rounded-xl shadow-lg flex items-center justify-center shrink-0"
-              style={{ backgroundColor: selectedCrew.cover }}
-            >
-              <BookOpen className="w-12 h-12 text-white opacity-80" />
-            </div>
+            <BookCover 
+              title={selectedCrew.name}
+              author={selectedCrew.author}
+              coverUrl={selectedCrew.coverUrl || bookCovers[selectedCrew.name]}
+              size="lg"
+            />
             <div className="flex-1">
               <span className="text-xs px-2 py-1 bg-orange-100 text-orange-600 rounded-full font-medium inline-block mb-2">
                 {selectedCrew.genre}
@@ -2472,12 +2540,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               {similarBooks.map((book, i) => (
                 <div key={i} className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition">
                   <div className="flex items-start gap-3">
-                    <div 
-                      className="w-12 h-16 rounded-lg flex items-center justify-center"
-                      style={{ backgroundColor: book.cover }}
-                    >
-                      <BookOpen className="w-6 h-6 text-white" />
-                    </div>
+                    <BookCover 
+                      title={book.title}
+                      author={book.author}
+                      coverUrl={book.coverUrl}
+                      size="sm"
+                    />
                     <div className="flex-1">
                       <h4 className="font-semibold text-gray-900">{book.title}</h4>
                       <p className="text-xs text-gray-500">by {book.author}</p>
@@ -2594,14 +2662,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
                     Joined
                   </div>
-                  <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
+                  <div className="h-20 relative">
                     <div className="absolute inset-0 flex items-center px-4 gap-4">
-                      <div 
-                        className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
-                        style={{ backgroundColor: crew.cover }}
-                      >
-                        <BookOpen className="w-6 h-6 text-white" />
-                      </div>
+                      <BookCover 
+                        title={crew.name}
+                        author={crew.author}
+                        coverUrl={crew.coverUrl || bookCovers[crew.name]}
+                        size="sm"
+                      />
                       <div>
                         <p className="font-bold text-gray-900">{crew.name}</p>
                         <p className="text-xs text-gray-500">by {crew.author}</p>
@@ -2637,14 +2705,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
                 onClick={() => { setSelectedCrew(crew); setView('bookpage'); }}
               >
-                <div className="h-20 relative" style={{ backgroundColor: crew.cover + '20' }}>
+                <div className="h-20 relative">
                   <div className="absolute inset-0 flex items-center px-4 gap-4">
-                    <div 
-                      className="w-14 h-18 rounded-xl shadow-md flex items-center justify-center"
-                      style={{ backgroundColor: crew.cover }}
-                    >
-                      <BookOpen className="w-6 h-6 text-white" />
-                    </div>
+                    <BookCover 
+                      title={crew.name}
+                      author={crew.author}
+                      coverUrl={crew.coverUrl || bookCovers[crew.name]}
+                      size="sm"
+                    />
                     <div>
                       <p className="font-bold text-gray-900">{crew.name}</p>
                       <p className="text-xs text-gray-500">by {crew.author}</p>
