@@ -14,8 +14,7 @@ import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommen
 import axios from 'axios';
 
 // API URL
-const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:10000';
-
+const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 // Validation functions
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validatePhone = (phone) => /^[6-9]\d{9}$/.test(phone);
