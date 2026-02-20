@@ -6,7 +6,8 @@ import {
   Sparkles, Lock, Eye, EyeOff, UserPlus, Gift, ThumbsUp, ThumbsDown,
   Trash2, Edit, Target, Check, ArrowLeft, Clock, TrendingUp, Menu, Upload,
   Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause,
-  Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink, ThumbsUp as LikeIcon
+  Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink, ThumbsUp as LikeIcon,
+  Link2, Instagram, Facebook, Twitter, WhatsApp
 } from 'lucide-react';
 
 // Import API functions
@@ -389,6 +390,358 @@ const NotificationsPage = ({ user, setPage, onClose }) => {
   );
 };
 
+// ─── SHARE MODAL ─────────────────────────────────────────────────────────
+const ShareModal = ({ post, onClose }) => {
+  const shareUrl = window.location.href;
+  const shareText = `Check out this post by ${post.userName}: "${post.content?.substring(0, 50)}..."`;
+
+  const shareHandlers = {
+    whatsapp: () => {
+      window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank');
+    },
+    instagram: () => {
+      // Instagram doesn't support direct sharing via URL, copy to clipboard
+      navigator.clipboard.writeText(shareText + ' ' + shareUrl);
+      alert('Link copied! You can paste it in Instagram');
+    },
+    facebook: () => {
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank');
+    },
+    twitter: () => {
+      window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, '_blank');
+    },
+    copyLink: () => {
+      navigator.clipboard.writeText(shareUrl);
+      alert('Link copied to clipboard!');
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl w-full max-w-sm">
+        <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+          <h3 className="font-semibold text-gray-900">Share Post</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <X className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+        
+        <div className="p-4">
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            <button onClick={shareHandlers.whatsapp} className="flex flex-col items-center gap-2">
+              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
+                <WhatsApp className="w-6 h-6 text-green-600" />
+              </div>
+              <span className="text-xs text-gray-600">WhatsApp</span>
+            </button>
+            
+            <button onClick={shareHandlers.instagram} className="flex flex-col items-center gap-2">
+              <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center">
+                <Instagram className="w-6 h-6 text-pink-600" />
+              </div>
+              <span className="text-xs text-gray-600">Instagram</span>
+            </button>
+            
+            <button onClick={shareHandlers.facebook} className="flex flex-col items-center gap-2">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+                <Facebook className="w-6 h-6 text-blue-600" />
+              </div>
+              <span className="text-xs text-gray-600">Facebook</span>
+            </button>
+            
+            <button onClick={shareHandlers.twitter} className="flex flex-col items-center gap-2">
+              <div className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center">
+                <Twitter className="w-6 h-6 text-sky-600" />
+              </div>
+              <span className="text-xs text-gray-600">Twitter</span>
+            </button>
+          </div>
+          
+          <button 
+            onClick={shareHandlers.copyLink}
+            className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50"
+          >
+            <Link2 className="w-5 h-5" />
+            Copy Link
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ─── COMMENT SECTION ─────────────────────────────────────────────────────
+const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
+  const [comments, setComments] = useState([]);
+  const [newComment, setNewComment] = useState('');
+  const [replyTo, setReplyTo] = useState(null);
+  const [showReplies, setShowReplies] = useState({});
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    loadComments();
+  }, [post.id]);
+
+  const loadComments = () => {
+    const savedComments = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
+    setComments(savedComments);
+  };
+
+  const handleSubmitComment = () => {
+    if (!newComment.trim()) return;
+
+    const comment = {
+      id: Date.now(),
+      postId: post.id,
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userInitials: user.name.slice(0, 2).toUpperCase(),
+      content: newComment,
+      timestamp: new Date().toISOString(),
+      parentId: replyTo?.id || null,
+      likes: 0,
+      likedBy: []
+    };
+
+    const updatedComments = [...comments, comment];
+    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updatedComments));
+    setComments(updatedComments);
+    setNewComment('');
+    setReplyTo(null);
+
+    // Create notification for post owner
+    if (post.userEmail !== user.email) {
+      const notification = {
+        id: Date.now(),
+        type: 'comment',
+        fromUser: user.name,
+        fromUserEmail: user.email,
+        postId: post.id,
+        comment: newComment,
+        message: `${user.name} commented on your post: "${newComment.substring(0, 30)}${newComment.length > 30 ? '...' : ''}"`,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
+      
+      const userNotifications = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
+      userNotifications.unshift(notification);
+      localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(userNotifications));
+      updateNotificationCount();
+    }
+
+    // Create notification for parent comment owner if replying
+    if (replyTo && replyTo.userEmail !== user.email) {
+      const notification = {
+        id: Date.now(),
+        type: 'comment',
+        fromUser: user.name,
+        fromUserEmail: user.email,
+        postId: post.id,
+        comment: newComment,
+        message: `${user.name} replied to your comment: "${newComment.substring(0, 30)}${newComment.length > 30 ? '...' : ''}"`,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
+      
+      const userNotifications = JSON.parse(localStorage.getItem(`user_${replyTo.userEmail}_notifications`) || '[]');
+      userNotifications.unshift(notification);
+      localStorage.setItem(`user_${replyTo.userEmail}_notifications`, JSON.stringify(userNotifications));
+      updateNotificationCount();
+    }
+  };
+
+  const handleLikeComment = (commentId) => {
+    const updatedComments = comments.map(c => {
+      if (c.id === commentId) {
+        if (c.likedBy?.includes(user.id)) return c;
+        return {
+          ...c,
+          likes: (c.likes || 0) + 1,
+          likedBy: [...(c.likedBy || []), user.id]
+        };
+      }
+      return c;
+    });
+    
+    setComments(updatedComments);
+    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updatedComments));
+  };
+
+  const toggleReplies = (commentId) => {
+    setShowReplies(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
+
+  const formatTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const CommentComponent = ({ comment, isReply = false }) => {
+    const replies = comments.filter(c => c.parentId === comment.id);
+    const isLiked = comment.likedBy?.includes(user.id);
+
+    return (
+      <div className={`${isReply ? 'ml-8 mt-2' : 'mt-3'}`}>
+        <div className="flex gap-2">
+          <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
+            {comment.userInitials}
+          </div>
+          <div className="flex-1">
+            <div className="bg-gray-100 rounded-xl p-3">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="font-semibold text-xs text-gray-900">{comment.userName}</span>
+                <span className="text-[10px] text-gray-500">{formatTime(comment.timestamp)}</span>
+              </div>
+              <p className="text-sm text-gray-800">{comment.content}</p>
+              
+              <div className="flex items-center gap-3 mt-2">
+                <button 
+                  onClick={() => handleLikeComment(comment.id)}
+                  className={`flex items-center gap-1 text-xs ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
+                >
+                  <Heart className={`w-3 h-3 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                  <span>{comment.likes || 0}</span>
+                </button>
+                <button 
+                  onClick={() => {
+                    setReplyTo(comment);
+                    inputRef.current?.focus();
+                  }}
+                  className="text-xs text-gray-500 hover:text-orange-500"
+                >
+                  Reply
+                </button>
+              </div>
+            </div>
+
+            {replies.length > 0 && (
+              <button 
+                onClick={() => toggleReplies(comment.id)}
+                className="text-xs text-gray-500 ml-2 mt-1 hover:text-orange-500"
+              >
+                {showReplies[comment.id] ? 'Hide replies' : `View ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
+              </button>
+            )}
+
+            {showReplies[comment.id] && (
+              <div className="mt-2">
+                {replies.map(reply => (
+                  <CommentComponent key={reply.id} comment={reply} isReply={true} />
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const topLevelComments = comments.filter(c => !c.parentId);
+
+  return (
+    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+      {/* Header */}
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <h2 className="font-semibold text-gray-900">Comments</h2>
+        <div className="w-8"></div>
+      </div>
+
+      {/* Original Post Preview */}
+      <div className="bg-gray-50 p-4 border-b border-gray-200">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            {post.userName?.slice(0, 2) || 'U'}
+          </div>
+          <div className="flex-1">
+            <p className="font-semibold text-sm text-gray-900">{post.userName}</p>
+            <p className="text-sm text-gray-700 mt-1">{post.content}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Comments List */}
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        {topLevelComments.length === 0 ? (
+          <div className="text-center py-12">
+            <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No comments yet</p>
+            <p className="text-xs text-gray-400 mt-1">Be the first to comment!</p>
+          </div>
+        ) : (
+          topLevelComments.map(comment => (
+            <CommentComponent key={comment.id} comment={comment} />
+          ))
+        )}
+      </div>
+
+      {/* Reply Indicator */}
+      {replyTo && (
+        <div className="bg-gray-100 px-4 py-2 flex items-center justify-between border-t border-gray-200">
+          <p className="text-xs text-gray-600">
+            Replying to <span className="font-semibold">{replyTo.userName}</span>
+          </p>
+          <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-gray-600">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Comment Input */}
+      <div className="bg-white border-t border-gray-200 px-4 py-3">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+            {user?.name?.slice(0, 2).toUpperCase()}
+          </div>
+          <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-full px-4 py-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSubmitComment();
+                }
+              }}
+              className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
+              placeholder={replyTo ? `Reply to ${replyTo.userName}...` : "Add a comment..."}
+            />
+            <button
+              onClick={handleSubmitComment}
+              disabled={!newComment.trim()}
+              className={`p-1.5 rounded-full ${
+                newComment.trim() 
+                  ? 'text-orange-500 hover:bg-orange-50' 
+                  : 'text-gray-400'
+              }`}
+            >
+              <Send className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── LOGIN PAGE ─────────────────────────────────────────────────────────────
 const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -448,9 +801,9 @@ const LoginPage = ({ onLogin }) => {
           createdAt: new Date().toISOString(),
           stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
           joinedCrews: [],
-          likedPosts: [], // Track liked posts
-          likedReviews: [], // Track liked reviews
-          likedMessages: [] // Track liked messages
+          likedPosts: [],
+          likedReviews: [],
+          likedMessages: []
         };
 
         const users = JSON.parse(localStorage.getItem('users') || '[]');
@@ -689,6 +1042,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const [showBookDetails, setShowBookDetails] = useState(false);
   const [bookDetails, setBookDetails] = useState(null);
   const [loadingBookDetails, setLoadingBookDetails] = useState(false);
+  const [showComments, setShowComments] = useState(null);
+  const [showShare, setShowShare] = useState(null);
 
   // Real-time stats
   const [userStats, setUserStats] = useState({
@@ -769,7 +1124,6 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     }
   };
 
-  // FIXED: Single like per user
   const handleLikePost = (postId, post) => {
     // Check if already liked
     if (likedPosts.includes(postId)) {
@@ -816,43 +1170,12 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     }
   };
 
-  const handleComment = (postId) => {
-    const comment = prompt('Enter your comment:');
-    if (comment) {
-      setFeedPosts(prev => prev.map(p => 
-        p.id === postId ? { ...p, comments: (p.comments || 0) + 1 } : p
-      ));
-      
-      // Create notification
-      const post = feedPosts.find(p => p.id === postId);
-      if (post && post.userEmail !== user.email) {
-        const notification = {
-          id: Date.now(),
-          type: 'comment',
-          fromUser: user.name,
-          fromUserEmail: user.email,
-          postId: postId,
-          comment: comment,
-          message: `${user.name} commented on your post: "${comment.substring(0, 30)}${comment.length > 30 ? '...' : ''}"`,
-          timestamp: new Date().toISOString(),
-          read: false
-        };
-        
-        const userNotifications = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
-        userNotifications.unshift(notification);
-        localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(userNotifications));
-        
-        // Update notification count in parent
-        updateNotificationCount();
-      }
-    }
+  const handleComment = (post) => {
+    setShowComments(post);
   };
 
-  const handleShare = (postId) => {
-    setFeedPosts(prev => prev.map(p => 
-      p.id === postId ? { ...p, shares: (p.shares || 0) + 1 } : p
-    ));
-    alert('Post shared!');
+  const handleShare = (post) => {
+    setShowShare(post);
   };
 
   const handleBookClick = async (book) => {
@@ -989,6 +1312,24 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
         </div>
       )}
 
+      {/* Comments Modal */}
+      {showComments && (
+        <CommentSection 
+          post={showComments}
+          user={user}
+          onClose={() => setShowComments(null)}
+          updateNotificationCount={updateNotificationCount}
+        />
+      )}
+
+      {/* Share Modal */}
+      {showShare && (
+        <ShareModal 
+          post={showShare}
+          onClose={() => setShowShare(null)}
+        />
+      )}
+
       <div className="px-4 py-4 space-y-5">
         {/* Welcome Card */}
         <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
@@ -1095,66 +1436,70 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                 </button>
               </div>
             ) : (
-              feedPosts.map((post, idx) => (
-                <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                      {post.userName?.slice(0, 2) || 'U'}
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-gray-900">{post.userName || 'Anonymous'}</p>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            <BookOpen className="w-3 h-3 text-orange-500" />
-                            <p className="text-xs text-gray-500">{post.bookName || 'Shared a story'}</p>
+              feedPosts.map((post, idx) => {
+                const commentCount = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]').length;
+                
+                return (
+                  <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                    <div className="flex items-start gap-3 mb-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        {post.userName?.slice(0, 2) || 'U'}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="font-semibold text-gray-900">{post.userName || 'Anonymous'}</p>
+                            <div className="flex items-center gap-1 mt-0.5">
+                              <BookOpen className="w-3 h-3 text-orange-500" />
+                              <p className="text-xs text-gray-500">{post.bookName || 'Shared a story'}</p>
+                            </div>
                           </div>
+                          <span className="text-xs text-gray-400">
+                            {new Date(post.createdAt || Date.now()).toLocaleDateString()}
+                          </span>
                         </div>
-                        <span className="text-xs text-gray-400">
-                          {new Date(post.createdAt || Date.now()).toLocaleDateString()}
-                        </span>
                       </div>
                     </div>
+                    
+                    {post.image && (
+                      <img 
+                        src={post.image} 
+                        alt={post.bookName} 
+                        className="w-full h-48 object-cover rounded-xl mb-3"
+                      />
+                    )}
+                    
+                    <p className="text-sm text-gray-700 leading-relaxed mb-3">
+                      {post.story || post.content}
+                    </p>
+                    
+                    <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
+                      <button 
+                        onClick={() => handleLikePost(post.id, post)}
+                        className={`flex items-center gap-1.5 text-xs ${likedPosts.includes(post.id) ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
+                        disabled={likedPosts.includes(post.id)}
+                      >
+                        <Heart className={`w-4 h-4 ${likedPosts.includes(post.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                        <span>{post.likes || 0}</span>
+                      </button>
+                      <button 
+                        onClick={() => handleComment(post)}
+                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
+                      >
+                        <MessageCircle className="w-4 h-4" />
+                        <span>{commentCount}</span>
+                      </button>
+                      <button 
+                        onClick={() => handleShare(post)}
+                        className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
+                      >
+                        <Share2 className="w-4 h-4" />
+                        <span>{post.shares || 0}</span>
+                      </button>
+                    </div>
                   </div>
-                  
-                  {post.image && (
-                    <img 
-                      src={post.image} 
-                      alt={post.bookName} 
-                      className="w-full h-48 object-cover rounded-xl mb-3"
-                    />
-                  )}
-                  
-                  <p className="text-sm text-gray-700 leading-relaxed mb-3">
-                    {post.story || post.content}
-                  </p>
-                  
-                  <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
-                    <button 
-                      onClick={() => handleLikePost(post.id, post)}
-                      className={`flex items-center gap-1.5 text-xs ${likedPosts.includes(post.id) ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
-                      disabled={likedPosts.includes(post.id)}
-                    >
-                      <Heart className={`w-4 h-4 ${likedPosts.includes(post.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                      <span>{post.likes || 0}</span>
-                    </button>
-                    <button 
-                      onClick={() => handleComment(post.id)}
-                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
-                    >
-                      <MessageCircle className="w-4 h-4" />
-                      <span>{post.comments || 0}</span>
-                    </button>
-                    <button 
-                      onClick={() => handleShare(post.id)}
-                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
-                    >
-                      <Share2 className="w-4 h-4" />
-                      <span>{post.shares || 0}</span>
-                    </button>
-                  </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
@@ -1737,7 +2082,6 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
     setLikedReviews(savedLikedReviews);
   };
 
-  // FIXED: Single like per review
   const handleLikeReview = (reviewId, review) => {
     if (likedReviews.includes(reviewId)) {
       alert('You have already liked this review');
@@ -2335,50 +2679,54 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     </div>
   );
 
-  // ========== CHAT VIEW (WhatsApp Style) ==========
+  // ========== CHAT VIEW (WhatsApp Style) - FIXED WITH inset-0 ==========
   if (view === 'chat' && selectedCrew) {
     const hasJoined = isUserJoined(selectedCrew.id);
     const messageGroups = groupMessagesByDate();
 
     return (
-      <div className="h-screen flex flex-col bg-gray-100">
+      <div
+        className="fixed inset-0 flex flex-col z-[60] bg-[#e5ddd5]"
+        style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}
+      >
         {showJoinMessage && <JoinMessageToast />}
 
-        {/* Chat Header */}
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between z-10 shadow-sm">
+        {/* ── Chat Header ── */}
+        <div className="flex-shrink-0 bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
-            <button onClick={() => setView('detail')} className="p-1 hover:bg-gray-100 rounded-full">
+            <button
+              onClick={() => setView('detail')}
+              className="p-1 hover:bg-gray-100 rounded-full"
+            >
               <ChevronLeft className="w-5 h-5 text-gray-600" />
             </button>
             <div className="relative">
-              <DynamicBookCover 
+              <DynamicBookCover
                 title={selectedCrew.name}
                 author={selectedCrew.author}
                 size="xs"
               />
               {hasJoined && (
-                <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full"></span>
+                <span className="absolute -bottom-1 -right-1 w-3 h-3 bg-green-500 border-2 border-white rounded-full" />
               )}
             </div>
             <div>
-              <p className="font-semibold text-gray-900">{selectedCrew.name}</p>
+              <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
               <p className="text-xs text-gray-500">
-                {crewMembers.length} member{crewMembers.length !== 1 ? 's' : ''} • 
+                {crewMembers.length} member{crewMembers.length !== 1 ? 's' : ''} •{' '}
                 {crewMembers.filter(m => m.online).length} online
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
-            <button className="p-2 hover:bg-gray-100 rounded-full">
-              <MoreHorizontal className="w-5 h-5 text-gray-600" />
-            </button>
-          </div>
+          <button className="p-2 hover:bg-gray-100 rounded-full">
+            <MoreHorizontal className="w-5 h-5 text-gray-600" />
+          </button>
         </div>
 
-        {/* Chat Messages Area - WhatsApp style bubbles */}
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 bg-[#e5ddd5]">
+        {/* ── Messages Scroll Area ── */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-2">
           {!hasJoined ? (
-            <div className="flex flex-col items-center justify-center h-full text-center bg-white/80 rounded-xl p-8">
+            <div className="flex flex-col items-center justify-center h-full text-center bg-white/80 rounded-xl p-8 mx-4 my-8">
               <Lock className="w-16 h-16 text-gray-400 mb-4" />
               <p className="text-gray-700 font-medium mb-2">This chat is private</p>
               <p className="text-gray-500 text-sm mb-4">Join this crew to see messages</p>
@@ -2391,63 +2739,88 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
             </div>
           ) : (
             <>
+              {messageGroups.length === 0 && (
+                <div className="flex flex-col items-center justify-center h-full py-16 text-center">
+                  <div className="w-16 h-16 bg-white/60 rounded-full flex items-center justify-center mb-3 shadow-sm">
+                    <MessageCircle className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <p className="text-gray-600 font-medium">No messages yet</p>
+                  <p className="text-gray-500 text-sm mt-1">Be the first to say something!</p>
+                </div>
+              )}
+
               {messageGroups.map((group, groupIndex) => (
                 <div key={groupIndex}>
-                  {/* Date Separator */}
-                  <div className="flex justify-center mb-4">
-                    <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full">
-                      {new Date(group.date).toLocaleDateString(undefined, { 
-                        weekday: 'long', 
-                        month: 'short', 
-                        day: 'numeric' 
+                  {/* Date separator */}
+                  <div className="flex justify-center my-4">
+                    <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full shadow-sm">
+                      {new Date(group.date).toLocaleDateString(undefined, {
+                        weekday: 'long',
+                        month: 'short',
+                        day: 'numeric',
                       })}
                     </span>
                   </div>
 
-                  {/* Messages */}
+                  {/* Message bubbles */}
                   {group.messages.map((msg, msgIndex) => {
                     const isOwn = msg.userId === user.id;
-                    const showAvatar = !isOwn && (msgIndex === 0 || group.messages[msgIndex - 1].userId !== msg.userId);
-                    
+                    const showAvatar =
+                      !isOwn &&
+                      (msgIndex === 0 ||
+                        group.messages[msgIndex - 1].userId !== msg.userId);
+
                     return (
-                      <div key={msg.id} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`flex max-w-[75%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
-                          {/* Avatar - only show for first message in a row from same user */}
-                          {!isOwn && showAvatar && (
-                            <div className="w-8 h-8 mr-2 flex-shrink-0 self-end mb-1">
-                              <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                                {msg.userInitials}
+                      <div
+                        key={msg.id}
+                        className={`flex mb-1 ${isOwn ? 'justify-end' : 'justify-start'}`}
+                      >
+                        <div
+                          className={`flex max-w-[78%] ${
+                            isOwn ? 'flex-row-reverse' : 'flex-row'
+                          } items-end gap-1.5`}
+                        >
+                          {/* Avatar */}
+                          {!isOwn ? (
+                            showAvatar ? (
+                              <div className="w-7 h-7 flex-shrink-0 mb-0.5">
+                                <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold">
+                                  {msg.userInitials}
+                                </div>
                               </div>
-                            </div>
-                          )}
-                          {!isOwn && !showAvatar && <div className="w-8 mr-2 flex-shrink-0"></div>}
-                          
-                          {/* Message Bubble */}
+                            ) : (
+                              <div className="w-7 flex-shrink-0" />
+                            )
+                          ) : null}
+
+                          {/* Bubble */}
                           <div>
-                            {/* Sender name - only show for others on first message */}
                             {!isOwn && showAvatar && (
-                              <p className="text-xs text-gray-600 mb-1 ml-1">{msg.userName}</p>
+                              <p className="text-xs text-gray-600 mb-0.5 ml-1 font-medium">
+                                {msg.userName}
+                              </p>
                             )}
-                            
-                            <div className={`rounded-2xl px-4 py-2.5 ${
-                              isOwn 
-                                ? 'bg-[#dcf8c6] rounded-br-none' 
-                                : 'bg-white rounded-bl-none'
-                            } shadow-sm`}>
+                            <div
+                              className={`rounded-2xl px-3.5 py-2 shadow-sm ${
+                                isOwn
+                                  ? 'bg-[#dcf8c6] rounded-br-sm'
+                                  : 'bg-white rounded-bl-sm'
+                              }`}
+                            >
                               {msg.type === 'image' ? (
-                                <img src={msg.content} alt="Shared" className="max-w-full rounded-lg max-h-64" />
+                                <img
+                                  src={msg.content}
+                                  alt="Shared"
+                                  className="max-w-full rounded-xl max-h-60"
+                                />
                               ) : (
-                                <p className="text-sm leading-relaxed break-words">{msg.content}</p>
+                                <p className="text-sm leading-relaxed break-words text-gray-900">
+                                  {msg.content}
+                                </p>
                               )}
-                              <p className={`text-[10px] mt-1 text-right ${
-                                isOwn ? 'text-gray-500' : 'text-gray-400'
-                              }`}>
+                              <p className="text-[10px] text-gray-400 text-right mt-0.5 leading-none">
                                 {formatMessageTime(msg.timestamp)}
-                                {isOwn && (
-                                  <span className="ml-1">
-                                    ✓✓
-                                  </span>
-                                )}
+                                {isOwn && <span className="ml-1 text-blue-400">✓✓</span>}
                               </p>
                             </div>
                           </div>
@@ -2457,18 +2830,18 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   })}
                 </div>
               ))}
-              
-              {/* Typing Indicator */}
+
+              {/* Typing indicator */}
               {isTyping && (
-                <div className="flex justify-start mb-2">
-                  <div className="flex max-w-[75%]">
-                    <div className="w-8 h-8 mr-2 flex-shrink-0">
-                      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        ...
+                <div className="flex justify-start mb-1">
+                  <div className="flex items-end gap-1.5 max-w-[78%]">
+                    <div className="w-7 h-7 flex-shrink-0">
+                      <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold">
+                        ..
                       </div>
                     </div>
-                    <div className="bg-white rounded-2xl rounded-bl-none px-4 py-3 shadow-sm">
-                      <div className="flex gap-1">
+                    <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm">
+                      <div className="flex gap-1 items-center">
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
                         <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
@@ -2477,19 +2850,23 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   </div>
                 </div>
               )}
-              
+
               <div ref={messagesEndRef} />
             </>
           )}
         </div>
 
-        {/* Chat Input - ALWAYS VISIBLE at bottom */}
+        {/* ── Message Input Bar ── ALWAYS VISIBLE AT BOTTOM ── */}
         {hasJoined && (
-          <div className="bg-gray-100 border-t border-gray-200 px-3 py-3">
-            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-1 shadow-sm">
-              <button 
+          <div
+            className="flex-shrink-0 bg-gray-50 border-t border-gray-200 px-3 py-2.5"
+            style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}
+          >
+            <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow border border-gray-100">
+              {/* Attachment button */}
+              <button
                 onClick={() => fileInputRef.current?.click()}
-                className="p-2 hover:bg-gray-100 rounded-full"
+                className="w-8 h-8 flex items-center justify-center hover:bg-orange-50 rounded-full transition flex-shrink-0"
               >
                 <Plus className="w-5 h-5 text-orange-500" />
               </button>
@@ -2500,27 +2877,31 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                 accept="image/*"
                 onChange={handleSendImage}
               />
+
+              {/* Text input */}
               <input
                 type="text"
                 value={newMessage}
-                onChange={(e) => setNewMessage(e.target.value)}
-                onKeyDown={(e) => {
+                onChange={e => setNewMessage(e.target.value)}
+                onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     handleSendMessage();
                   }
                   handleTyping();
                 }}
-                className="flex-1 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none"
+                className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent min-w-0"
                 placeholder="Type a message..."
               />
+
+              {/* Send button */}
               <button
                 onClick={handleSendMessage}
                 disabled={!newMessage.trim()}
-                className={`p-2 rounded-full ${
-                  newMessage.trim() 
-                    ? 'bg-orange-500 text-white' 
-                    : 'bg-gray-200 text-gray-400'
+                className={`w-8 h-8 flex items-center justify-center rounded-full transition flex-shrink-0 ${
+                  newMessage.trim()
+                    ? 'bg-orange-500 text-white shadow-md active:scale-95'
+                    : 'bg-gray-200 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 <Send className="w-4 h-4" />
