@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
   Heart, MessageCircle, Bookmark, Share2, Star, Plus, ChevronRight,
@@ -7,7 +7,7 @@ import {
   Trash2, Edit, Target, Check, ArrowLeft, Clock, TrendingUp, Menu, Upload,
   Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause,
   Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink, ThumbsUp as LikeIcon,
-  Link2, Instagram, Facebook, Twitter, WhatsApp
+  Link2, Instagram, Facebook, Twitter, WhatsApp, AtSign, Flag, Pin, Smile
 } from 'lucide-react';
 
 // Import API functions
@@ -264,7 +264,7 @@ const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
 };
 
 // ─── TOP BAR ───────────────────────────────────────────────────────────────
-const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true, onNotificationClick, notificationCount = 0 }) => (
+const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true, onNotificationClick, notificationCount = 0, profileSrc }) => (
   <header className="sticky top-0 bg-white/95 backdrop-blur-sm z-40 px-4 py-3 flex items-center justify-between border-b border-gray-200">
     <div className="flex items-center gap-3">
       {showBack && (
@@ -295,9 +295,13 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = 
           )}
         </button>
         <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
-          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-            {user?.name?.slice(0, 2).toUpperCase()}
-          </div>
+          {profileSrc ? (
+            <img src={profileSrc} alt="profile" className="w-8 h-8 rounded-full object-cover border border-orange-200" />
+          ) : (
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+              {user?.name?.slice(0, 2).toUpperCase()}
+            </div>
+          )}
         </button>
       </div>
     )}
@@ -305,7 +309,7 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = 
 );
 
 // ─── NOTIFICATIONS PAGE ───────────────────────────────────────────────────
-const NotificationsPage = ({ user, setPage, onClose }) => {
+const NotificationsPage = ({ user, onClose }) => {
   const [notifications, setNotifications] = useState([]);
 
   useEffect(() => {
@@ -331,8 +335,22 @@ const NotificationsPage = ({ user, setPage, onClose }) => {
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
   };
 
+  const icons = {
+    like: <Heart className="w-4 h-4 text-red-500" />,
+    comment: <MessageCircle className="w-4 h-4 text-blue-500" />,
+    message: <MessageSquare className="w-4 h-4 text-green-500" />,
+    invite: <UserPlus className="w-4 h-4 text-purple-500" />
+  };
+
+  const bgColors = {
+    like: 'bg-red-100',
+    comment: 'bg-blue-100',
+    message: 'bg-green-100',
+    invite: 'bg-purple-100'
+  };
+
   return (
-    <div className="fixed inset-0 bg-white z-50">
+    <div className="fixed inset-0 bg-white z-50" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
           <ChevronLeft className="w-5 h-5 text-gray-600" />
@@ -357,28 +375,21 @@ const NotificationsPage = ({ user, setPage, onClose }) => {
             {notifications.map((notif) => (
               <div 
                 key={notif.id}
-                className={`p-4 ${notif.read ? 'bg-white' : 'bg-orange-50'}`}
+                className={`p-4 cursor-pointer transition ${notif.read ? 'bg-white hover:bg-gray-50' : 'bg-orange-50 hover:bg-orange-100'}`}
                 onClick={() => markAsRead(notif.id)}
               >
                 <div className="flex items-start gap-3">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                    notif.type === 'like' ? 'bg-red-100' : 
-                    notif.type === 'comment' ? 'bg-blue-100' : 
-                    notif.type === 'message' ? 'bg-green-100' : 'bg-purple-100'
-                  }`}>
-                    {notif.type === 'like' && <Heart className="w-4 h-4 text-red-500" />}
-                    {notif.type === 'comment' && <MessageCircle className="w-4 h-4 text-blue-500" />}
-                    {notif.type === 'message' && <MessageSquare className="w-4 h-4 text-green-500" />}
-                    {notif.type === 'invite' && <UserPlus className="w-4 h-4 text-purple-500" />}
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${bgColors[notif.type] || 'bg-gray-100'}`}>
+                    {icons[notif.type] || <Bell className="w-4 h-4 text-gray-500" />}
                   </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-900">{notif.message}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 leading-relaxed">{notif.message}</p>
                     <p className="text-xs text-gray-500 mt-1">
                       {new Date(notif.timestamp).toLocaleString()}
                     </p>
                   </div>
                   {!notif.read && (
-                    <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
+                    <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
                   )}
                 </div>
               </div>
@@ -400,7 +411,6 @@ const ShareModal = ({ post, onClose }) => {
       window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank');
     },
     instagram: () => {
-      // Instagram doesn't support direct sharing via URL, copy to clipboard
       navigator.clipboard.writeText(shareText + ' ' + shareUrl);
       alert('Link copied! You can paste it in Instagram');
     },
@@ -416,8 +426,15 @@ const ShareModal = ({ post, onClose }) => {
     }
   };
 
+  const shareIcons = {
+    whatsapp: { icon: WhatsApp, bg: 'bg-green-500', color: 'text-white' },
+    instagram: { icon: Instagram, bg: 'bg-pink-500', color: 'text-white' },
+    facebook: { icon: Facebook, bg: 'bg-blue-600', color: 'text-white' },
+    twitter: { icon: Twitter, bg: 'bg-sky-500', color: 'text-white' }
+  };
+
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/50 z-[65] flex items-end sm:items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
       <div className="bg-white rounded-2xl w-full max-w-sm">
         <div className="p-4 border-b border-gray-200 flex justify-between items-center">
           <h3 className="font-semibold text-gray-900">Share Post</h3>
@@ -428,41 +445,32 @@ const ShareModal = ({ post, onClose }) => {
         
         <div className="p-4">
           <div className="grid grid-cols-4 gap-4 mb-4">
-            <button onClick={shareHandlers.whatsapp} className="flex flex-col items-center gap-2">
-              <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center">
-                <WhatsApp className="w-6 h-6 text-green-600" />
-              </div>
-              <span className="text-xs text-gray-600">WhatsApp</span>
-            </button>
-            
-            <button onClick={shareHandlers.instagram} className="flex flex-col items-center gap-2">
-              <div className="w-12 h-12 bg-pink-100 rounded-full flex items-center justify-center">
-                <Instagram className="w-6 h-6 text-pink-600" />
-              </div>
-              <span className="text-xs text-gray-600">Instagram</span>
-            </button>
-            
-            <button onClick={shareHandlers.facebook} className="flex flex-col items-center gap-2">
-              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                <Facebook className="w-6 h-6 text-blue-600" />
-              </div>
-              <span className="text-xs text-gray-600">Facebook</span>
-            </button>
-            
-            <button onClick={shareHandlers.twitter} className="flex flex-col items-center gap-2">
-              <div className="w-12 h-12 bg-sky-100 rounded-full flex items-center justify-center">
-                <Twitter className="w-6 h-6 text-sky-600" />
-              </div>
-              <span className="text-xs text-gray-600">Twitter</span>
-            </button>
+            {Object.entries(shareHandlers).map(([key, handler]) => {
+              const Icon = shareIcons[key]?.icon;
+              const bg = shareIcons[key]?.bg;
+              if (!Icon) return null;
+              
+              return (
+                <button 
+                  key={key} 
+                  onClick={handler} 
+                  className="flex flex-col items-center gap-2 group"
+                >
+                  <div className={`w-12 h-12 ${bg} rounded-full flex items-center justify-center shadow-md group-hover:scale-110 transition-transform`}>
+                    <Icon className="w-6 h-6 text-white" />
+                  </div>
+                  <span className="text-xs text-gray-600 capitalize">{key}</span>
+                </button>
+              );
+            })}
           </div>
           
           <button 
             onClick={shareHandlers.copyLink}
-            className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50"
+            className="w-full py-3 border-2 border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 hover:border-orange-300 transition"
           >
-            <Link2 className="w-5 h-5" />
-            Copy Link
+            <Link2 className="w-5 h-5 text-orange-500" />
+            <span className="font-medium">Copy Link</span>
           </button>
         </div>
       </div>
@@ -470,21 +478,29 @@ const ShareModal = ({ post, onClose }) => {
   );
 };
 
-// ─── COMMENT SECTION ─────────────────────────────────────────────────────
+// ─── COMMENT SECTION (Premium UI) ─────────────────────────────────────────
 const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [replyTo, setReplyTo] = useState(null);
   const [showReplies, setShowReplies] = useState({});
+  const [likedComments, setLikedComments] = useState(new Set());
   const inputRef = useRef(null);
+  const listRef = useRef(null);
 
   useEffect(() => {
     loadComments();
+    loadLikedComments();
   }, [post.id]);
 
   const loadComments = () => {
     const savedComments = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
     setComments(savedComments);
+  };
+
+  const loadLikedComments = () => {
+    const liked = JSON.parse(localStorage.getItem(`user_${user.id}_likedComments`) || '[]');
+    setLikedComments(new Set(liked));
   };
 
   const handleSubmitComment = () => {
@@ -497,18 +513,27 @@ const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
       userName: user.name,
       userEmail: user.email,
       userInitials: user.name.slice(0, 2).toUpperCase(),
-      content: newComment,
+      content: newComment.trim(),
       timestamp: new Date().toISOString(),
       parentId: replyTo?.id || null,
       likes: 0,
-      likedBy: []
+      likedBy: [],
+      isAuthor: user.email === post.userEmail
     };
 
     const updatedComments = [...comments, comment];
     localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updatedComments));
     setComments(updatedComments);
     setNewComment('');
-    setReplyTo(null);
+    
+    if (replyTo) {
+      setReplyTo(null);
+    }
+
+    // Scroll to bottom after posting
+    setTimeout(() => {
+      listRef.current?.scrollTo({ top: 99999, behavior: 'smooth' });
+    }, 50);
 
     // Create notification for post owner
     if (post.userEmail !== user.email) {
@@ -552,9 +577,10 @@ const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
   };
 
   const handleLikeComment = (commentId) => {
+    if (likedComments.has(commentId)) return;
+
     const updatedComments = comments.map(c => {
       if (c.id === commentId) {
-        if (c.likedBy?.includes(user.id)) return c;
         return {
           ...c,
           likes: (c.likes || 0) + 1,
@@ -566,6 +592,17 @@ const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
     
     setComments(updatedComments);
     localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updatedComments));
+    
+    const newLiked = new Set(likedComments);
+    newLiked.add(commentId);
+    setLikedComments(newLiked);
+    localStorage.setItem(`user_${user.id}_likedComments`, JSON.stringify([...newLiked]));
+  };
+
+  const handleDeleteComment = (commentId) => {
+    const filtered = comments.filter(c => c.id !== commentId && c.parentId !== commentId);
+    setComments(filtered);
+    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(filtered));
   };
 
   const toggleReplies = (commentId) => {
@@ -590,60 +627,98 @@ const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
     return date.toLocaleDateString();
   };
 
-  const CommentComponent = ({ comment, isReply = false }) => {
+  const CommentComponent = ({ comment, depth = 0 }) => {
     const replies = comments.filter(c => c.parentId === comment.id);
-    const isLiked = comment.likedBy?.includes(user.id);
+    const isLiked = likedComments.has(comment.id);
+    const isOwn = comment.userId === user.id;
+    const hasReplies = replies.length > 0;
 
     return (
-      <div className={`${isReply ? 'ml-8 mt-2' : 'mt-3'}`}>
-        <div className="flex gap-2">
-          <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">
-            {comment.userInitials}
-          </div>
-          <div className="flex-1">
-            <div className="bg-gray-100 rounded-xl p-3">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="font-semibold text-xs text-gray-900">{comment.userName}</span>
-                <span className="text-[10px] text-gray-500">{formatTime(comment.timestamp)}</span>
+      <div className={`${depth > 0 ? 'ml-8 mt-2' : 'mt-3'}`}>
+        <div className="flex gap-2.5 group">
+          {/* Vertical line for threaded replies */}
+          {depth > 0 && (
+            <div className="w-px bg-orange-200 flex-shrink-0 ml-3" style={{ height: 'calc(100% - 24px)' }} />
+          )}
+          
+          <div className="flex gap-2 flex-1">
+            {/* Avatar */}
+            <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm">
+              {comment.userInitials}
+            </div>
+            
+            <div className="flex-1 min-w-0">
+              {/* Comment Bubble */}
+              <div className={`rounded-2xl px-4 py-2.5 ${
+                comment.isAuthor 
+                  ? 'bg-orange-50 border border-orange-100' 
+                  : 'bg-white border border-gray-100'
+              } shadow-sm`}>
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
+                  <span className="font-semibold text-sm text-gray-900">{comment.userName}</span>
+                  {comment.isAuthor && (
+                    <span className="text-[10px] px-1.5 py-0.5 bg-orange-500 text-white rounded-full font-medium leading-none">Author</span>
+                  )}
+                  <span className="text-[10px] text-gray-400">{formatTime(comment.timestamp)}</span>
+                </div>
+                <p className="text-sm text-gray-700 leading-relaxed">{comment.content}</p>
               </div>
-              <p className="text-sm text-gray-800">{comment.content}</p>
               
-              <div className="flex items-center gap-3 mt-2">
+              {/* Action Buttons */}
+              <div className="flex items-center gap-4 mt-1 ml-1">
                 <button 
                   onClick={() => handleLikeComment(comment.id)}
-                  className={`flex items-center gap-1 text-xs ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
+                  disabled={isLiked}
+                  className={`flex items-center gap-1 text-xs transition-all ${
+                    isLiked 
+                      ? 'text-red-500 font-medium' 
+                      : 'text-gray-400 hover:text-red-400'
+                  }`}
                 >
-                  <Heart className={`w-3 h-3 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
+                  <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
                   <span>{comment.likes || 0}</span>
                 </button>
+                
                 <button 
                   onClick={() => {
                     setReplyTo(comment);
                     inputRef.current?.focus();
                   }}
-                  className="text-xs text-gray-500 hover:text-orange-500"
+                  className="text-xs text-gray-400 hover:text-orange-500 font-medium"
                 >
                   Reply
                 </button>
+                
+                {isOwn && (
+                  <button 
+                    onClick={() => handleDeleteComment(comment.id)}
+                    className="text-xs text-gray-300 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Trash2 className="w-3 h-3" />
+                  </button>
+                )}
               </div>
+
+              {/* Replies Toggle */}
+              {hasReplies && (
+                <button 
+                  onClick={() => toggleReplies(comment.id)}
+                  className="flex items-center gap-1 text-xs text-orange-500 font-medium mt-1.5 ml-1"
+                >
+                  <div className="w-4 h-px bg-orange-300" />
+                  {showReplies[comment.id] ? 'Hide' : `View ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
+                </button>
+              )}
+
+              {/* Replies */}
+              {showReplies[comment.id] && (
+                <div className="mt-2 space-y-2">
+                  {replies.map(reply => (
+                    <CommentComponent key={reply.id} comment={reply} depth={depth + 1} />
+                  ))}
+                </div>
+              )}
             </div>
-
-            {replies.length > 0 && (
-              <button 
-                onClick={() => toggleReplies(comment.id)}
-                className="text-xs text-gray-500 ml-2 mt-1 hover:text-orange-500"
-              >
-                {showReplies[comment.id] ? 'Hide replies' : `View ${replies.length} ${replies.length === 1 ? 'reply' : 'replies'}`}
-              </button>
-            )}
-
-            {showReplies[comment.id] && (
-              <div className="mt-2">
-                {replies.map(reply => (
-                  <CommentComponent key={reply.id} comment={reply} isReply={true} />
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -653,36 +728,41 @@ const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
   const topLevelComments = comments.filter(c => !c.parentId);
 
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col">
+    <div className="fixed inset-0 z-[65] flex flex-col" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', background: '#F9F5F0' }}>
       {/* Header */}
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between shadow-sm z-10">
         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
           <ChevronLeft className="w-5 h-5 text-gray-600" />
         </button>
-        <h2 className="font-semibold text-gray-900">Comments</h2>
-        <div className="w-8"></div>
+        <div className="text-center">
+          <h2 className="font-semibold text-gray-900">Comments</h2>
+          <p className="text-xs text-gray-500">{comments.length} comment{comments.length !== 1 ? 's' : ''}</p>
+        </div>
+        <div className="w-8" />
       </div>
 
       {/* Original Post Preview */}
-      <div className="bg-gray-50 p-4 border-b border-gray-200">
-        <div className="flex items-start gap-3">
+      <div className="bg-white mx-3 mt-3 rounded-2xl p-3 border border-gray-100 shadow-sm">
+        <div className="flex items-start gap-2.5">
           <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
             {post.userName?.slice(0, 2) || 'U'}
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <p className="font-semibold text-sm text-gray-900">{post.userName}</p>
-            <p className="text-sm text-gray-700 mt-1">{post.content}</p>
+            <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">{post.content}</p>
           </div>
         </div>
       </div>
 
       {/* Comments List */}
-      <div className="flex-1 overflow-y-auto px-4 py-3">
+      <div ref={listRef} className="flex-1 overflow-y-auto px-3 py-4">
         {topLevelComments.length === 0 ? (
           <div className="text-center py-12">
-            <MessageCircle className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No comments yet</p>
-            <p className="text-xs text-gray-400 mt-1">Be the first to comment!</p>
+            <div className="w-16 h-16 bg-orange-50 rounded-full flex items-center justify-center mx-auto mb-3">
+              <MessageCircle className="w-8 h-8 text-orange-300" />
+            </div>
+            <p className="text-gray-500 text-sm">No comments yet</p>
+            <p className="text-xs text-gray-400 mt-1">Start the conversation!</p>
           </div>
         ) : (
           topLevelComments.map(comment => (
@@ -693,23 +773,23 @@ const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
 
       {/* Reply Indicator */}
       {replyTo && (
-        <div className="bg-gray-100 px-4 py-2 flex items-center justify-between border-t border-gray-200">
-          <p className="text-xs text-gray-600">
+        <div className="bg-orange-50 border-t border-orange-100 px-4 py-2 flex items-center justify-between">
+          <p className="text-xs text-orange-700">
             Replying to <span className="font-semibold">{replyTo.userName}</span>
           </p>
-          <button onClick={() => setReplyTo(null)} className="text-gray-400 hover:text-gray-600">
+          <button onClick={() => setReplyTo(null)} className="text-orange-400 hover:text-orange-600">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
       {/* Comment Input */}
-      <div className="bg-white border-t border-gray-200 px-4 py-3">
+      <div className="bg-white border-t border-gray-200 px-3 py-2.5" style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+          <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm">
             {user?.name?.slice(0, 2).toUpperCase()}
           </div>
-          <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-full px-4 py-2">
+          <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-full px-3 py-1.5 border border-gray-200 focus-within:border-orange-300 focus-within:bg-white transition">
             <input
               ref={inputRef}
               type="text"
@@ -727,9 +807,9 @@ const CommentSection = ({ post, user, onClose, updateNotificationCount }) => {
             <button
               onClick={handleSubmitComment}
               disabled={!newComment.trim()}
-              className={`p-1.5 rounded-full ${
+              className={`p-1.5 rounded-full transition ${
                 newComment.trim() 
-                  ? 'text-orange-500 hover:bg-orange-50' 
+                  ? 'text-orange-500 hover:bg-orange-100' 
                   : 'text-gray-400'
               }`}
             >
@@ -1033,9 +1113,12 @@ const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validateName = (name) => name && name.trim().length >= 2;
 
 // ─── HOME PAGE ──────────────────────────────────────────────────────────────
-const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats, updateNotificationCount }) => {
+const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats, updateNotificationCount, profileSrc }) => {
   const [trendingBooks, setTrendingBooks] = useState([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
+  const [trendingPage, setTrendingPage] = useState(1);
+  const [hasMoreTrending, setHasMoreTrending] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [readingProgress, setReadingProgress] = useState(0);
   const [feedPosts, setFeedPosts] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
@@ -1057,7 +1140,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const [likedPosts, setLikedPosts] = useState([]);
 
   useEffect(() => {
-    loadTrendingBooks();
+    loadTrendingBooks(1);
     loadFeedPosts();
     calculateReadingProgress();
     loadLikedPosts();
@@ -1067,21 +1150,25 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     if (savedStats) {
       setUserStats(JSON.parse(savedStats));
     }
-  }, [user?.stats?.booksRead, user?.joinedCrews]);
+  }, [user?.stats?.booksRead, user?.joinedCrews, posts]);
 
   const loadLikedPosts = () => {
     const savedLikedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
     setLikedPosts(savedLikedPosts);
   };
 
-  const loadTrendingBooks = async () => {
-    setLoadingTrending(true);
+  const loadTrendingBooks = async (page = 1, append = false) => {
+    if (page === 1) setLoadingTrending(true);
+    else setLoadingMore(true);
+    
     try {
-      const response = await fetch(`${API_URL}/api/recommend/trending`);
+      const response = await fetch(`${API_URL}/api/books/trending?page=${page}`);
       const data = await response.json();
       
-      if (data.success) {
-        setTrendingBooks(data.books);
+      if (data.success && data.books?.length > 0) {
+        setTrendingBooks(prev => append ? [...prev, ...data.books] : data.books);
+        setHasMoreTrending(data.hasMore || false);
+        setTrendingPage(page);
       } else {
         // Fallback to mock data
         const mockBooks = [
@@ -1089,8 +1176,10 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350 },
           { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870 },
           { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500 },
+          { id: 5, title: 'Project Hail Mary', author: 'Andy Weir', rating: 4.9, readers: 18700 },
         ];
-        setTrendingBooks(mockBooks);
+        setTrendingBooks(prev => append ? [...prev, ...mockBooks.slice(prev.length)] : mockBooks);
+        setHasMoreTrending(append ? mockBooks.length > (trendingBooks.length + 5) : mockBooks.length > 5);
       }
     } catch (error) {
       console.error('Error loading trending books:', error);
@@ -1099,10 +1188,13 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
         { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350 },
         { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870 },
         { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500 },
+        { id: 5, title: 'Project Hail Mary', author: 'Andy Weir', rating: 4.9, readers: 18700 },
       ];
-      setTrendingBooks(mockBooks);
+      setTrendingBooks(prev => append ? [...prev, ...mockBooks.slice(prev.length)] : mockBooks);
+      setHasMoreTrending(false);
     } finally {
       setLoadingTrending(false);
+      setLoadingMore(false);
     }
   };
 
@@ -1127,7 +1219,6 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const handleLikePost = (postId, post) => {
     // Check if already liked
     if (likedPosts.includes(postId)) {
-      alert('You have already liked this post');
       return;
     }
 
@@ -1185,12 +1276,13 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     
     try {
       // Fetch book details from Groq API via your backend
-      const response = await axios.post(`${API_URL}/api/recommend/ai`, {
-        query: `Tell me about the book "${book.title}" by ${book.author}. Include summary, themes, and why people like it.`
+      const response = await axios.post(`${API_URL}/api/books/book-details`, {
+        bookName: book.title,
+        author: book.author
       });
       
       if (response.data.success) {
-        setBookDetails(response.data.recommendations[0]);
+        setBookDetails(response.data.details);
       } else {
         throw new Error('Failed to fetch book details');
       }
@@ -1214,14 +1306,26 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
   const hasReadingGoal = user?.readingGoal?.yearly > 0 || user?.readingGoal?.monthly > 0;
 
+  const getCommentCount = (postId) => {
+    const comments = JSON.parse(localStorage.getItem(`post_${postId}_comments`) || '[]');
+    return comments.length;
+  };
+
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
-      <TopBar user={user} setPage={setPage} title="ReadCrew" />
+      <TopBar 
+        user={user} 
+        setPage={setPage} 
+        title="ReadCrew" 
+        profileSrc={profileSrc}
+        onNotificationClick={() => setPage('notifications')}
+        notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read).length}
+      />
       
       {/* Book Details Modal */}
       {showBookDetails && selectedBook && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+          <div className="bg-white rounded-2xl w-full max-h-[80vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
               <h3 className="font-bold text-gray-900">Book Details</h3>
               <button onClick={() => setShowBookDetails(false)} className="p-2 hover:bg-gray-100 rounded-full">
@@ -1243,8 +1347,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                       size="lg"
                     />
                     <div className="flex-1">
-                      <h2 className="text-xl font-bold text-gray-900">{bookDetails.title}</h2>
-                      <p className="text-gray-600">by {bookDetails.author}</p>
+                      <h2 className="text-xl font-bold text-gray-900">{bookDetails.title || selectedBook.title}</h2>
+                      <p className="text-gray-600">by {bookDetails.author || selectedBook.author}</p>
                       {bookDetails.genre && (
                         <span className="inline-block mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">
                           {bookDetails.genre}
@@ -1298,7 +1402,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                     </button>
                     <button 
                       onClick={() => {
-                        alert('Share feature coming soon!');
+                        navigator.clipboard.writeText(`Check out "${selectedBook.title}" by ${selectedBook.author} on ReadCrew!`);
+                        alert('Link copied!');
                       }}
                       className="px-4 py-3 border border-gray-200 rounded-xl"
                     >
@@ -1401,11 +1506,15 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           onClick={() => setPage('post')}
           className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md transition"
         >
-          <div className="w-10 h-10 bg-gradient-to-br from-orange-100 to-red-100 rounded-full flex items-center justify-center">
-            <Edit3 className="w-5 h-5 text-orange-500" />
-          </div>
-          <span className="text-gray-600">Share your reading journey...</span>
-          <span className="ml-auto text-xs text-gray-400">Post</span>
+          {profileSrc ? (
+            <img src={profileSrc} alt="profile" className="w-9 h-9 rounded-full object-cover" />
+          ) : (
+            <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
+              {user?.name?.slice(0, 2).toUpperCase()}
+            </div>
+          )}
+          <span className="text-gray-400 text-sm flex-1 text-left">Share your reading journey...</span>
+          <span className="text-xs text-orange-500 font-medium bg-orange-50 px-3 py-1 rounded-full">Post</span>
         </button>
 
         {/* Live Feed */}
@@ -1437,7 +1546,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               </div>
             ) : (
               feedPosts.map((post, idx) => {
-                const commentCount = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]').length;
+                const commentCount = getCommentCount(post.id);
+                const isLiked = likedPosts.includes(post.id);
                 
                 return (
                   <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
@@ -1476,10 +1586,14 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                     <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
                       <button 
                         onClick={() => handleLikePost(post.id, post)}
-                        className={`flex items-center gap-1.5 text-xs ${likedPosts.includes(post.id) ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
-                        disabled={likedPosts.includes(post.id)}
+                        disabled={isLiked}
+                        className={`flex items-center gap-1.5 text-xs transition ${
+                          isLiked 
+                            ? 'text-red-500' 
+                            : 'text-gray-500 hover:text-red-500'
+                        }`}
                       >
-                        <Heart className={`w-4 h-4 ${likedPosts.includes(post.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                        <Heart className={`w-4 h-4 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
                         <span>{post.likes || 0}</span>
                       </button>
                       <button 
@@ -1515,7 +1629,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               onClick={handleViewAllTrending}
               className="text-sm text-orange-500 font-semibold"
             >
-              View All
+              Explore All
             </button>
           </div>
 
@@ -1524,28 +1638,47 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               <LoadingSpinner />
             </div>
           ) : (
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-              {trendingBooks.map((book, i) => (
-                <div 
-                  key={i} 
-                  className="shrink-0 w-32 cursor-pointer hover:scale-105 transition-transform"
-                  onClick={() => handleBookClick(book)}
-                >
-                  <DynamicBookCover 
-                    title={book.title}
-                    author={book.author}
-                    size="md"
-                    className="mb-2"
-                  />
-                  <p className="text-sm font-semibold text-gray-900 leading-tight">{book.title}</p>
-                  <p className="text-xs text-gray-500">{book.author}</p>
-                  <div className="flex items-center gap-1 mt-1">
-                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                    <span className="text-xs font-medium">{book.rating}</span>
-                    <span className="text-xs text-gray-400 ml-1">({(book.readers/1000).toFixed(1)}K)</span>
+            <div>
+              <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
+                {trendingBooks.slice(0, 10).map((book, i) => (
+                  <div 
+                    key={i} 
+                    className="shrink-0 w-28 cursor-pointer hover:scale-105 transition-transform"
+                    onClick={() => handleBookClick(book)}
+                  >
+                    <DynamicBookCover 
+                      title={book.title}
+                      author={book.author}
+                      size="md"
+                      className="mb-2"
+                    />
+                    <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">{book.title}</p>
+                    <p className="text-xs text-gray-500 truncate">{book.author}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span className="text-xs font-medium">{book.rating}</span>
+                      <span className="text-xs text-gray-400 ml-1">({(book.readers/1000).toFixed(1)}K)</span>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
+              
+              {hasMoreTrending && (
+                <button 
+                  onClick={() => loadTrendingBooks(trendingPage + 1, true)}
+                  disabled={loadingMore}
+                  className="w-full mt-2 py-2 border border-orange-200 text-orange-500 rounded-xl text-sm font-medium flex items-center justify-center gap-2 hover:bg-orange-50 transition"
+                >
+                  {loadingMore ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      Loading...
+                    </>
+                  ) : (
+                    'Load More Books'
+                  )}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1577,7 +1710,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                   />
                 </div>
                 <div className="p-3">
-                  <h3 className="font-semibold text-gray-900 text-sm leading-tight">{crew.name}</h3>
+                  <h3 className="font-semibold text-gray-900 text-sm leading-tight line-clamp-2">{crew.name}</h3>
                   <p className="text-xs text-gray-500 mt-0.5">{crew.genre}</p>
                   <div className="flex items-center justify-between mt-2">
                     <div className="flex items-center gap-1 text-xs text-gray-500">
@@ -1612,288 +1745,449 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
 // ─── ENHANCED EXPLORE PAGE ─────────────────────────────────────────────────
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
-  const [query, setQuery] = useState('');
-  const [intensity, setIntensity] = useState(50);
-  const [suggestions, setSuggestions] = useState([
-    { emoji: '🚀', label: 'Space exploration' },
-    { emoji: '👨‍🚀', label: 'Sci-fi adventure' },
-    { emoji: '🌌', label: 'Cosmic philosophy' },
-    { emoji: '📚', label: 'Real NASA stories' },
+  const [mode, setMode] = useState('chat'); // 'chat', 'results', 'character'
+  const [chatHistory, setChatHistory] = useState([
+    { role: 'assistant', content: "📚 Hey! I'm Page Turner, your AI book guide. Tell me what kind of book you're in the mood for — a genre, a feeling, or even a favorite character from a novel!" }
   ]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [results, setResults] = useState([]);
-  const [searched, setSearched] = useState(false);
-  const [selectedTags, setSelectedTags] = useState([]);
-  const inputRef = useRef();
-
-  const SUGGESTION_MAP = {
-    space: [
-      { emoji: '🚀', label: 'Space exploration' },
-      { emoji: '👨‍🚀', label: 'Sci-fi adventure' },
-      { emoji: '🌌', label: 'Cosmic philosophy' },
-      { emoji: '📚', label: 'Real NASA stories' },
-    ],
-    love: [
-      { emoji: '❤️', label: 'Romantic drama' },
-      { emoji: '💔', label: 'Heartbreak & healing' },
-      { emoji: '💑', label: 'Long-distance love' },
-      { emoji: '🌹', label: 'Classic romance' },
-    ],
-    motivation: [
-      { emoji: '💪', label: 'Self-improvement' },
-      { emoji: '🎯', label: 'Goal setting' },
-      { emoji: '🧠', label: 'Mindset shifts' },
-      { emoji: '🚀', label: 'Entrepreneurship' },
-    ],
-  };
+  const [books, setBooks] = useState([]);
+  const [bookPage, setBookPage] = useState(1);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [sessionId] = useState(() => `session_${Date.now()}`);
+  const [charName, setCharName] = useState('');
+  const [charBook, setCharBook] = useState('');
+  const [charLoading, setCharLoading] = useState(false);
+  const [charResult, setCharResult] = useState(null);
+  const chatRef = useRef();
 
   useEffect(() => {
-    if (query.trim()) {
-      const lower = query.toLowerCase();
-      for (const [key, sug] of Object.entries(SUGGESTION_MAP)) {
-        if (lower.includes(key)) {
-          setSuggestions(sug);
-          setShowSuggestions(true);
-          return;
-        }
-      }
-      setSuggestions([
-        { emoji: '✨', label: `${query} fiction` },
-        { emoji: '📖', label: `${query} non-fiction` },
-        { emoji: '🌟', label: `Popular ${query}` },
-      ]);
-      setShowSuggestions(true);
-    } else {
-      setSuggestions([
-        { emoji: '🚀', label: 'Space exploration' },
-        { emoji: '👨‍🚀', label: 'Sci-fi adventure' },
-        { emoji: '🌌', label: 'Cosmic philosophy' },
-        { emoji: '📚', label: 'Real NASA stories' },
-      ]);
-      setShowSuggestions(false);
-    }
-  }, [query]);
+    chatRef.current?.scrollTo({ top: 99999, behavior: 'smooth' });
+  }, [chatHistory]);
 
-  const handleSuggestionClick = (label) => {
-    setQuery(label);
-    setShowSuggestions(false);
-    if (!selectedTags.includes(label)) {
-      setSelectedTags([...selectedTags, label]);
-    }
-    inputRef.current?.focus();
-  };
-
-  const removeTag = (tag) => {
-    setSelectedTags(selectedTags.filter(t => t !== tag));
-  };
-
-  const handleFindBook = async () => {
-    if (!query.trim()) return;
+  const sendChat = async () => {
+    if (!input.trim() || loading) return;
     
+    const userMsg = { role: 'user', content: input.trim() };
+    const newHistory = [...chatHistory, userMsg];
+    setChatHistory(newHistory);
+    setInput('');
     setLoading(true);
-    setSearched(true);
-    setResults([]);
-    setShowSuggestions(false);
-
-    const intensityLabel = 
-      intensity < 33 ? 'light and easy to read' : 
-      intensity < 66 ? 'moderately engaging' : 
-      'deep and intellectually intense';
-    
-    const fullQuery = `${query}. Books that are ${intensityLabel}.`;
 
     try {
-      const response = await axios.post(`${API_URL}/api/recommend/ai`, {
-        query: fullQuery
+      const response = await axios.post(`${API_URL}/api/books/chat`, {
+        message: input.trim(),
+        sessionId
       });
 
-      if (response.data.success && response.data.recommendations) {
-        setResults(response.data.recommendations);
-      } else {
-        throw new Error('No recommendations');
+      const { reply, hasRecommendations, recommendations } = response.data;
+      
+      setChatHistory(prev => [...prev, { role: 'assistant', content: reply }]);
+      
+      if (hasRecommendations && recommendations?.length) {
+        setBooks(recommendations);
+        setBookPage(1);
+        setHasMore(false);
+        setMode('results');
       }
     } catch (error) {
-      console.error('Error fetching recommendations:', error);
-      // Fallback
-      const fallbackBooks = [
-        { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', description: 'Tiny changes, remarkable results', rating: 4.8 },
-        { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', description: 'Survival on Mars', rating: 4.7 },
-        { title: 'Deep Work', author: 'Cal Newport', genre: 'Productivity', description: 'Focused success in a distracted world', rating: 4.6 },
-        { title: 'Dune', author: 'Frank Herbert', genre: 'Sci-Fi', description: 'Epic desert planet saga', rating: 4.5 },
-      ];
-      setResults(fallbackBooks);
+      console.error('Error in chat:', error);
+      
+      // Fallback: direct recommendations
+      try {
+        const recResponse = await axios.post(`${API_URL}/api/books/recommend`, {
+          query: input.trim(),
+          page: 1
+        });
+        
+        if (recResponse.data.success) {
+          const reply = `Based on "${input.trim()}", here are some great books! Let me know if you'd like more. 📖`;
+          setChatHistory(prev => [...prev, { role: 'assistant', content: reply }]);
+          setBooks(recResponse.data.recommendations || []);
+          setBookPage(1);
+          setHasMore(recResponse.data.hasMore || false);
+          setTimeout(() => setMode('results'), 500);
+        }
+      } catch (recError) {
+        setChatHistory(prev => [...prev, { 
+          role: 'assistant', 
+          content: "I'm having trouble connecting right now. Try searching directly — what are you in the mood to read?" 
+        }]);
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const handleJoinCrew = (book) => {
-    if (window.confirm(`Create crew for "${book.title}"?`)) {
-      onCreateCrew(book);
-      setPage('crews');
+  const loadMoreBooks = async () => {
+    if (loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    try {
+      const lastUserMessage = chatHistory.filter(m => m.role === 'user').pop()?.content || '';
+      
+      const response = await axios.post(`${API_URL}/api/books/recommend`, {
+        query: lastUserMessage,
+        page: bookPage + 1
+      });
+      
+      if (response.data.success && response.data.recommendations) {
+        setBooks(prev => [...prev, ...response.data.recommendations]);
+        setBookPage(p => p + 1);
+        setHasMore(response.data.hasMore || false);
+      }
+    } catch (error) {
+      console.error('Error loading more books:', error);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
-  const handleInvite = (book) => {
-    alert('Share feature coming soon!');
+  const searchCharacter = async () => {
+    if (!charName.trim()) return;
+    
+    setCharLoading(true);
+    setCharResult(null);
+    
+    try {
+      const response = await axios.post(`${API_URL}/api/books/character-search`, {
+        character: charName.trim(),
+        fromBook: charBook.trim() || undefined
+      });
+      
+      if (response.data.success) {
+        setCharResult(response.data);
+      } else {
+        throw new Error('No results');
+      }
+    } catch (error) {
+      console.error('Error searching character:', error);
+      
+      // Fallback mock data
+      setCharResult({
+        characterAnalysis: `Fans of "${charName}" will enjoy books with similar complex, compelling characters. Here are some recommendations:`,
+        recommendations: [
+          {
+            title: 'The Name of the Wind',
+            author: 'Patrick Rothfuss',
+            genre: 'Fantasy',
+            description: 'Epic tale of a legendary figure.',
+            reason: 'Similar complex protagonist',
+            rating: 4.5
+          },
+          {
+            title: 'A Little Life',
+            author: 'Hanya Yanagihara',
+            genre: 'Fiction',
+            description: 'Deeply moving character study.',
+            reason: 'Rich character depth',
+            rating: 4.4
+          },
+          {
+            title: 'The Count of Monte Cristo',
+            author: 'Alexandre Dumas',
+            genre: 'Adventure',
+            description: 'Classic tale of revenge and redemption.',
+            reason: 'Complex character arc',
+            rating: 4.7
+          }
+        ]
+      });
+    } finally {
+      setCharLoading(false);
+    }
   };
 
-  // RESULTS VIEW
-  if (searched) {
+  // ── Results View ──
+  if (mode === 'results') {
     return (
       <div className="min-h-screen bg-[#FAF6F1] pb-24">
-        <div className="sticky top-0 bg-[#FAF6F1] z-40 px-4 py-3 flex items-center gap-3 border-b border-[#EDE8E3]">
-          <button onClick={() => { setSearched(false); setResults([]); }} className="p-2 hover:bg-[#F0E8DF] rounded-xl">
-            <ChevronLeft className="w-5 h-5 text-[#6B5D52]" />
+        <div className="sticky top-0 bg-white border-b border-[#EDE8E3] z-40 px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setMode('chat')} className="p-2 hover:bg-gray-100 rounded-xl">
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <div className="flex-1 bg-white border border-[#EDE8E3] rounded-xl px-3 py-2 flex items-center gap-2">
-            <Search className="w-4 h-4 text-[#9B8E84]" />
-            <span className="text-sm text-[#2D2419]">{query}</span>
-          </div>
+          <span className="font-semibold text-gray-900">Book Recommendations</span>
         </div>
-
-        <div className="px-4 py-5">
-          {loading && (
-            <div className="text-center py-16">
-              <div className="w-16 h-16 border-4 border-[#F0E8DF] border-t-[#C8622A] rounded-full animate-spin mx-auto mb-5" />
-              <p className="text-[#6B5D52] font-medium">Finding your perfect book...</p>
+        
+        <div className="px-4 py-5 space-y-4">
+          {books.map((book, i) => (
+            <div key={i} className="bg-white rounded-2xl border border-[#EDE8E3] p-4 shadow-sm">
+              <div className="flex gap-4">
+                <DynamicBookCover 
+                  title={book.title}
+                  author={book.author}
+                  size="md"
+                />
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-bold text-[#2D2419] text-sm">{book.title}</h3>
+                  <p className="text-xs text-[#9B8E84]">by {book.author}</p>
+                  {book.genre && (
+                    <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
+                      {book.genre}
+                    </span>
+                  )}
+                  {book.description && (
+                    <p className="text-xs text-[#6B5D52] mt-1.5 line-clamp-2">{book.description}</p>
+                  )}
+                  {book.reason && (
+                    <p className="text-xs text-orange-700 mt-1 italic">"{book.reason}"</p>
+                  )}
+                  <div className="flex items-center gap-1 mt-2">
+                    <StarRating rating={book.rating || 4} size="xs" />
+                    <span className="text-xs text-gray-500">{book.rating || 4.0}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-2 mt-3">
+                <button 
+                  onClick={() => {
+                    onCreateCrew(book);
+                    setPage('crews');
+                  }} 
+                  className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold"
+                >
+                  Create Crew
+                </button>
+                <button 
+                  onClick={() => onCreateCrew(book)} 
+                  className="px-4 py-2.5 border border-[#EDE8E3] rounded-xl"
+                >
+                  <UserPlus className="w-4 h-4" />
+                </button>
+              </div>
             </div>
+          ))}
+          
+          {hasMore && (
+            <button 
+              onClick={loadMoreBooks} 
+              disabled={loadingMore}
+              className="w-full py-3 border border-orange-200 text-orange-500 rounded-xl text-sm font-medium flex items-center justify-center gap-2 hover:bg-orange-50 transition"
+            >
+              {loadingMore ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  Loading...
+                </>
+              ) : (
+                'Load 5 More Books'
+              )}
+            </button>
           )}
+          
+          <button 
+            onClick={() => setMode('chat')}
+            className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition"
+          >
+            💬 Refine with Chat
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-          {results.length > 0 && (
-            <>
-              <h2 className="font-bold text-[#2D2419] mb-4">Books for "{query}"</h2>
-              <div className="space-y-4">
-                {results.map((book, i) => (
-                  <div key={i} className="bg-white rounded-2xl border border-[#EDE8E3] p-4">
-                    <div className="flex gap-4">
-                      <DynamicBookCover 
-                        title={book.title}
-                        author={book.author}
-                        size="md"
-                      />
-                      <div className="flex-1">
-                        <h3 className="font-bold text-[#2D2419]">{book.title}</h3>
-                        <p className="text-sm text-[#9B8E84]">by {book.author}</p>
-                        {book.genre && (
-                          <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
-                            {book.genre}
-                          </span>
-                        )}
-                        {book.description && (
-                          <p className="text-xs text-[#6B5D52] mt-2 line-clamp-2">{book.description}</p>
-                        )}
-                        <div className="flex items-center gap-1 mt-2">
-                          <StarRating rating={book.rating || 4} size="xs" />
-                          <span className="text-xs text-gray-500">{book.rating || 4.0}</span>
-                        </div>
+  // ── Character Search View ──
+  if (mode === 'character') {
+    return (
+      <div className="min-h-screen bg-[#FAF6F1] pb-24">
+        <div className="sticky top-0 bg-white border-b border-[#EDE8E3] z-40 px-4 py-3 flex items-center gap-3">
+          <button onClick={() => setMode('chat')} className="p-2 hover:bg-gray-100 rounded-xl">
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <span className="font-semibold text-gray-900">Find Books by Character</span>
+        </div>
+        
+        <div className="px-4 py-5 space-y-4">
+          <div className="bg-white rounded-2xl p-5 border border-[#EDE8E3] shadow-sm">
+            <p className="text-sm text-gray-600 mb-4">
+              Love a fictional character? Find books with similar characters!
+            </p>
+            
+            <input 
+              value={charName} 
+              onChange={e => setCharName(e.target.value)} 
+              placeholder="Character name (e.g. Sherlock Holmes)"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm mb-2 outline-none focus:border-orange-400"
+            />
+            
+            <input 
+              value={charBook} 
+              onChange={e => setCharBook(e.target.value)} 
+              placeholder="From book (optional)"
+              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm mb-3 outline-none focus:border-orange-400"
+            />
+            
+            <button 
+              onClick={searchCharacter} 
+              disabled={!charName.trim() || charLoading}
+              className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2 hover:shadow-lg transition"
+            >
+              {charLoading ? (
+                <>
+                  <LoadingSpinner size="sm" />
+                  Searching...
+                </>
+              ) : (
+                '🎭 Find Similar Books'
+              )}
+            </button>
+          </div>
+          
+          {charResult && (
+            <div className="space-y-4">
+              <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
+                <p className="text-sm text-orange-800 leading-relaxed">{charResult.characterAnalysis}</p>
+              </div>
+              
+              {(charResult.recommendations || []).map((book, i) => (
+                <div key={i} className="bg-white rounded-2xl border border-[#EDE8E3] p-4 shadow-sm">
+                  <div className="flex gap-4">
+                    <DynamicBookCover 
+                      title={book.title}
+                      author={book.author}
+                      size="md"
+                    />
+                    <div className="flex-1">
+                      <h3 className="font-bold text-[#2D2419] text-sm">{book.title}</h3>
+                      <p className="text-xs text-gray-500">by {book.author}</p>
+                      {book.similarCharacter && (
+                        <p className="text-xs text-orange-600 mt-1">
+                          Similar to: <span className="font-semibold">{book.similarCharacter}</span>
+                        </p>
+                      )}
+                      {book.reason && (
+                        <p className="text-xs text-gray-600 mt-1 italic">"{book.reason}"</p>
+                      )}
+                      <div className="flex items-center gap-1 mt-2">
+                        <StarRating rating={book.rating || 4} size="xs" />
+                        <span className="text-xs text-gray-500">{book.rating || 4.0}</span>
                       </div>
                     </div>
-                    <div className="flex gap-2 mt-4">
-                      <button 
-                        onClick={() => handleJoinCrew(book)} 
-                        className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold"
-                      >
-                        Join Crew
-                      </button>
-                      <button 
-                        onClick={() => handleInvite(book)} 
-                        className="px-4 py-2.5 border border-[#EDE8E3] rounded-xl"
-                      >
-                        <UserPlus className="w-4 h-4" />
-                      </button>
-                    </div>
                   </div>
-                ))}
-              </div>
-            </>
+                  
+                  <button 
+                    onClick={() => {
+                      onCreateCrew(book);
+                      setPage('crews');
+                    }} 
+                    className="w-full mt-3 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold"
+                  >
+                    Create Crew
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
     );
   }
 
-  // MAIN EXPLORE VIEW
+  // ── Main Chat View ──
   return (
-    <div className="min-h-screen pb-24 bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1]">
-      <div className="px-5 pt-12 max-w-md mx-auto">
-        <div className="text-center mb-8">
-          <h1 className="text-[2rem] font-bold text-[#2D1F14] leading-tight mb-3" style={{ fontFamily: 'Georgia, serif' }}>
-            What do you feel like<br />reading today?
-          </h1>
-          <p className="text-[#8B7968] text-sm">You can type anything — a mood, a topic, a vibe</p>
-        </div>
+    <div className="min-h-screen bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1] pb-24">
+      <div className="px-5 pt-10 pb-4">
+        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+          What to read next?
+        </h1>
+        <p className="text-sm text-[#8B7968]">Chat with AI or find books by character</p>
+      </div>
 
-        <div className="bg-white/80 backdrop-blur-sm rounded-3xl p-5 shadow-lg border border-[#EDE8E3] mb-6">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-lg">✨</span>
-            <span className="text-[#8B7968] text-sm">Tell me what's on your mind...</span>
-          </div>
-
-          <input
-            ref={inputRef}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onFocus={() => setShowSuggestions(true)}
-            onKeyDown={(e) => e.key === 'Enter' && handleFindBook()}
-            placeholder=""
-            className="w-full bg-[#FAF8F5] border border-[#E8E0D8] rounded-2xl px-4 py-3.5 text-[#2D1F14] text-base outline-none focus:border-[#C8622A] mb-3"
-          />
-
-          {showSuggestions && suggestions.length > 0 && (
-            <div className="bg-[#FAF8F5] border border-[#E8E0D8] rounded-2xl overflow-hidden mb-3">
-              {suggestions.map((s, i) => (
-                <button key={i} onClick={() => handleSuggestionClick(s.label)} className="w-full flex items-center gap-3 px-4 py-3.5 hover:bg-[#F0E8DF] text-left border-b border-[#EDE8E3] last:border-0">
-                  <span className="text-xl">{s.emoji}</span>
-                  <span className="text-[#2D1F14] text-sm font-medium">{s.label}</span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {selectedTags.length > 0 && (
-            <div className="flex gap-2 flex-wrap">
-              {selectedTags.map((tag, i) => (
-                <span key={i} className="flex items-center gap-1.5 bg-[#F0E8DF] text-[#6B5D52] text-xs px-3 py-1.5 rounded-full">
-                  🌙 {tag}
-                  <button onClick={() => removeTag(tag)}>×</button>
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div className="mb-6">
-          <p className="text-center text-[#6B5D52] text-sm font-medium mb-3">How intense should it be?</p>
-          <div className="flex items-center gap-3">
-            <span className="text-lg">☀️</span>
-            <span className="text-xs text-[#9B8E84]">Light</span>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={intensity}
-              onChange={(e) => setIntensity(Number(e.target.value))}
-              className="flex-1 h-1.5 rounded-full outline-none"
-              style={{ background: `linear-gradient(to right, #C8622A ${intensity}%, #E8DDD5 ${intensity}%)` }}
-            />
-            <span className="text-xs text-[#9B8E84]">Deep</span>
-            <span className="text-lg">🌑</span>
-          </div>
-          <p className="text-xs text-[#C8622A] font-medium text-center mt-2">
-            {intensity < 33 ? 'Light & Breezy' : intensity < 66 ? 'Moderately Deep' : 'Deep & Intense'}
-          </p>
-        </div>
-
-        <button
-          onClick={handleFindBook}
-          disabled={!query.trim() || loading}
-          className="w-full py-4 rounded-2xl font-bold text-white text-base shadow-lg disabled:opacity-50"
-          style={{ background: 'linear-gradient(135deg, #C8622A 0%, #A0481E 100%)' }}
+      {/* Mode Tabs */}
+      <div className="flex gap-2 px-5 mb-4">
+        <button 
+          onClick={() => setMode('chat')} 
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium bg-orange-500 text-white shadow"
         >
-          {loading ? 'Finding...' : '✨ Find My Book'}
+          <Sparkles className="w-3.5 h-3.5" />
+          AI Chat
         </button>
+        <button 
+          onClick={() => setMode('character')} 
+          className="flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium bg-white text-gray-600 border border-gray-200 shadow-sm hover:border-orange-300 transition"
+        >
+          🎭 By Character
+        </button>
+      </div>
+
+      {/* Chat Window */}
+      <div className="mx-5 bg-white/80 backdrop-blur rounded-3xl shadow-lg border border-[#EDE8E3] overflow-hidden">
+        <div ref={chatRef} className="h-64 overflow-y-auto p-4 space-y-3">
+          {chatHistory.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed ${
+                msg.role === 'user' 
+                  ? 'bg-[#C8622A] text-white rounded-br-sm' 
+                  : 'bg-[#F6F0E8] text-[#3A2C25] rounded-bl-sm'
+              }`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-[#F6F0E8] rounded-2xl rounded-bl-sm px-4 py-3">
+                <div className="flex gap-1.5">
+                  <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <div className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Chat Input */}
+        <div className="border-t border-[#EDE8E3] px-3 py-2.5 flex items-center gap-2">
+          <input 
+            value={input} 
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendChat();
+              }
+            }}
+            placeholder="Type a mood, genre, or ask anything..."
+            className="flex-1 bg-[#FAF8F5] rounded-full px-4 py-2.5 text-sm text-[#2D1F14] outline-none border border-[#E8E0D8] focus:border-[#C8622A] transition"
+          />
+          <button 
+            onClick={sendChat} 
+            disabled={!input.trim() || loading}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition ${
+              input.trim() && !loading 
+                ? 'bg-[#C8622A] text-white hover:bg-[#B0521A]' 
+                : 'bg-gray-200 text-gray-400'
+            }`}
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+
+      {/* Quick Suggestions */}
+      <div className="px-5 mt-4">
+        <p className="text-xs text-[#8B7968] mb-2">Try asking:</p>
+        <div className="flex flex-wrap gap-2">
+          {[
+            '📚 Best books of 2024',
+            '🔥 Something thrilling',
+            '🌿 Calm and cozy',
+            '🧠 Mind-blowing fiction',
+            '💪 Motivational'
+          ].map(s => (
+            <button 
+              key={s} 
+              onClick={() => setInput(s.replace(/^[^\s]+\s/, ''))} 
+              className="text-xs px-3 py-1.5 bg-white border border-[#EDE8E3] rounded-full text-[#6B5D52] hover:border-orange-300 hover:text-orange-600 transition"
+            >
+              {s}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -1938,7 +2232,7 @@ const PostPage = ({ user, onPost, setPage }) => {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-white">
+    <div className="fixed inset-0 flex flex-col bg-white z-[55]" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
         <button onClick={() => setPage('home')} className="p-2 hover:bg-gray-100 rounded-lg">
           <X className="w-5 h-5 text-gray-600" />
@@ -1955,7 +2249,7 @@ const PostPage = ({ user, onPost, setPage }) => {
 
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="flex gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold">
+          <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">
             {user?.name?.slice(0, 2).toUpperCase()}
           </div>
           <div className="flex-1">
@@ -1964,7 +2258,7 @@ const PostPage = ({ user, onPost, setPage }) => {
               onChange={(e) => setContent(e.target.value)}
               className="w-full bg-transparent text-gray-900 placeholder-gray-400 outline-none text-base resize-none"
               placeholder={isDonation ? "Share your book donation story..." : "What are you reading?"}
-              rows={4}
+              rows={5}
               autoFocus
             />
           </div>
@@ -1974,23 +2268,23 @@ const PostPage = ({ user, onPost, setPage }) => {
           <input
             value={bookName}
             onChange={(e) => setBookName(e.target.value)}
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300"
             placeholder="Book name (optional)"
           />
           <input
             value={author}
             onChange={(e) => setAuthor(e.target.value)}
-            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm"
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300"
             placeholder="Author (optional)"
           />
         </div>
 
         {image && (
           <div className="relative mb-4">
-            <img src={image} alt="preview" className="w-full rounded-xl" />
+            <img src={image} alt="preview" className="w-full rounded-xl max-h-56 object-cover" />
             <button
               onClick={() => setImage(null)}
-              className="absolute top-2 right-2 bg-black/50 rounded-full p-1"
+              className="absolute top-2 right-2 bg-black/50 rounded-full p-1 hover:bg-black/70 transition"
             >
               <X className="w-4 h-4 text-white" />
             </button>
@@ -2000,7 +2294,7 @@ const PostPage = ({ user, onPost, setPage }) => {
         <div className="flex flex-wrap gap-3">
           <button
             onClick={() => fileRef.current?.click()}
-            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-sm text-gray-700"
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-sm text-gray-700 hover:bg-gray-200 transition"
           >
             <Camera className="w-4 h-4" />
             Add Photo
@@ -2009,7 +2303,7 @@ const PostPage = ({ user, onPost, setPage }) => {
           <button
             onClick={() => setIsDonation(!isDonation)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition ${
-              isDonation ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-700'
+              isDonation ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             <Gift className="w-4 h-4" />
@@ -2019,7 +2313,7 @@ const PostPage = ({ user, onPost, setPage }) => {
           <button
             onClick={() => setIsPublic(!isPublic)}
             className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition ${
-              !isPublic ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
+              !isPublic ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
             }`}
           >
             {isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
@@ -2084,7 +2378,6 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
 
   const handleLikeReview = (reviewId, review) => {
     if (likedReviews.includes(reviewId)) {
-      alert('You have already liked this review');
       return;
     }
 
@@ -2195,14 +2488,14 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
                 type="text"
                 value={newReview.bookName}
                 onChange={(e) => setNewReview({...newReview, bookName: e.target.value})}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300"
                 placeholder="Book name"
               />
               <input
                 type="text"
                 value={newReview.author}
                 onChange={(e) => setNewReview({...newReview, author: e.target.value})}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300"
                 placeholder="Author"
               />
               
@@ -2211,33 +2504,50 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
                 <StarRating 
                   rating={newReview.rating} 
                   onChange={(r) => setNewReview({...newReview, rating: r})}
+                  size="md"
                 />
               </div>
               
               <textarea
                 value={newReview.review}
                 onChange={(e) => setNewReview({...newReview, review: e.target.value})}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none"
                 placeholder="Write your review..."
                 rows={4}
               />
               
               <div>
                 <label className="text-xs text-gray-600 mb-1 block">Sentiment</label>
-                <select
-                  value={newReview.sentiment}
-                  onChange={(e) => setNewReview({...newReview, sentiment: e.target.value})}
-                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                >
-                  <option value="positive">Positive</option>
-                  <option value="negative">Negative</option>
-                </select>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNewReview({...newReview, sentiment: 'positive'})}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                      newReview.sentiment === 'positive' 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    👍 Positive
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewReview({...newReview, sentiment: 'negative'})}
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${
+                      newReview.sentiment === 'negative' 
+                        ? 'bg-red-500 text-white' 
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    👎 Negative
+                  </button>
+                </div>
               </div>
             </div>
             
             <button
               onClick={handleCreateReview}
-              className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium"
+              className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition"
             >
               Submit Review
             </button>
@@ -2255,50 +2565,62 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
           </div>
         ) : (
           <div className="space-y-4">
-            {reviews.map((review, idx) => (
-              <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <div className="flex items-start gap-3 mb-2">
-                  <DynamicBookCover 
-                    title={review.bookName}
-                    author={review.author}
-                    size="sm"
-                  />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900">{review.bookName}</h3>
-                    <p className="text-xs text-gray-500">by {review.author}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <StarRating rating={review.rating} size="xs" />
+            {reviews.map((review, idx) => {
+              const isLiked = likedReviews.includes(review.id);
+              
+              return (
+                <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                  <div className="flex items-start gap-3 mb-2">
+                    <DynamicBookCover 
+                      title={review.bookName}
+                      author={review.author}
+                      size="sm"
+                    />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-gray-900 text-sm">{review.bookName}</h3>
+                      <p className="text-xs text-gray-500">by {review.author}</p>
+                      <div className="flex items-center gap-1 mt-1">
+                        <StarRating rating={review.rating} size="xs" />
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <p className="text-sm text-gray-700 mb-3">{review.review}</p>
+                  
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        {review.userName?.slice(0, 2) || 'U'}
+                      </div>
+                      <span className="text-xs text-gray-500">{review.userName}</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-3">
+                      <button 
+                        onClick={() => handleLikeReview(review.id, review)}
+                        disabled={isLiked}
+                        className={`flex items-center gap-1 text-xs transition ${
+                          isLiked 
+                            ? 'text-red-500' 
+                            : 'text-gray-400 hover:text-red-400'
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500' : ''}`} />
+                        <span>{review.likes || 0}</span>
+                      </button>
+                      
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        review.sentiment === 'positive' 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {review.sentiment === 'positive' ? '👍' : '👎'}
+                      </span>
                     </div>
                   </div>
                 </div>
-                
-                <p className="text-sm text-gray-700 mb-3">{review.review}</p>
-                
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                      {review.userName?.slice(0, 2) || 'U'}
-                    </div>
-                    <span className="text-xs text-gray-500">{review.userName}</span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <button 
-                      onClick={() => handleLikeReview(review.id, review)}
-                      className={`flex items-center gap-1 text-xs ${likedReviews.includes(review.id) ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
-                      disabled={likedReviews.includes(review.id)}
-                    >
-                      <Heart className={`w-3 h-3 ${likedReviews.includes(review.id) ? 'fill-red-500 text-red-500' : ''}`} />
-                      <span>{review.likes || 0}</span>
-                    </button>
-                    <span className={`text-xs px-2 py-1 rounded-full ${
-                      review.sentiment === 'positive' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                    }`}>
-                      {review.sentiment === 'positive' ? '👍 Positive' : '👎 Negative'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -2306,7 +2628,7 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
   );
 };
 
-// ─── CREWS PAGE WITH FULL GROUP CHAT (LIKE WHATSAPP) ──────────────────────
+// ─── CREWS PAGE WITH FULL GROUP CHAT ──────────────────────────────────────
 const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount }) => {
   const [view, setView] = useState('list'); // 'list', 'detail', 'chat'
   const [selectedCrew, setSelectedCrew] = useState(null);
@@ -2407,7 +2729,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     }
   };
 
-  // FIXED: Message input always visible at bottom
   const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedCrew || !isUserJoined(selectedCrew.id)) return;
 
@@ -2415,8 +2736,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       id: Date.now(),
       userId: user.id,
       userName: user.name,
-      userInitials: user.name?.slice(0, 2),
-      content: newMessage,
+      userInitials: user.name?.slice(0, 2).toUpperCase(),
+      content: newMessage.trim(),
       timestamp: new Date().toISOString(),
       type: 'text'
     };
@@ -2464,7 +2785,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
           id: Date.now(),
           userId: user.id,
           userName: user.name,
-          userInitials: user.name?.slice(0, 2),
+          userInitials: user.name?.slice(0, 2).toUpperCase(),
           content: ev.target.result,
           timestamp: new Date().toISOString(),
           type: 'image'
@@ -2525,7 +2846,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(updatedStats));
 
-    setJoinMessage(`You've joined the ${crew.name} crew! 🎉`);
+    setJoinMessage(`🎉 You've joined the ${crew.name} crew!`);
     setShowJoinMessage(true);
     setTimeout(() => setShowJoinMessage(false), 3000);
   };
@@ -2603,7 +2924,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       genre: '',
     });
 
-    setJoinMessage(`Crew "${newCrew.name}" created! 🎉`);
+    setJoinMessage(`🎉 Crew "${newCrew.name}" created!`);
     setShowJoinMessage(true);
     setTimeout(() => setShowJoinMessage(false), 3000);
   };
@@ -2674,7 +2995,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   };
 
   const JoinMessageToast = () => (
-    <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] animate-slideDown">
+    <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] animate-slideDown text-center">
       {joinMessage}
     </div>
   );
@@ -2755,7 +3076,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   <div className="flex justify-center my-4">
                     <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full shadow-sm">
                       {new Date(group.date).toLocaleDateString(undefined, {
-                        weekday: 'long',
+                        weekday: 'short',
                         month: 'short',
                         day: 'numeric',
                       })}
@@ -3166,33 +3487,33 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                 type="text"
                 value={newCrewData.name}
                 onChange={(e) => setNewCrewData({...newCrewData, name: e.target.value})}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300"
                 placeholder="Book name"
               />
               <input
                 type="text"
                 value={newCrewData.author}
                 onChange={(e) => setNewCrewData({...newCrewData, author: e.target.value})}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300"
                 placeholder="Author"
               />
               <input
                 type="text"
                 value={newCrewData.genre}
                 onChange={(e) => setNewCrewData({...newCrewData, genre: e.target.value})}
-                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300"
                 placeholder="Genre (e.g., Fiction, Self-Help)"
               />
               <div className="flex gap-2">
                 <button
                   onClick={handleCreateCrew}
-                  className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                  className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition"
                 >
                   Create
                 </button>
                 <button
                   onClick={() => setShowCreateCrewForm(false)}
-                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition"
                 >
                   Cancel
                 </button>
@@ -3325,7 +3646,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 };
 
 // ─── PROFILE PAGE ─────────────────────────────────────────────────────────
-const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
+const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc, setProfileSrc }) => {
   const [activeTab, setActiveTab] = useState('Posts');
   const [userStats, setUserStats] = useState(user?.stats || {
     booksRead: 0,
@@ -3336,13 +3657,12 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
   const [readingGoal, setReadingGoal] = useState(user?.readingGoal || { yearly: 0, monthly: 0 });
   const [showEditGoal, setShowEditGoal] = useState(false);
   const [editGoal, setEditGoal] = useState(readingGoal);
-  const [profileImage, setProfileImage] = useState(null);
   const fileRef = useRef();
 
   const tabs = ['Posts', 'Reviews', 'Crews', 'Saved'];
   const myPosts = posts.filter(p => p.userEmail === user?.email);
 
-  // FIXED: Load profile image on mount and when user changes
+  // Load profile image on mount and when user changes
   useEffect(() => {
     const savedStats = localStorage.getItem(`user_${user.email}_stats`);
     if (savedStats) {
@@ -3351,7 +3671,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
     
     const savedImage = localStorage.getItem(`user_${user.email}_profile_image`);
     if (savedImage) {
-      setProfileImage(savedImage);
+      setProfileSrc(savedImage);
     }
   }, [user.email]);
 
@@ -3363,17 +3683,17 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
     setReadingGoal(editGoal);
     setShowEditGoal(false);
-    onUpdateStats?.(updatedUser);
+    onUpdateUser?.(updatedUser);
   };
 
-  // FIXED: Profile image persists after tab changes
+  // Profile image persists after tab changes
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (ev) => {
         const imageData = ev.target.result;
-        setProfileImage(imageData);
+        setProfileSrc(imageData);
         localStorage.setItem(`user_${user.email}_profile_image`, imageData);
         
         // Also update in users array for persistence
@@ -3386,6 +3706,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
         // Update current user
         const updatedUser = { ...user, profileImage: imageData };
         localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+        onUpdateUser?.(updatedUser);
       };
       reader.readAsDataURL(file);
     }
@@ -3408,8 +3729,8 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
       <div className="px-4 py-5">
         <div className="flex items-start gap-4 mb-6">
           <div className="relative">
-            {profileImage ? (
-              <img src={profileImage} alt={user?.name} className="w-20 h-20 rounded-full object-cover border-2 border-orange-200" />
+            {profileSrc ? (
+              <img src={profileSrc} alt={user?.name} className="w-20 h-20 rounded-full object-cover border-2 border-orange-200" />
             ) : (
               <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
                 {user?.name?.slice(0, 2).toUpperCase()}
@@ -3417,9 +3738,9 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
             )}
             <button 
               onClick={() => fileRef.current?.click()}
-              className="absolute bottom-0 right-0 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white hover:bg-orange-600 transition"
+              className="absolute bottom-0 right-0 w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white hover:bg-orange-600 transition shadow"
             >
-              <Camera className="w-3 h-3 text-white" />
+              <Camera className="w-3.5 h-3.5 text-white" />
             </button>
             <input
               ref={fileRef}
@@ -3431,7 +3752,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
           </div>
           <div className="flex-1">
             <h2 className="text-xl font-bold text-gray-900">{user?.name}</h2>
-            <p className="text-sm text-gray-500">@{user?.name?.toLowerCase().replace(' ', '')}</p>
+            <p className="text-sm text-gray-500">@{user?.name?.toLowerCase().replace(/\s/g, '')}</p>
             <p className="text-sm text-gray-600 mt-1 italic">"Reading is my superpower"</p>
             <button className="mt-2 px-4 py-1.5 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 transition">
               Edit Profile
@@ -3481,7 +3802,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
               </div>
               <button
                 onClick={handleSaveGoal}
-                className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition"
               >
                 Save Goal
               </button>
@@ -3560,8 +3881,8 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
               myPosts.map(post => (
                 <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                   <div className="flex items-start gap-3 mb-3">
-                    {profileImage ? (
-                      <img src={profileImage} alt={user?.name} className="w-8 h-8 rounded-full object-cover" />
+                    {profileSrc ? (
+                      <img src={profileSrc} alt={user?.name} className="w-8 h-8 rounded-full object-cover" />
                     ) : (
                       <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
                         {user?.name?.slice(0, 2).toUpperCase()}
@@ -3661,20 +3982,21 @@ export default function App() {
   const [donations, setDonations] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
-  const [showBottomNav, setShowBottomNav] = useState(true); // Control bottom nav visibility
+  const [showBottomNav, setShowBottomNav] = useState(true);
   const [crews, setCrews] = useState([
     { id: 1, name: 'Atomic Habits', author: 'James Clear', genre: 'Self Improvement', members: 1, chats: 0 },
     { id: 2, name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 1, chats: 0 },
     { id: 3, name: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', members: 1, chats: 0 },
     { id: 4, name: 'Sapiens', author: 'Yuval Harari', genre: 'History', members: 1, chats: 0 },
   ]);
-  const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
+  // Profile photo lives in App state so it persists across all page changes
+  const [profileSrc, setProfileSrc] = useState(null);
 
-  // FIXED: Hide bottom nav on pages where keyboard is needed
+  // Hide bottom nav on pages where keyboard is needed
   useEffect(() => {
-    // Hide bottom nav on chat and post pages (where keyboard is needed)
+    // Hide bottom nav on post page and chat view
     if (currentPage === 'post' || (currentPage === 'crews' && window.location.hash.includes('chat'))) {
       setShowBottomNav(false);
     } else {
@@ -3690,6 +4012,10 @@ export default function App() {
         setCurrentUser(user);
         setIsLoggedIn(true);
         loadUserData(user);
+        
+        // Load profile image
+        const img = localStorage.getItem(`user_${user.email}_profile_image`);
+        if (img) setProfileSrc(img);
         
         // Load crews from localStorage
         const savedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
@@ -3714,7 +4040,6 @@ export default function App() {
     }
   };
 
-  // FIXED: Update notification count
   const updateNotificationCount = () => {
     const notifications = JSON.parse(localStorage.getItem(`user_${currentUser?.email}_notifications`) || '[]');
     const unread = notifications.filter(n => !n.read).length;
@@ -3726,6 +4051,10 @@ export default function App() {
     setIsLoggedIn(true);
     setCurrentPage('home');
     loadUserData(userData);
+    
+    // Load profile image
+    const img = localStorage.getItem(`user_${userData.email}_profile_image`);
+    if (img) setProfileSrc(img);
   };
 
   const handlePost = (postData) => {
@@ -3777,14 +4106,13 @@ export default function App() {
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleUpdateStats = (updatedUser) => {
+  const handleUpdateUser = (updatedUser) => {
     setCurrentUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
   };
 
   const handleNotificationClick = () => {
     setShowNotifications(true);
-    // Mark all as read when opening
     updateNotificationCount();
   };
 
@@ -3813,7 +4141,6 @@ export default function App() {
       {showNotifications && (
         <NotificationsPage 
           user={currentUser} 
-          setPage={setCurrentPage}
           onClose={() => {
             setShowNotifications(false);
             updateNotificationCount();
@@ -3831,8 +4158,9 @@ export default function App() {
             donations={donations}
             reviews={reviews}
             setPage={setCurrentPage}
-            onUpdateStats={handleUpdateStats}
+            onUpdateStats={handleUpdateUser}
             updateNotificationCount={updateNotificationCount}
+            profileSrc={profileSrc}
           />
         )}
         
@@ -3874,12 +4202,25 @@ export default function App() {
             user={currentUser} 
             posts={posts} 
             setPage={setCurrentPage}
-            onUpdateStats={handleUpdateStats}
             onLogout={() => { 
               setIsLoggedIn(false); 
               setCurrentUser(null); 
+              setProfileSrc(null);
               localStorage.removeItem('currentUser');
               setCurrentPage('home');
+            }} 
+            onUpdateUser={handleUpdateUser}
+            profileSrc={profileSrc}
+            setProfileSrc={setProfileSrc}
+          />
+        )}
+        
+        {currentPage === 'notifications' && (
+          <NotificationsPage 
+            user={currentUser} 
+            onClose={() => {
+              setCurrentPage('home');
+              updateNotificationCount();
             }} 
           />
         )}
