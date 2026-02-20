@@ -217,10 +217,12 @@ const LoadingSpinner = ({ size = 'md', color = 'orange' }) => {
   );
 };
 
-// ─── BOTTOM NAV ────────────────────────────────────────────────────────────
-const BottomNav = ({ active, setPage, unreadCount = 0 }) => {
+// ─── BOTTOM NAV (TAB BAR) ────────────────────────────────────────────────────
+const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
+  if (!show) return null;
+  
   const items = [
-    { id: 'home', icon: BookOpen, label: 'ReadCrew' },
+    { id: 'home', icon: BookOpen, label: 'Home' },
     { id: 'explore', icon: Sparkles, label: 'Explore' },
     { id: 'post', icon: Edit3, label: 'Post' },
     { id: 'crews', icon: Users, label: 'Crews' },
@@ -261,7 +263,7 @@ const BottomNav = ({ active, setPage, unreadCount = 0 }) => {
 };
 
 // ─── TOP BAR ───────────────────────────────────────────────────────────────
-const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true, onNotificationClick }) => (
+const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true, onNotificationClick, notificationCount = 0 }) => (
   <header className="sticky top-0 bg-white/95 backdrop-blur-sm z-40 px-4 py-3 flex items-center justify-between border-b border-gray-200">
     <div className="flex items-center gap-3">
       {showBack && (
@@ -285,7 +287,11 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = 
           className="relative p-1 hover:bg-gray-100 rounded-lg transition"
         >
           <Bell className="w-5 h-5 text-gray-600" />
-          <span className="absolute top-0 right-0 w-2 h-2 bg-red-500 rounded-full"></span>
+          {notificationCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+              {notificationCount}
+            </span>
+          )}
         </button>
         <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
           <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
@@ -356,11 +362,13 @@ const NotificationsPage = ({ user, setPage, onClose }) => {
                 <div className="flex items-start gap-3">
                   <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
                     notif.type === 'like' ? 'bg-red-100' : 
-                    notif.type === 'comment' ? 'bg-blue-100' : 'bg-green-100'
+                    notif.type === 'comment' ? 'bg-blue-100' : 
+                    notif.type === 'message' ? 'bg-green-100' : 'bg-purple-100'
                   }`}>
                     {notif.type === 'like' && <Heart className="w-4 h-4 text-red-500" />}
                     {notif.type === 'comment' && <MessageCircle className="w-4 h-4 text-blue-500" />}
                     {notif.type === 'message' && <MessageSquare className="w-4 h-4 text-green-500" />}
+                    {notif.type === 'invite' && <UserPlus className="w-4 h-4 text-purple-500" />}
                   </div>
                   <div className="flex-1">
                     <p className="text-sm text-gray-900">{notif.message}</p>
@@ -439,7 +447,10 @@ const LoginPage = ({ onLogin }) => {
           isVerified: true,
           createdAt: new Date().toISOString(),
           stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
-          joinedCrews: []
+          joinedCrews: [],
+          likedPosts: [], // Track liked posts
+          likedReviews: [], // Track liked reviews
+          likedMessages: [] // Track liked messages
         };
 
         const users = JSON.parse(localStorage.getItem('users') || '[]');
@@ -450,6 +461,9 @@ const LoginPage = ({ onLogin }) => {
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
         localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
         localStorage.setItem(`user_${userData.email}_notifications`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_likedPosts`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_likedReviews`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_likedMessages`, JSON.stringify([]));
 
         onLogin(userData);
         setShowOTP(false);
@@ -469,7 +483,10 @@ const LoginPage = ({ onLogin }) => {
           isVerified: true,
           createdAt: new Date().toISOString(),
           stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
-          joinedCrews: []
+          joinedCrews: [],
+          likedPosts: [],
+          likedReviews: [],
+          likedMessages: []
         };
         
         const users = JSON.parse(localStorage.getItem('users') || '[]');
@@ -480,6 +497,9 @@ const LoginPage = ({ onLogin }) => {
         localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify(userData.stats));
         localStorage.setItem(`user_${userData.email}_joinedCrews`, JSON.stringify([]));
         localStorage.setItem(`user_${userData.email}_notifications`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_likedPosts`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_likedReviews`, JSON.stringify([]));
+        localStorage.setItem(`user_${userData.email}_likedMessages`, JSON.stringify([]));
         
         onLogin(userData);
         setShowOTP(false);
@@ -528,7 +548,7 @@ const LoginPage = ({ onLogin }) => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4" style={{ fontFamily: "'Georgia', serif" }}>
       <div className="w-full max-w-md">
-        {/* Logo Section - Properly oriented */}
+        {/* Logo Section */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-3">
             <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl shadow-xl flex items-center justify-center transform hover:scale-105 transition-transform">
@@ -659,156 +679,8 @@ const LoginPage = ({ onLogin }) => {
 const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validateName = (name) => name && name.trim().length >= 2;
 
-// Book recommendations database
-const BOOK_RECOMMENDATIONS = [
-  {
-    id: 1,
-    category: 'Fantasy',
-    emoji: '📚',
-    description: 'Imaginative worlds, magic, mythical creatures',
-    books: [
-      { title: 'The Hobbit', author: 'J.R.R. Tolkien', rating: 4.7 },
-      { title: 'Harry Potter Series', author: 'J.K. Rowling', rating: 4.8 },
-      { title: 'The Name of the Wind', author: 'Patrick Rothfuss', rating: 4.5 },
-      { title: 'A Song of Ice and Fire', author: 'George R.R. Martin', rating: 4.6 }
-    ]
-  },
-  {
-    id: 2,
-    category: 'Science Fiction',
-    emoji: '🚀',
-    description: 'Future tech, space exploration, aliens',
-    books: [
-      { title: 'Dune', author: 'Frank Herbert', rating: 4.5 },
-      { title: '1984', author: 'George Orwell', rating: 4.4 },
-      { title: 'The Martian', author: 'Andy Weir', rating: 4.7 },
-      { title: 'Foundation', author: 'Isaac Asimov', rating: 4.3 }
-    ]
-  },
-  {
-    id: 3,
-    category: 'Mystery/Thriller',
-    emoji: '🔍',
-    description: 'Suspense, crime solving, plot twists',
-    books: [
-      { title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.2 },
-      { title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.1 },
-      { title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5 },
-      { title: 'The Da Vinci Code', author: 'Dan Brown', rating: 4.0 }
-    ]
-  },
-  {
-    id: 4,
-    category: 'Romance',
-    emoji: '❤️',
-    description: 'Love stories, relationships, emotional journeys',
-    books: [
-      { title: 'Pride and Prejudice', author: 'Jane Austen', rating: 4.8 },
-      { title: 'The Notebook', author: 'Nicholas Sparks', rating: 4.3 },
-      { title: 'Normal People', author: 'Sally Rooney', rating: 4.0 },
-      { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', rating: 4.6 }
-    ]
-  },
-  {
-    id: 5,
-    category: 'Biography/Autobiography',
-    emoji: '📖',
-    description: 'Real-life stories, memoirs, historical figures',
-    books: [
-      { title: 'The Diary of a Young Girl', author: 'Anne Frank', rating: 4.8 },
-      { title: 'Becoming', author: 'Michelle Obama', rating: 4.8 },
-      { title: 'Educated', author: 'Tara Westover', rating: 4.7 },
-      { title: 'Steve Jobs', author: 'Walter Isaacson', rating: 4.6 }
-    ]
-  },
-  {
-    id: 6,
-    category: 'Self-Help/Motivational',
-    emoji: '💪',
-    description: 'Personal growth, productivity, mindset',
-    books: [
-      { title: 'Atomic Habits', author: 'James Clear', rating: 4.8 },
-      { title: 'The 7 Habits of Highly Effective People', author: 'Stephen R. Covey', rating: 4.7 },
-      { title: 'The Power of Now', author: 'Eckhart Tolle', rating: 4.3 },
-      { title: 'Think and Grow Rich', author: 'Napoleon Hill', rating: 4.2 }
-    ]
-  },
-  {
-    id: 7,
-    category: 'Historical Fiction',
-    emoji: '🏛️',
-    description: 'Historical events, period settings',
-    books: [
-      { title: 'The Book Thief', author: 'Markus Zusak', rating: 4.7 },
-      { title: 'All the Light We Cannot See', author: 'Anthony Doerr', rating: 4.6 },
-      { title: 'The Nightingale', author: 'Kristen Hannah', rating: 4.8 },
-      { title: 'Wolf Hall', author: 'Hilary Mantel', rating: 4.5 }
-    ]
-  },
-  {
-    id: 8,
-    category: 'Horror',
-    emoji: '👻',
-    description: 'Fear, supernatural, psychological terror',
-    books: [
-      { title: 'It', author: 'Stephen King', rating: 4.6 },
-      { title: 'Dracula', author: 'Bram Stoker', rating: 4.2 },
-      { title: 'The Shining', author: 'Stephen King', rating: 4.7 },
-      { title: 'Frankenstein', author: 'Mary Shelley', rating: 4.1 }
-    ]
-  },
-  {
-    id: 9,
-    category: 'Literary Fiction',
-    emoji: '✍️',
-    description: 'Character-driven, artistic prose, social commentary',
-    books: [
-      { title: 'To Kill a Mockingbird', author: 'Harper Lee', rating: 4.8 },
-      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', rating: 4.3 },
-      { title: 'Beloved', author: 'Toni Morrison', rating: 4.4 },
-      { title: 'The Catcher in the Rye', author: 'J.D. Salinger', rating: 4.1 }
-    ]
-  },
-  {
-    id: 10,
-    category: 'Young Adult',
-    emoji: '🌟',
-    description: 'Teen protagonists, coming-of-age',
-    books: [
-      { title: 'The Fault in Our Stars', author: 'John Green', rating: 4.7 },
-      { title: 'The Hunger Games', author: 'Suzanne Collins', rating: 4.7 },
-      { title: 'Divergent', author: 'Veronica Roth', rating: 4.2 },
-      { title: 'Twilight', author: 'Stephenie Meyer', rating: 3.8 }
-    ]
-  },
-  {
-    id: 11,
-    category: 'Adventure',
-    emoji: '🗺️',
-    description: 'Exploration, survival, action',
-    books: [
-      { title: 'The Lord of the Rings', author: 'J.R.R. Tolkien', rating: 4.9 },
-      { title: 'Treasure Island', author: 'Robert Louis Stevenson', rating: 4.0 },
-      { title: 'Life of Pi', author: 'Yann Martel', rating: 4.2 },
-      { title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.3 }
-    ]
-  },
-  {
-    id: 12,
-    category: 'Philosophy',
-    emoji: '🤔',
-    description: 'Existential questions, ethics, consciousness',
-    books: [
-      { title: 'Meditations', author: 'Marcus Aurelius', rating: 4.5 },
-      { title: 'Thus Spoke Zarathustra', author: 'Friedrich Nietzsche', rating: 4.0 },
-      { title: 'The Republic', author: 'Plato', rating: 4.2 },
-      { title: 'Sophie\'s World', author: 'Jostein Gaarder', rating: 4.3 }
-    ]
-  }
-];
-
 // ─── HOME PAGE ──────────────────────────────────────────────────────────────
-const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats }) => {
+const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats, updateNotificationCount }) => {
   const [trendingBooks, setTrendingBooks] = useState([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [readingProgress, setReadingProgress] = useState(0);
@@ -826,10 +698,14 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     crewsJoined: user?.joinedCrews?.length || 0
   });
 
+  // Liked posts tracking
+  const [likedPosts, setLikedPosts] = useState([]);
+
   useEffect(() => {
     loadTrendingBooks();
     loadFeedPosts();
     calculateReadingProgress();
+    loadLikedPosts();
     
     // Update stats from localStorage
     const savedStats = localStorage.getItem(`user_${user.email}_stats`);
@@ -837,6 +713,11 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       setUserStats(JSON.parse(savedStats));
     }
   }, [user?.stats?.booksRead, user?.joinedCrews]);
+
+  const loadLikedPosts = () => {
+    const savedLikedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
+    setLikedPosts(savedLikedPosts);
+  };
 
   const loadTrendingBooks = async () => {
     setLoadingTrending(true);
@@ -888,33 +769,50 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     }
   };
 
-  const handleLikePost = async (postId, type) => {
-    try {
-      // Update post likes
-      setFeedPosts(prev => prev.map(p => 
-        p._id === postId ? { ...p, likes: (p.likes || 0) + 1, liked: true } : p
-      ));
+  // FIXED: Single like per user
+  const handleLikePost = (postId, post) => {
+    // Check if already liked
+    if (likedPosts.includes(postId)) {
+      alert('You have already liked this post');
+      return;
+    }
+
+    // Update liked posts
+    const updatedLikedPosts = [...likedPosts, postId];
+    setLikedPosts(updatedLikedPosts);
+    localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(updatedLikedPosts));
+
+    // Update post likes count
+    setFeedPosts(prev => prev.map(p => 
+      p.id === postId ? { ...p, likes: (p.likes || 0) + 1, liked: true } : p
+    ));
+
+    // Update in main posts array
+    const updatedPosts = posts.map(p => 
+      p.id === postId ? { ...p, likes: (p.likes || 0) + 1 } : p
+    );
+    setPosts(updatedPosts);
+    localStorage.setItem(`user_${post.userEmail}_posts`, JSON.stringify(updatedPosts.filter(p => p.userEmail === post.userEmail)));
+
+    // Create notification for post owner
+    if (post && post.userEmail !== user.email) {
+      const notification = {
+        id: Date.now(),
+        type: 'like',
+        fromUser: user.name,
+        fromUserEmail: user.email,
+        postId: postId,
+        message: `${user.name} liked your post`,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
       
-      // Create notification for post owner
-      const post = feedPosts.find(p => p._id === postId);
-      if (post && post.userEmail !== user.email) {
-        const notification = {
-          id: Date.now(),
-          type: 'like',
-          fromUser: user.name,
-          fromUserEmail: user.email,
-          postId: postId,
-          message: `${user.name} liked your post`,
-          timestamp: new Date().toISOString(),
-          read: false
-        };
-        
-        const userNotifications = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
-        userNotifications.unshift(notification);
-        localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(userNotifications));
-      }
-    } catch (error) {
-      console.error('Error liking post:', error);
+      const userNotifications = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
+      userNotifications.unshift(notification);
+      localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(userNotifications));
+      
+      // Update notification count in parent
+      updateNotificationCount();
     }
   };
 
@@ -922,11 +820,11 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     const comment = prompt('Enter your comment:');
     if (comment) {
       setFeedPosts(prev => prev.map(p => 
-        p._id === postId ? { ...p, comments: (p.comments || 0) + 1 } : p
+        p.id === postId ? { ...p, comments: (p.comments || 0) + 1 } : p
       ));
       
       // Create notification
-      const post = feedPosts.find(p => p._id === postId);
+      const post = feedPosts.find(p => p.id === postId);
       if (post && post.userEmail !== user.email) {
         const notification = {
           id: Date.now(),
@@ -935,7 +833,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           fromUserEmail: user.email,
           postId: postId,
           comment: comment,
-          message: `${user.name} commented on your post`,
+          message: `${user.name} commented on your post: "${comment.substring(0, 30)}${comment.length > 30 ? '...' : ''}"`,
           timestamp: new Date().toISOString(),
           read: false
         };
@@ -943,13 +841,16 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
         const userNotifications = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
         userNotifications.unshift(notification);
         localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(userNotifications));
+        
+        // Update notification count in parent
+        updateNotificationCount();
       }
     }
   };
 
   const handleShare = (postId) => {
     setFeedPosts(prev => prev.map(p => 
-      p._id === postId ? { ...p, shares: (p.shares || 0) + 1 } : p
+      p.id === postId ? { ...p, shares: (p.shares || 0) + 1 } : p
     ));
     alert('Post shared!');
   };
@@ -1056,6 +957,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                           members: 1,
                           chats: 0,
                           createdBy: user.email,
+                          createdByName: user.name,
                           createdAt: new Date().toISOString(),
                           messages: []
                         };
@@ -1088,20 +990,19 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       )}
 
       <div className="px-4 py-4 space-y-5">
-        {/* Welcome Card - Without the white circle and avatar */}
+        {/* Welcome Card */}
         <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Welcome, {user?.name?.split(' ')[0]}! 📚</h2>
               <p className="text-orange-100 text-sm mt-1">Ready for your next reading adventure?</p>
             </div>
-            {/* Removed the Avatar circle as requested */}
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
               <BookOpen className="w-6 h-6 text-white" />
             </div>
           </div>
           
-          {/* Reading Progress - Only show if goals are set */}
+          {/* Reading Progress */}
           {hasReadingGoal && (
             <div className="mt-4 bg-white/20 rounded-xl p-3 backdrop-blur-sm">
               <div className="flex items-center justify-between text-sm mb-2">
@@ -1132,7 +1033,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           )}
         </div>
 
-        {/* Quick Stats - Real-time updates */}
+        {/* Quick Stats */}
         <div className="grid grid-cols-4 gap-2">
           {[
             { label: 'Books', value: userStats.booksRead, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100', page: 'profile' },
@@ -1230,21 +1131,22 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                   
                   <div className="flex items-center gap-4 pt-3 border-t border-gray-100">
                     <button 
-                      onClick={() => handleLikePost(post._id, post.type)}
-                      className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
+                      onClick={() => handleLikePost(post.id, post)}
+                      className={`flex items-center gap-1.5 text-xs ${likedPosts.includes(post.id) ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
+                      disabled={likedPosts.includes(post.id)}
                     >
-                      <Heart className={`w-4 h-4 ${post.liked ? 'fill-red-500 text-red-500' : ''}`} />
+                      <Heart className={`w-4 h-4 ${likedPosts.includes(post.id) ? 'fill-red-500 text-red-500' : ''}`} />
                       <span>{post.likes || 0}</span>
                     </button>
                     <button 
-                      onClick={() => handleComment(post._id)}
+                      onClick={() => handleComment(post.id)}
                       className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
                     >
                       <MessageCircle className="w-4 h-4" />
                       <span>{post.comments || 0}</span>
                     </button>
                     <button 
-                      onClick={() => handleShare(post._id)}
+                      onClick={() => handleShare(post.id)}
                       className="flex items-center gap-1.5 text-xs text-gray-500 hover:text-orange-500"
                     >
                       <Share2 className="w-4 h-4" />
@@ -1800,10 +1702,11 @@ const PostPage = ({ user, onPost, setPage }) => {
 };
 
 // ─── REVIEWS PAGE ─────────────────────────────────────────────────────────
-const ReviewsPage = ({ user, setPage }) => {
+const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [likedReviews, setLikedReviews] = useState([]);
   const [newReview, setNewReview] = useState({
     bookName: '',
     author: '',
@@ -1814,6 +1717,7 @@ const ReviewsPage = ({ user, setPage }) => {
 
   useEffect(() => {
     loadReviews();
+    loadLikedReviews();
   }, []);
 
   const loadReviews = async () => {
@@ -1825,6 +1729,50 @@ const ReviewsPage = ({ user, setPage }) => {
       console.error('Error loading reviews:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadLikedReviews = () => {
+    const savedLikedReviews = JSON.parse(localStorage.getItem(`user_${user.email}_likedReviews`) || '[]');
+    setLikedReviews(savedLikedReviews);
+  };
+
+  // FIXED: Single like per review
+  const handleLikeReview = (reviewId, review) => {
+    if (likedReviews.includes(reviewId)) {
+      alert('You have already liked this review');
+      return;
+    }
+
+    const updatedLikedReviews = [...likedReviews, reviewId];
+    setLikedReviews(updatedLikedReviews);
+    localStorage.setItem(`user_${user.email}_likedReviews`, JSON.stringify(updatedLikedReviews));
+
+    // Update review likes
+    const updatedReviews = reviews.map(r => 
+      r.id === reviewId ? { ...r, likes: (r.likes || 0) + 1 } : r
+    );
+    setReviews(updatedReviews);
+    localStorage.setItem('reviews', JSON.stringify(updatedReviews));
+
+    // Create notification
+    if (review.userEmail !== user.email) {
+      const notification = {
+        id: Date.now(),
+        type: 'like',
+        fromUser: user.name,
+        fromUserEmail: user.email,
+        reviewId: reviewId,
+        message: `${user.name} liked your review of "${review.bookName}"`,
+        timestamp: new Date().toISOString(),
+        read: false
+      };
+      
+      const userNotifications = JSON.parse(localStorage.getItem(`user_${review.userEmail}_notifications`) || '[]');
+      userNotifications.unshift(notification);
+      localStorage.setItem(`user_${review.userEmail}_notifications`, JSON.stringify(userNotifications));
+      
+      updateNotificationCount();
     }
   };
 
@@ -1840,7 +1788,8 @@ const ReviewsPage = ({ user, setPage }) => {
         ...newReview,
         userName: user.name,
         userEmail: user.email,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        likes: 0
       };
 
       const savedReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
@@ -1870,19 +1819,6 @@ const ReviewsPage = ({ user, setPage }) => {
       
       localStorage.setItem('currentUser', JSON.stringify(updatedUser));
       localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(updatedStats));
-      
-      // Trigger notification
-      const notification = {
-        id: Date.now(),
-        type: 'review',
-        message: `You wrote a review for "${newReview.bookName}"`,
-        timestamp: new Date().toISOString(),
-        read: false
-      };
-      
-      const userNotifications = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-      userNotifications.unshift(notification);
-      localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(userNotifications));
       
     } catch (error) {
       console.error('Error creating review:', error);
@@ -2001,11 +1937,21 @@ const ReviewsPage = ({ user, setPage }) => {
                     </div>
                     <span className="text-xs text-gray-500">{review.userName}</span>
                   </div>
-                  <span className={`text-xs px-2 py-1 rounded-full ${
-                    review.sentiment === 'positive' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {review.sentiment === 'positive' ? '👍 Positive' : '👎 Negative'}
-                  </span>
+                  <div className="flex items-center gap-3">
+                    <button 
+                      onClick={() => handleLikeReview(review.id, review)}
+                      className={`flex items-center gap-1 text-xs ${likedReviews.includes(review.id) ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
+                      disabled={likedReviews.includes(review.id)}
+                    >
+                      <Heart className={`w-3 h-3 ${likedReviews.includes(review.id) ? 'fill-red-500 text-red-500' : ''}`} />
+                      <span>{review.likes || 0}</span>
+                    </button>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      review.sentiment === 'positive' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {review.sentiment === 'positive' ? '👍 Positive' : '👎 Negative'}
+                    </span>
+                  </div>
                 </div>
               </div>
             ))}
@@ -2016,9 +1962,9 @@ const ReviewsPage = ({ user, setPage }) => {
   );
 };
 
-// ─── CREWS PAGE ───────────────────────────────────────────────────────────
-const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
-  const [view, setView] = useState('list');
+// ─── CREWS PAGE WITH FULL GROUP CHAT (LIKE WHATSAPP) ──────────────────────
+const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount }) => {
+  const [view, setView] = useState('list'); // 'list', 'detail', 'chat'
   const [selectedCrew, setSelectedCrew] = useState(null);
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -2035,9 +1981,11 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     author: '',
     genre: '',
   });
+  const [selectedTab, setSelectedTab] = useState('chat'); // 'chat', 'members', 'media'
   
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   useEffect(() => {
     // Load crews from localStorage
@@ -2079,10 +2027,24 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       .map(u => ({
         id: u.id,
         name: u.name,
+        email: u.email,
         initials: u.name?.slice(0, 2),
         color: '#C8622A',
         online: Math.random() > 0.5 // Random online status for demo
       }));
+    
+    // Add creator if not in list
+    if (!members.find(m => m.email === selectedCrew.createdBy)) {
+      members.push({
+        id: selectedCrew.createdBy,
+        name: selectedCrew.createdByName || 'Creator',
+        email: selectedCrew.createdBy,
+        initials: selectedCrew.createdByName?.slice(0, 2) || 'CR',
+        color: '#C8622A',
+        online: true,
+        isCreator: true
+      });
+    }
     
     setCrewMembers(members);
   };
@@ -2101,7 +2063,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     }
   };
 
-  const handleSendMessage = async () => {
+  // FIXED: Message input always visible at bottom
+  const handleSendMessage = () => {
     if (!newMessage.trim() || !selectedCrew || !isUserJoined(selectedCrew.id)) return;
 
     const message = {
@@ -2111,7 +2074,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       userInitials: user.name?.slice(0, 2),
       content: newMessage,
       timestamp: new Date().toISOString(),
-      color: '#C8622A'
+      type: 'text'
     };
 
     // Save to localStorage
@@ -2122,7 +2085,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     setMessages(prev => [...prev, { ...message, timestamp: new Date(message.timestamp) }]);
     setNewMessage('');
 
-    // Notify other crew members (simulated)
+    // Notify other crew members
     const notification = {
       id: Date.now(),
       type: 'message',
@@ -2137,12 +2100,41 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
     // Store notifications for all members except sender
     crewMembers.forEach(member => {
-      if (member.id !== user.id) {
+      if (member.email !== user.email) {
         const memberNotifications = JSON.parse(localStorage.getItem(`user_${member.email}_notifications`) || '[]');
         memberNotifications.unshift(notification);
         localStorage.setItem(`user_${member.email}_notifications`, JSON.stringify(memberNotifications));
       }
     });
+
+    // Update notification count in parent
+    updateNotificationCount();
+  };
+
+  const handleSendImage = (e) => {
+    const file = e.target.files[0];
+    if (file && selectedCrew && isUserJoined(selectedCrew.id)) {
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        const message = {
+          id: Date.now(),
+          userId: user.id,
+          userName: user.name,
+          userInitials: user.name?.slice(0, 2),
+          content: ev.target.result,
+          timestamp: new Date().toISOString(),
+          type: 'image'
+        };
+
+        // Save to localStorage
+        const existingMessages = JSON.parse(localStorage.getItem(`crew_${selectedCrew.id}_messages`) || '[]');
+        existingMessages.push(message);
+        localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existingMessages));
+
+        setMessages(prev => [...prev, { ...message, timestamp: new Date(message.timestamp) }]);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleTyping = () => {
@@ -2248,6 +2240,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       members: 1,
       chats: 0,
       createdBy: user.email,
+      createdByName: user.name,
       createdAt: new Date().toISOString(),
       messages: []
     };
@@ -2289,9 +2282,51 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       const friendNotifications = JSON.parse(localStorage.getItem(`user_${friendEmail}_notifications`) || '[]');
       friendNotifications.unshift(notification);
       localStorage.setItem(`user_${friendEmail}_notifications`, JSON.stringify(friendNotifications));
+      
+      updateNotificationCount();
 
       alert(`Invitation sent to ${friendEmail}!`);
     }
+  };
+
+  const formatMessageTime = (timestamp) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  };
+
+  const groupMessagesByDate = () => {
+    const groups = [];
+    let currentDate = null;
+    let currentGroup = [];
+
+    messages.forEach(msg => {
+      const msgDate = new Date(msg.timestamp).toDateString();
+      if (msgDate !== currentDate) {
+        if (currentGroup.length > 0) {
+          groups.push({ date: currentDate, messages: currentGroup });
+        }
+        currentDate = msgDate;
+        currentGroup = [msg];
+      } else {
+        currentGroup.push(msg);
+      }
+    });
+
+    if (currentGroup.length > 0) {
+      groups.push({ date: currentDate, messages: currentGroup });
+    }
+
+    return groups;
   };
 
   const JoinMessageToast = () => (
@@ -2300,18 +2335,21 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     </div>
   );
 
+  // ========== CHAT VIEW (WhatsApp Style) ==========
   if (view === 'chat' && selectedCrew) {
     const hasJoined = isUserJoined(selectedCrew.id);
+    const messageGroups = groupMessagesByDate();
 
     return (
-      <div className="h-screen flex flex-col bg-gray-50">
+      <div className="h-screen flex flex-col bg-gray-100">
         {showJoinMessage && <JoinMessageToast />}
 
-        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
-          <button onClick={() => setView('bookpage')} className="p-1 hover:bg-gray-100 rounded-lg">
-            <ChevronLeft className="w-5 h-5 text-gray-600" />
-          </button>
-          <div className="flex items-center gap-2 flex-1 mx-3">
+        {/* Chat Header */}
+        <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-2 flex items-center justify-between z-10 shadow-sm">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setView('detail')} className="p-1 hover:bg-gray-100 rounded-full">
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            </button>
             <div className="relative">
               <DynamicBookCover 
                 title={selectedCrew.name}
@@ -2323,122 +2361,170 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               )}
             </div>
             <div>
-              <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
+              <p className="font-semibold text-gray-900">{selectedCrew.name}</p>
               <p className="text-xs text-gray-500">
-                {crewMembers.length} member{crewMembers.length !== 1 ? 's' : ''} •
+                {crewMembers.length} member{crewMembers.length !== 1 ? 's' : ''} • 
                 {crewMembers.filter(m => m.online).length} online
               </p>
             </div>
           </div>
-          {hasJoined && (
-            <div className="flex gap-2">
-              <button
-                onClick={() => handleAddFriend(selectedCrew)}
-                className="text-xs text-blue-500 px-2 py-1 border border-blue-200 rounded-lg"
-              >
-                Add Friend
-              </button>
-              <button
-                onClick={() => handleLeaveCrew(selectedCrew)}
-                className="text-xs text-red-500 px-2 py-1 border border-red-200 rounded-lg"
-              >
-                Leave
-              </button>
-            </div>
-          )}
+          <div className="flex gap-2">
+            <button className="p-2 hover:bg-gray-100 rounded-full">
+              <MoreHorizontal className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
+        {/* Chat Messages Area - WhatsApp style bubbles */}
+        <div className="flex-1 overflow-y-auto px-4 py-4 space-y-6 bg-[#e5ddd5]">
           {!hasJoined ? (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <Lock className="w-12 h-12 text-gray-300 mb-3" />
-              <p className="text-gray-500 mb-2">Join this crew to see the chat</p>
+            <div className="flex flex-col items-center justify-center h-full text-center bg-white/80 rounded-xl p-8">
+              <Lock className="w-16 h-16 text-gray-400 mb-4" />
+              <p className="text-gray-700 font-medium mb-2">This chat is private</p>
+              <p className="text-gray-500 text-sm mb-4">Join this crew to see messages</p>
               <button
                 onClick={() => handleJoinCrew(selectedCrew)}
-                className="px-6 py-2 bg-orange-500 text-white rounded-xl font-medium"
+                className="px-6 py-3 bg-orange-500 text-white rounded-xl font-medium shadow-lg"
               >
                 Join Crew
               </button>
             </div>
           ) : (
             <>
-              {messages.map((message) => {
-                const isOwn = message.userId === user.id;
-                return (
-                  <div key={message.id} className={`flex gap-2.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                    {!isOwn && (
-                      <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        {message.userInitials}
-                      </div>
-                    )}
-                    <div className={`max-w-[75%] ${isOwn ? 'items-end' : 'items-start'}`}>
-                      {!isOwn && (
-                        <p className="text-xs text-gray-500 mb-1 px-1">{message.userName}</p>
-                      )}
-                      <div className={`rounded-2xl px-4 py-2.5 ${
-                        isOwn 
-                          ? 'bg-gradient-to-r from-orange-500 to-red-500 text-white' 
-                          : 'bg-white border border-gray-200 text-gray-900'
-                      }`}>
-                        <p className="text-sm leading-relaxed">{message.content}</p>
-                      </div>
-                      <p className="text-[10px] text-gray-400 mt-1 px-1">
-                        {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      </p>
-                    </div>
+              {messageGroups.map((group, groupIndex) => (
+                <div key={groupIndex}>
+                  {/* Date Separator */}
+                  <div className="flex justify-center mb-4">
+                    <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full">
+                      {new Date(group.date).toLocaleDateString(undefined, { 
+                        weekday: 'long', 
+                        month: 'short', 
+                        day: 'numeric' 
+                      })}
+                    </span>
                   </div>
-                );
-              })}
+
+                  {/* Messages */}
+                  {group.messages.map((msg, msgIndex) => {
+                    const isOwn = msg.userId === user.id;
+                    const showAvatar = !isOwn && (msgIndex === 0 || group.messages[msgIndex - 1].userId !== msg.userId);
+                    
+                    return (
+                      <div key={msg.id} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                        <div className={`flex max-w-[75%] ${isOwn ? 'flex-row-reverse' : 'flex-row'}`}>
+                          {/* Avatar - only show for first message in a row from same user */}
+                          {!isOwn && showAvatar && (
+                            <div className="w-8 h-8 mr-2 flex-shrink-0 self-end mb-1">
+                              <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                                {msg.userInitials}
+                              </div>
+                            </div>
+                          )}
+                          {!isOwn && !showAvatar && <div className="w-8 mr-2 flex-shrink-0"></div>}
+                          
+                          {/* Message Bubble */}
+                          <div>
+                            {/* Sender name - only show for others on first message */}
+                            {!isOwn && showAvatar && (
+                              <p className="text-xs text-gray-600 mb-1 ml-1">{msg.userName}</p>
+                            )}
+                            
+                            <div className={`rounded-2xl px-4 py-2.5 ${
+                              isOwn 
+                                ? 'bg-[#dcf8c6] rounded-br-none' 
+                                : 'bg-white rounded-bl-none'
+                            } shadow-sm`}>
+                              {msg.type === 'image' ? (
+                                <img src={msg.content} alt="Shared" className="max-w-full rounded-lg max-h-64" />
+                              ) : (
+                                <p className="text-sm leading-relaxed break-words">{msg.content}</p>
+                              )}
+                              <p className={`text-[10px] mt-1 text-right ${
+                                isOwn ? 'text-gray-500' : 'text-gray-400'
+                              }`}>
+                                {formatMessageTime(msg.timestamp)}
+                                {isOwn && (
+                                  <span className="ml-1">
+                                    ✓✓
+                                  </span>
+                                )}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ))}
               
+              {/* Typing Indicator */}
               {isTyping && (
-                <div className="flex gap-2">
-                  <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                    ...
-                  </div>
-                  <div className="bg-white border border-gray-200 rounded-2xl px-4 py-2">
-                    <div className="flex gap-1">
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                      <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                <div className="flex justify-start mb-2">
+                  <div className="flex max-w-[75%]">
+                    <div className="w-8 h-8 mr-2 flex-shrink-0">
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                        ...
+                      </div>
+                    </div>
+                    <div className="bg-white rounded-2xl rounded-bl-none px-4 py-3 shadow-sm">
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                      </div>
                     </div>
                   </div>
                 </div>
               )}
+              
+              <div ref={messagesEndRef} />
             </>
           )}
-          
-          <div ref={messagesEndRef} />
         </div>
 
+        {/* Chat Input - ALWAYS VISIBLE at bottom */}
         {hasJoined && (
-          <div className="bg-white border-t border-gray-200 px-4 py-3 pb-safe">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                {user?.name?.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="flex-1 flex items-center gap-2 bg-gray-100 rounded-2xl px-4 py-2.5">
-                <input
-                  type="text"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSendMessage();
-                    }
-                    handleTyping();
-                  }}
-                  className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none"
-                  placeholder="Type a message..."
-                />
-                <button
-                  onClick={handleSendMessage}
-                  disabled={!newMessage.trim()}
-                  className="p-1.5 disabled:opacity-50 transition hover:scale-110 active:scale-95"
-                >
-                  <Send className={`w-5 h-5 ${!newMessage.trim() ? 'text-gray-400' : 'text-orange-500'}`} />
-                </button>
-              </div>
+          <div className="bg-gray-100 border-t border-gray-200 px-3 py-3">
+            <div className="flex items-center gap-2 bg-white rounded-full px-4 py-1 shadow-sm">
+              <button 
+                onClick={() => fileInputRef.current?.click()}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <Plus className="w-5 h-5 text-orange-500" />
+              </button>
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleSendImage}
+              />
+              <input
+                type="text"
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                  handleTyping();
+                }}
+                className="flex-1 py-2.5 text-sm text-gray-900 placeholder-gray-400 outline-none"
+                placeholder="Type a message..."
+              />
+              <button
+                onClick={handleSendMessage}
+                disabled={!newMessage.trim()}
+                className={`p-2 rounded-full ${
+                  newMessage.trim() 
+                    ? 'bg-orange-500 text-white' 
+                    : 'bg-gray-200 text-gray-400'
+                }`}
+              >
+                <Send className="w-4 h-4" />
+              </button>
             </div>
           </div>
         )}
@@ -2446,79 +2532,94 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     );
   }
 
-  if (view !== 'list' && selectedCrew) {
+  // ========== CREW DETAIL VIEW ==========
+  if (view === 'detail' && selectedCrew) {
     const hasJoined = isUserJoined(selectedCrew.id);
 
     return (
-      <div className="h-screen flex flex-col bg-gray-50">
+      <div className="h-screen flex flex-col bg-white">
         {showJoinMessage && <JoinMessageToast />}
         
+        {/* Detail Header */}
         <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10">
           <button onClick={() => setView('list')} className="p-1 hover:bg-gray-100 rounded-lg">
             <ChevronLeft className="w-5 h-5 text-gray-600" />
           </button>
-          <span className="font-semibold text-gray-900 flex-1">{selectedCrew.name}</span>
-          {hasJoined && (
-            <button 
-              onClick={() => handleAddFriend(selectedCrew)}
-              className="p-2 hover:bg-gray-100 rounded-full"
-              title="Invite Friend"
-            >
-              <UserPlus className="w-5 h-5 text-gray-600" />
-            </button>
-          )}
+          <span className="font-semibold text-gray-900 flex-1">Crew Info</span>
           <button className="p-2 hover:bg-gray-100 rounded-full">
-            <Bookmark className="w-5 h-5 text-gray-600" />
+            <MoreHorizontal className="w-5 h-5 text-gray-600" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          <div className="flex gap-4 mb-6">
-            <DynamicBookCover 
-              title={selectedCrew.name}
-              author={selectedCrew.author}
-              size="lg"
-            />
-            <div className="flex-1">
-              <span className="text-xs px-2 py-1 bg-orange-100 text-orange-600 rounded-full font-medium inline-block mb-2">
+        <div className="flex-1 overflow-y-auto">
+          {/* Cover & Basic Info */}
+          <div className="bg-gradient-to-b from-orange-50 to-white px-4 pt-6 pb-4">
+            <div className="flex flex-col items-center text-center">
+              <DynamicBookCover 
+                title={selectedCrew.name}
+                author={selectedCrew.author}
+                size="xl"
+                className="mb-4"
+              />
+              <h1 className="text-2xl font-bold text-gray-900">{selectedCrew.name}</h1>
+              <p className="text-gray-600">by {selectedCrew.author}</p>
+              <span className="mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">
                 {selectedCrew.genre}
               </span>
-              <h2 className="font-bold text-gray-900 text-xl">{selectedCrew.name}</h2>
-              <p className="text-sm text-gray-500">by {selectedCrew.author}</p>
-              <div className="flex items-center gap-2 mt-2">
-                <StarRating rating={4.5} />
-                <span className="text-sm font-medium">4.5</span>
-              </div>
-              <div className="flex items-center gap-3 mt-2">
-                <div className="flex items-center gap-1">
-                  <Users className="w-4 h-4 text-gray-400" />
-                  <span className="text-sm text-gray-600">{crewMembers.length} members</span>
+              
+              {/* Stats */}
+              <div className="flex gap-6 mt-4">
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-900">{crewMembers.length}</p>
+                  <p className="text-xs text-gray-500">Members</p>
                 </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-900">{messages.length}</p>
+                  <p className="text-xs text-gray-500">Messages</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold text-gray-900">4.5</p>
+                  <p className="text-xs text-gray-500">Rating</p>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 mt-6 w-full">
                 {!hasJoined ? (
                   <button 
                     onClick={() => handleJoinCrew(selectedCrew)}
-                    className="px-4 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold"
                   >
                     Join Crew
                   </button>
                 ) : (
-                  <span className="px-3 py-1 bg-green-100 text-green-600 rounded-lg text-sm font-medium">
-                    Joined
-                  </span>
+                  <button 
+                    onClick={() => setView('chat')}
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold"
+                  >
+                    Go to Chat
+                  </button>
                 )}
+                <button 
+                  onClick={() => handleAddFriend(selectedCrew)}
+                  className="px-4 py-3 border border-gray-200 rounded-xl"
+                >
+                  <UserPlus className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
 
-          <div className="flex gap-4 border-b border-gray-200 mb-4 overflow-x-auto pb-1">
-            {['Reviews', 'Crew Chat', 'About', 'Similar'].map((tab) => (
+          {/* Tabs */}
+          <div className="flex border-b border-gray-200 px-4">
+            {['Chat', 'Members', 'Media', 'About'].map((tab) => (
               <button
                 key={tab}
-                onClick={() => setView(tab.toLowerCase().replace(' ', ''))}
-                className={`text-sm pb-2 font-medium whitespace-nowrap border-b-2 transition ${
-                  view === tab.toLowerCase().replace(' ', '')
+                onClick={() => setSelectedTab(tab.toLowerCase())}
+                className={`flex-1 py-3 text-sm font-medium border-b-2 transition ${
+                  selectedTab === tab.toLowerCase()
                     ? 'text-orange-500 border-orange-500'
-                    : 'text-gray-500 border-transparent hover:text-gray-700'
+                    : 'text-gray-500 border-transparent'
                 }`}
               >
                 {tab}
@@ -2526,155 +2627,135 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
             ))}
           </div>
 
-          {view === 'reviews' && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-4 mb-4">
-                <span className="text-4xl font-bold text-gray-900">4.5</span>
-                <div>
-                  <StarRating rating={4.5} />
-                  <p className="text-sm text-gray-500 mt-1">Based on 22,847 reviews</p>
-                </div>
-              </div>
-              
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-white rounded-xl p-4 border border-gray-200">
-                  <div className="flex items-start gap-3 mb-2">
-                    <DynamicBookCover 
-                      title={selectedCrew.name}
-                      author={selectedCrew.author}
-                      size="xs"
-                    />
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                          R{i}
+          {/* Tab Content */}
+          <div className="p-4 pb-24">
+            {selectedTab === 'chat' && (
+              <div className="space-y-4">
+                {hasJoined ? (
+                  <>
+                    <button
+                      onClick={() => setView('chat')}
+                      className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
+                    >
+                      <MessageCircle className="w-5 h-5" />
+                      Open Chat
+                    </button>
+                    
+                    {/* Recent messages preview */}
+                    {messages.slice(-3).reverse().map((msg) => (
+                      <div key={msg.id} className="flex items-start gap-3 py-2">
+                        <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                          {msg.userInitials}
                         </div>
-                        <div>
-                          <p className="font-semibold text-gray-900">Reader {i}</p>
-                          <StarRating rating={4} size="xs" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-sm">{msg.userName}</span>
+                            <span className="text-xs text-gray-400">
+                              {formatMessageTime(msg.timestamp)}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-600 truncate">{msg.content}</p>
                         </div>
-                        <span className="text-xs text-gray-400 ml-auto">2 days ago</span>
                       </div>
-                      <p className="text-sm text-gray-600 mt-2">
-                        {i === 1 && "Profound and heartwarming. Made me reflect on what truly matters in life!"}
-                        {i === 2 && "A beautiful story about life's most important lessons. Highly recommended!"}
-                        {i === 3 && "Reading this book feels like having a conversation with a wise old friend."}
-                      </p>
-                    </div>
+                    ))}
+                  </>
+                ) : (
+                  <div className="text-center py-8">
+                    <Lock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                    <p className="text-gray-500">Join this crew to see messages</p>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
+                )}
+              </div>
+            )}
 
-          {view === 'crewchat' && (
-            <div className="space-y-4">
-              {!hasJoined ? (
-                <div className="text-center py-8">
-                  <Lock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500 mb-3">Join this crew to see the chat</p>
-                  <button
-                    onClick={() => handleJoinCrew(selectedCrew)}
-                    className="px-6 py-2 bg-orange-500 text-white rounded-xl font-medium"
-                  >
-                    Join Crew
-                  </button>
-                </div>
-              ) : (
-                <>
-                  <button
-                    onClick={() => setView('chat')}
-                    className="w-full bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl p-4 font-semibold mb-4"
-                  >
-                    Join the Discussion
-                  </button>
-                  
-                  {messages.slice(-3).map((msg) => (
-                    <div key={msg.id} className="flex gap-3">
-                      <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        {msg.userInitials}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-semibold text-sm">{msg.userName}</span>
-                          <span className="text-xs text-gray-400">
-                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600">{msg.content}</p>
-                      </div>
-                    </div>
-                  ))}
-                </>
-              )}
-            </div>
-          )}
-
-          {view === 'about' && (
-            <div className="space-y-4">
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <h3 className="font-semibold text-gray-900 mb-2">About this book</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">
-                  {selectedCrew.name} by {selectedCrew.author} is a powerful and inspiring book that has touched millions of readers worldwide. 
-                  It explores deep themes of life, purpose, and human connection through compelling storytelling and profound insights.
+            {selectedTab === 'members' && (
+              <div className="space-y-4">
+                <p className="text-sm font-semibold text-gray-700 mb-2">
+                  {crewMembers.length} Members
                 </p>
-              </div>
-              
-              <div className="bg-white rounded-xl p-4 border border-gray-200">
-                <h3 className="font-semibold text-gray-900 mb-2">Book Details</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Author</span>
-                    <span className="text-gray-900 font-medium">{selectedCrew.author}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Genre</span>
-                    <span className="text-gray-900 font-medium">{selectedCrew.genre}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Pages</span>
-                    <span className="text-gray-900 font-medium">224</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-500">Published</span>
-                    <span className="text-gray-900 font-medium">1997</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {view === 'similar' && (
-            <div className="space-y-3">
-              {similarBooks.map((book, i) => (
-                <div key={i} className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition">
-                  <div className="flex items-start gap-3">
-                    <DynamicBookCover 
-                      title={book.title}
-                      author={book.author}
-                      size="sm"
-                    />
-                    <div className="flex-1">
-                      <h4 className="font-semibold text-gray-900">{book.title}</h4>
-                      <p className="text-xs text-gray-500">by {book.author}</p>
-                      <div className="flex items-center gap-1 mt-1">
-                        <StarRating rating={book.rating} size="xs" />
-                        <span className="text-xs text-gray-600">{book.rating}</span>
+                {crewMembers.map((member) => (
+                  <div key={member.id} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold">
+                          {member.initials}
+                        </div>
+                        {member.online && (
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></span>
+                        )}
                       </div>
-                      <button className="mt-2 text-xs text-orange-500 font-medium">
-                        View Details →
+                      <div>
+                        <p className="font-semibold text-gray-900">{member.name}</p>
+                        <p className="text-xs text-gray-500">
+                          {member.isCreator ? 'Creator' : member.online ? 'Online' : 'Offline'}
+                        </p>
+                      </div>
+                    </div>
+                    {member.email !== user.email && (
+                      <button className="text-sm text-orange-500 font-medium">
+                        Message
                       </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {selectedTab === 'media' && (
+              <div className="text-center py-12">
+                <Image className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                <p className="text-gray-500 text-sm">No media shared yet</p>
+              </div>
+            )}
+
+            {selectedTab === 'about' && (
+              <div className="space-y-4">
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-900 mb-2">Description</h3>
+                  <p className="text-sm text-gray-600">
+                    This crew is dedicated to discussing "{selectedCrew.name}" by {selectedCrew.author}. 
+                    Join to share your thoughts, ask questions, and connect with other readers.
+                  </p>
+                </div>
+                
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <h3 className="font-semibold text-gray-900 mb-2">Crew Info</h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Created</span>
+                      <span className="text-gray-900">
+                        {new Date(selectedCrew.createdAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Created by</span>
+                      <span className="text-gray-900">{selectedCrew.createdByName || 'Creator'}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Genre</span>
+                      <span className="text-gray-900">{selectedCrew.genre}</span>
                     </div>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Leave button */}
+                {hasJoined && (
+                  <button
+                    onClick={() => handleLeaveCrew(selectedCrew)}
+                    className="w-full py-3 border border-red-200 text-red-500 rounded-xl font-medium mt-4"
+                  >
+                    Leave Crew
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
   }
 
+  // ========== CREW LIST VIEW ==========
   return (
     <div className="pb-24 bg-gray-50 min-h-screen">
       {showJoinMessage && <JoinMessageToast />}
@@ -2719,7 +2800,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                 value={newCrewData.genre}
                 onChange={(e) => setNewCrewData({...newCrewData, genre: e.target.value})}
                 className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm"
-                placeholder="Genre"
+                placeholder="Genre (e.g., Fiction, Self-Help)"
               />
               <div className="flex gap-2">
                 <button
@@ -2749,6 +2830,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           </div>
         </div>
 
+        {/* My Crews Section */}
         <div className="mb-6">
           <h2 className="text-lg font-bold text-gray-900 mb-3 flex items-center gap-2">
             <Users className="w-5 h-5 text-orange-500" />
@@ -2765,7 +2847,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                 <div
                   key={crew.id}
                   className="bg-white rounded-xl overflow-hidden border border-green-200 shadow-sm cursor-pointer hover:shadow-md transition relative"
-                  onClick={() => { setSelectedCrew(crew); setView('bookpage'); }}
+                  onClick={() => { setSelectedCrew(crew); setView('detail'); }}
                 >
                   <div className="absolute top-2 right-2 bg-green-500 text-white text-xs px-2 py-1 rounded-full">
                     Joined
@@ -2789,7 +2871,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                       </div>
                     </div>
                   </div>
-                  <div className="px-4 py-2 flex justify-end gap-2">
+                  <div className="px-4 py-2 flex justify-end gap-2 border-t border-gray-100">
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); setSelectedCrew(crew); setView('chat'); }}
+                      className="px-3 py-1 bg-orange-100 text-orange-600 rounded-lg text-xs font-medium"
+                    >
+                      Chat
+                    </button>
                     <button 
                       onClick={(e) => { e.stopPropagation(); handleAddFriend(crew); }}
                       className="px-3 py-1 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium"
@@ -2803,6 +2891,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           </div>
         </div>
 
+        {/* Discover Crews Section */}
         <div>
           <h2 className="text-lg font-bold text-gray-900 mb-3">Discover Crews</h2>
           <div className="space-y-3">
@@ -2810,7 +2899,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               <div
                 key={crew.id}
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition"
-                onClick={() => { setSelectedCrew(crew); setView('bookpage'); }}
+                onClick={() => { setSelectedCrew(crew); setView('detail'); }}
               >
                 <div className="h-20 relative">
                   <div className="absolute inset-0 flex items-center px-4 gap-4">
@@ -2831,7 +2920,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                     </div>
                   </div>
                 </div>
-                <div className="px-4 py-3 flex justify-between items-center">
+                <div className="px-4 py-3 flex justify-between items-center border-t border-gray-100">
                   <button 
                     onClick={(e) => { e.stopPropagation(); handleAddFriend(crew); }}
                     className="px-3 py-1 border border-blue-200 text-blue-600 rounded-lg text-xs font-medium"
@@ -2872,6 +2961,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
   const tabs = ['Posts', 'Reviews', 'Crews', 'Saved'];
   const myPosts = posts.filter(p => p.userEmail === user?.email);
 
+  // FIXED: Load profile image on mount and when user changes
   useEffect(() => {
     const savedStats = localStorage.getItem(`user_${user.email}_stats`);
     if (savedStats) {
@@ -2895,13 +2985,26 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
     onUpdateStats?.(updatedUser);
   };
 
+  // FIXED: Profile image persists after tab changes
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
       reader.onload = (ev) => {
-        setProfileImage(ev.target.result);
-        localStorage.setItem(`user_${user.email}_profile_image`, ev.target.result);
+        const imageData = ev.target.result;
+        setProfileImage(imageData);
+        localStorage.setItem(`user_${user.email}_profile_image`, imageData);
+        
+        // Also update in users array for persistence
+        const users = JSON.parse(localStorage.getItem('users') || '[]');
+        const updatedUsers = users.map(u => 
+          u.email === user.email ? { ...u, profileImage: imageData } : u
+        );
+        localStorage.setItem('users', JSON.stringify(updatedUsers));
+        
+        // Update current user
+        const updatedUser = { ...user, profileImage: imageData };
+        localStorage.setItem('currentUser', JSON.stringify(updatedUser));
       };
       reader.readAsDataURL(file);
     }
@@ -2925,7 +3028,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateStats }) => {
         <div className="flex items-start gap-4 mb-6">
           <div className="relative">
             {profileImage ? (
-              <img src={profileImage} alt={user?.name} className="w-20 h-20 rounded-full object-cover" />
+              <img src={profileImage} alt={user?.name} className="w-20 h-20 rounded-full object-cover border-2 border-orange-200" />
             ) : (
               <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
                 {user?.name?.slice(0, 2).toUpperCase()}
@@ -3177,6 +3280,7 @@ export default function App() {
   const [donations, setDonations] = useState([]);
   const [reviews, setReviews] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showBottomNav, setShowBottomNav] = useState(true); // Control bottom nav visibility
   const [crews, setCrews] = useState([
     { id: 1, name: 'Atomic Habits', author: 'James Clear', genre: 'Self Improvement', members: 1, chats: 0 },
     { id: 2, name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 1, chats: 0 },
@@ -3186,6 +3290,16 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
   const [unreadMessages, setUnreadMessages] = useState(0);
+
+  // FIXED: Hide bottom nav on pages where keyboard is needed
+  useEffect(() => {
+    // Hide bottom nav on chat and post pages (where keyboard is needed)
+    if (currentPage === 'post' || (currentPage === 'crews' && window.location.hash.includes('chat'))) {
+      setShowBottomNav(false);
+    } else {
+      setShowBottomNav(true);
+    }
+  }, [currentPage]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
@@ -3213,12 +3327,17 @@ export default function App() {
       setPosts(userPosts);
       
       // Check for unread notifications
-      const notifications = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-      const unread = notifications.filter(n => !n.read).length;
-      setUnreadMessages(unread);
+      updateNotificationCount();
     } catch (error) {
       console.error('Error loading user data:', error);
     }
+  };
+
+  // FIXED: Update notification count
+  const updateNotificationCount = () => {
+    const notifications = JSON.parse(localStorage.getItem(`user_${currentUser?.email}_notifications`) || '[]');
+    const unread = notifications.filter(n => !n.read).length;
+    setUnreadMessages(unread);
   };
 
   const handleLogin = (userData) => {
@@ -3260,6 +3379,7 @@ export default function App() {
       members: 1,
       chats: 0,
       createdBy: currentUser.email,
+      createdByName: currentUser.name,
       createdAt: new Date().toISOString(),
       messages: []
     };
@@ -3283,6 +3403,8 @@ export default function App() {
 
   const handleNotificationClick = () => {
     setShowNotifications(true);
+    // Mark all as read when opening
+    updateNotificationCount();
   };
 
   if (!isLoggedIn) {
@@ -3313,7 +3435,7 @@ export default function App() {
           setPage={setCurrentPage}
           onClose={() => {
             setShowNotifications(false);
-            setUnreadMessages(0);
+            updateNotificationCount();
           }} 
         />
       )}
@@ -3329,6 +3451,7 @@ export default function App() {
             reviews={reviews}
             setPage={setCurrentPage}
             onUpdateStats={handleUpdateStats}
+            updateNotificationCount={updateNotificationCount}
           />
         )}
         
@@ -3352,7 +3475,8 @@ export default function App() {
           <CrewsPage 
             user={currentUser} 
             crews={crews}
-            setPage={setCurrentPage} 
+            setPage={setCurrentPage}
+            updateNotificationCount={updateNotificationCount}
           />
         )}
         
@@ -3360,6 +3484,7 @@ export default function App() {
           <ReviewsPage 
             user={currentUser}
             setPage={setCurrentPage}
+            updateNotificationCount={updateNotificationCount}
           />
         )}
         
@@ -3378,10 +3503,12 @@ export default function App() {
           />
         )}
         
+        {/* Bottom Navigation - Only shows when keyboard isn't needed */}
         <BottomNav 
           active={currentPage} 
           setPage={setCurrentPage} 
           unreadCount={unreadMessages}
+          show={showBottomNav}
         />
       </div>
     </div>
