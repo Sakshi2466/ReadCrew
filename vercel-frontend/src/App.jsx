@@ -13,163 +13,158 @@ import {
 import { donationAPI, reviewAPI, otpAPI, checkBackendConnection, getBookRecommendations, chatAPI, crewAPI, userAPI, bookCrewAPI, getTrendingBooks, aiChatAPI } from './services/api';
 import axios from 'axios';
 
-// Import BookCover component
-import BookCover from './components/BookCover';
-
 // API URL
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 
-// Validation functions
-const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-const validateName = (name) => name && name.trim().length >= 2;
+// ========================================
+// DYNAMIC BOOK COVER FETCHER (No ISBN Needed!)
+// ========================================
 
-// Book recommendations database
-const BOOK_RECOMMENDATIONS = [
-  {
-    id: 1,
-    category: 'Fantasy',
-    emoji: '📚',
-    description: 'Imaginative worlds, magic, mythical creatures',
-    books: [
-      { title: 'The Hobbit', author: 'J.R.R. Tolkien', rating: 4.7 },
-      { title: 'Harry Potter Series', author: 'J.K. Rowling', rating: 4.8 },
-      { title: 'The Name of the Wind', author: 'Patrick Rothfuss', rating: 4.5 },
-      { title: 'A Song of Ice and Fire', author: 'George R.R. Martin', rating: 4.6 }
-    ]
-  },
-  {
-    id: 2,
-    category: 'Science Fiction',
-    emoji: '🚀',
-    description: 'Future tech, space exploration, aliens',
-    books: [
-      { title: 'Dune', author: 'Frank Herbert', rating: 4.5 },
-      { title: '1984', author: 'George Orwell', rating: 4.4 },
-      { title: 'The Martian', author: 'Andy Weir', rating: 4.7 },
-      { title: 'Foundation', author: 'Isaac Asimov', rating: 4.3 }
-    ]
-  },
-  {
-    id: 3,
-    category: 'Mystery/Thriller',
-    emoji: '🔍',
-    description: 'Suspense, crime solving, plot twists',
-    books: [
-      { title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.2 },
-      { title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.1 },
-      { title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5 },
-      { title: 'The Da Vinci Code', author: 'Dan Brown', rating: 4.0 }
-    ]
-  },
-  {
-    id: 4,
-    category: 'Romance',
-    emoji: '❤️',
-    description: 'Love stories, relationships, emotional journeys',
-    books: [
-      { title: 'Pride and Prejudice', author: 'Jane Austen', rating: 4.8 },
-      { title: 'The Notebook', author: 'Nicholas Sparks', rating: 4.3 },
-      { title: 'Normal People', author: 'Sally Rooney', rating: 4.0 },
-      { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', rating: 4.6 }
-    ]
-  },
-  {
-    id: 5,
-    category: 'Biography/Autobiography',
-    emoji: '📖',
-    description: 'Real-life stories, memoirs, historical figures',
-    books: [
-      { title: 'The Diary of a Young Girl', author: 'Anne Frank', rating: 4.8 },
-      { title: 'Becoming', author: 'Michelle Obama', rating: 4.8 },
-      { title: 'Educated', author: 'Tara Westover', rating: 4.7 },
-      { title: 'Steve Jobs', author: 'Walter Isaacson', rating: 4.6 }
-    ]
-  },
-  {
-    id: 6,
-    category: 'Self-Help/Motivational',
-    emoji: '💪',
-    description: 'Personal growth, productivity, mindset',
-    books: [
-      { title: 'Atomic Habits', author: 'James Clear', rating: 4.8 },
-      { title: 'The 7 Habits of Highly Effective People', author: 'Stephen R. Covey', rating: 4.7 },
-      { title: 'The Power of Now', author: 'Eckhart Tolle', rating: 4.3 },
-      { title: 'Think and Grow Rich', author: 'Napoleon Hill', rating: 4.2 }
-    ]
-  },
-  {
-    id: 7,
-    category: 'Historical Fiction',
-    emoji: '🏛️',
-    description: 'Historical events, period settings',
-    books: [
-      { title: 'The Book Thief', author: 'Markus Zusak', rating: 4.7 },
-      { title: 'All the Light We Cannot See', author: 'Anthony Doerr', rating: 4.6 },
-      { title: 'The Nightingale', author: 'Kristen Hannah', rating: 4.8 },
-      { title: 'Wolf Hall', author: 'Hilary Mantel', rating: 4.5 }
-    ]
-  },
-  {
-    id: 8,
-    category: 'Horror',
-    emoji: '👻',
-    description: 'Fear, supernatural, psychological terror',
-    books: [
-      { title: 'It', author: 'Stephen King', rating: 4.6 },
-      { title: 'Dracula', author: 'Bram Stoker', rating: 4.2 },
-      { title: 'The Shining', author: 'Stephen King', rating: 4.7 },
-      { title: 'Frankenstein', author: 'Mary Shelley', rating: 4.1 }
-    ]
-  },
-  {
-    id: 9,
-    category: 'Literary Fiction',
-    emoji: '✍️',
-    description: 'Character-driven, artistic prose, social commentary',
-    books: [
-      { title: 'To Kill a Mockingbird', author: 'Harper Lee', rating: 4.8 },
-      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', rating: 4.3 },
-      { title: 'Beloved', author: 'Toni Morrison', rating: 4.4 },
-      { title: 'The Catcher in the Rye', author: 'J.D. Salinger', rating: 4.1 }
-    ]
-  },
-  {
-    id: 10,
-    category: 'Young Adult',
-    emoji: '🌟',
-    description: 'Teen protagonists, coming-of-age',
-    books: [
-      { title: 'The Fault in Our Stars', author: 'John Green', rating: 4.7 },
-      { title: 'The Hunger Games', author: 'Suzanne Collins', rating: 4.7 },
-      { title: 'Divergent', author: 'Veronica Roth', rating: 4.2 },
-      { title: 'Twilight', author: 'Stephenie Meyer', rating: 3.8 }
-    ]
-  },
-  {
-    id: 11,
-    category: 'Adventure',
-    emoji: '🗺️',
-    description: 'Exploration, survival, action',
-    books: [
-      { title: 'The Lord of the Rings', author: 'J.R.R. Tolkien', rating: 4.9 },
-      { title: 'Treasure Island', author: 'Robert Louis Stevenson', rating: 4.0 },
-      { title: 'Life of Pi', author: 'Yann Martel', rating: 4.2 },
-      { title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.3 }
-    ]
-  },
-  {
-    id: 12,
-    category: 'Philosophy',
-    emoji: '🤔',
-    description: 'Existential questions, ethics, consciousness',
-    books: [
-      { title: 'Meditations', author: 'Marcus Aurelius', rating: 4.5 },
-      { title: 'Thus Spoke Zarathustra', author: 'Friedrich Nietzsche', rating: 4.0 },
-      { title: 'The Republic', author: 'Plato', rating: 4.2 },
-      { title: 'Sophie\'s World', author: 'Jostein Gaarder', rating: 4.3 }
-    ]
+const DynamicBookCover = ({ 
+  title, 
+  author, 
+  className = 'w-32 h-40',
+  onClick,
+  size = 'md' 
+}) => {
+  const [coverUrl, setCoverUrl] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(false);
+
+  // Size mappings
+  const sizeMap = {
+    xs: 'w-12 h-16',
+    sm: 'w-16 h-20',
+    md: 'w-24 h-32',
+    lg: 'w-32 h-40',
+    xl: 'w-40 h-48'
+  };
+
+  const coverClassName = sizeMap[size] || className;
+
+  useEffect(() => {
+    if (!title) {
+      setError(true);
+      setIsLoading(false);
+      return;
+    }
+
+    fetchBookCover();
+  }, [title, author]);
+
+  const fetchBookCover = async () => {
+    setIsLoading(true);
+    setError(false);
+
+    try {
+      // Build search query
+      const query = author 
+        ? `${title} ${author}`.trim()
+        : title;
+      
+      const searchQuery = encodeURIComponent(query);
+
+      // Search Open Library
+      const response = await fetch(
+        `https://openlibrary.org/search.json?q=${searchQuery}&limit=1`
+      );
+
+      if (!response.ok) {
+        throw new Error('Search failed');
+      }
+
+      const data = await response.json();
+
+      if (data.docs && data.docs.length > 0) {
+        const book = data.docs[0];
+
+        // Try to get cover (multiple methods)
+        let cover = null;
+
+        // Method 1: cover_i (most common)
+        if (book.cover_i) {
+          cover = `https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`;
+        }
+        // Method 2: ISBN
+        else if (book.isbn && book.isbn.length > 0) {
+          cover = `https://covers.openlibrary.org/b/isbn/${book.isbn[0]}-L.jpg`;
+        }
+        // Method 3: OLID (Open Library ID)
+        else if (book.cover_edition_key) {
+          cover = `https://covers.openlibrary.org/b/olid/${book.cover_edition_key}-L.jpg`;
+        }
+
+        if (cover) {
+          setCoverUrl(cover);
+        } else {
+          setError(true);
+        }
+      } else {
+        setError(true);
+      }
+    } catch (err) {
+      console.error('Error fetching book cover:', err);
+      setError(true);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Generate fallback color based on title
+  const getFallbackColor = () => {
+    const colors = [
+      '#7B9EA6', '#C8622A', '#8B5E3C', '#E8A87C', '#C4A882',
+      '#2C3E50', '#E74C3C', '#3498DB', '#9B59B6', '#1ABC9C',
+      '#27AE60', '#F39C12', '#D35400', '#8E44AD', '#16A085'
+    ];
+    const hash = title.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[hash % colors.length];
+  };
+
+  const initials = title ? title.slice(0, 2).toUpperCase() : 'BK';
+  const fallbackColor = getFallbackColor();
+
+  // Loading state
+  if (isLoading) {
+    return (
+      <div 
+        className={`${coverClassName} bg-gray-200 rounded-xl flex items-center justify-center animate-pulse`}
+        onClick={onClick}
+      >
+        <BookOpen className="w-8 h-8 text-gray-400 animate-pulse" />
+      </div>
+    );
   }
-];
+
+  // Error state or no cover - show initials
+  if (error || !coverUrl) {
+    return (
+      <div 
+        className={`${coverClassName} rounded-xl flex flex-col items-center justify-center text-white font-bold shadow-lg cursor-pointer group hover:scale-105 transition-transform`}
+        style={{ backgroundColor: fallbackColor }}
+        onClick={onClick}
+      >
+        <span className="text-3xl">{initials}</span>
+        <BookOpen className="w-6 h-6 mt-2 opacity-50 group-hover:opacity-100 transition-opacity" />
+      </div>
+    );
+  }
+
+  // Success - show cover
+  return (
+    <div className={`${coverClassName} relative group cursor-pointer`} onClick={onClick}>
+      <img
+        src={coverUrl}
+        alt={`${title} cover`}
+        className="w-full h-full rounded-xl object-cover shadow-lg group-hover:scale-105 transition-transform"
+        onError={() => setError(true)}
+        loading="lazy"
+      />
+      {/* Hover overlay */}
+      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all rounded-xl" />
+    </div>
+  );
+};
 
 // ─── AVATAR COMPONENT ──────────────────────────────────────────────────────
 const Avatar = ({ initials, size = 'md', color = '#C8622A', src, online }) => {
@@ -660,6 +655,158 @@ const LoginPage = ({ onLogin }) => {
   );
 };
 
+// Validation functions
+const validateEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const validateName = (name) => name && name.trim().length >= 2;
+
+// Book recommendations database
+const BOOK_RECOMMENDATIONS = [
+  {
+    id: 1,
+    category: 'Fantasy',
+    emoji: '📚',
+    description: 'Imaginative worlds, magic, mythical creatures',
+    books: [
+      { title: 'The Hobbit', author: 'J.R.R. Tolkien', rating: 4.7 },
+      { title: 'Harry Potter Series', author: 'J.K. Rowling', rating: 4.8 },
+      { title: 'The Name of the Wind', author: 'Patrick Rothfuss', rating: 4.5 },
+      { title: 'A Song of Ice and Fire', author: 'George R.R. Martin', rating: 4.6 }
+    ]
+  },
+  {
+    id: 2,
+    category: 'Science Fiction',
+    emoji: '🚀',
+    description: 'Future tech, space exploration, aliens',
+    books: [
+      { title: 'Dune', author: 'Frank Herbert', rating: 4.5 },
+      { title: '1984', author: 'George Orwell', rating: 4.4 },
+      { title: 'The Martian', author: 'Andy Weir', rating: 4.7 },
+      { title: 'Foundation', author: 'Isaac Asimov', rating: 4.3 }
+    ]
+  },
+  {
+    id: 3,
+    category: 'Mystery/Thriller',
+    emoji: '🔍',
+    description: 'Suspense, crime solving, plot twists',
+    books: [
+      { title: 'The Girl with the Dragon Tattoo', author: 'Stieg Larsson', rating: 4.2 },
+      { title: 'Gone Girl', author: 'Gillian Flynn', rating: 4.1 },
+      { title: 'The Silent Patient', author: 'Alex Michaelides', rating: 4.5 },
+      { title: 'The Da Vinci Code', author: 'Dan Brown', rating: 4.0 }
+    ]
+  },
+  {
+    id: 4,
+    category: 'Romance',
+    emoji: '❤️',
+    description: 'Love stories, relationships, emotional journeys',
+    books: [
+      { title: 'Pride and Prejudice', author: 'Jane Austen', rating: 4.8 },
+      { title: 'The Notebook', author: 'Nicholas Sparks', rating: 4.3 },
+      { title: 'Normal People', author: 'Sally Rooney', rating: 4.0 },
+      { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', rating: 4.6 }
+    ]
+  },
+  {
+    id: 5,
+    category: 'Biography/Autobiography',
+    emoji: '📖',
+    description: 'Real-life stories, memoirs, historical figures',
+    books: [
+      { title: 'The Diary of a Young Girl', author: 'Anne Frank', rating: 4.8 },
+      { title: 'Becoming', author: 'Michelle Obama', rating: 4.8 },
+      { title: 'Educated', author: 'Tara Westover', rating: 4.7 },
+      { title: 'Steve Jobs', author: 'Walter Isaacson', rating: 4.6 }
+    ]
+  },
+  {
+    id: 6,
+    category: 'Self-Help/Motivational',
+    emoji: '💪',
+    description: 'Personal growth, productivity, mindset',
+    books: [
+      { title: 'Atomic Habits', author: 'James Clear', rating: 4.8 },
+      { title: 'The 7 Habits of Highly Effective People', author: 'Stephen R. Covey', rating: 4.7 },
+      { title: 'The Power of Now', author: 'Eckhart Tolle', rating: 4.3 },
+      { title: 'Think and Grow Rich', author: 'Napoleon Hill', rating: 4.2 }
+    ]
+  },
+  {
+    id: 7,
+    category: 'Historical Fiction',
+    emoji: '🏛️',
+    description: 'Historical events, period settings',
+    books: [
+      { title: 'The Book Thief', author: 'Markus Zusak', rating: 4.7 },
+      { title: 'All the Light We Cannot See', author: 'Anthony Doerr', rating: 4.6 },
+      { title: 'The Nightingale', author: 'Kristen Hannah', rating: 4.8 },
+      { title: 'Wolf Hall', author: 'Hilary Mantel', rating: 4.5 }
+    ]
+  },
+  {
+    id: 8,
+    category: 'Horror',
+    emoji: '👻',
+    description: 'Fear, supernatural, psychological terror',
+    books: [
+      { title: 'It', author: 'Stephen King', rating: 4.6 },
+      { title: 'Dracula', author: 'Bram Stoker', rating: 4.2 },
+      { title: 'The Shining', author: 'Stephen King', rating: 4.7 },
+      { title: 'Frankenstein', author: 'Mary Shelley', rating: 4.1 }
+    ]
+  },
+  {
+    id: 9,
+    category: 'Literary Fiction',
+    emoji: '✍️',
+    description: 'Character-driven, artistic prose, social commentary',
+    books: [
+      { title: 'To Kill a Mockingbird', author: 'Harper Lee', rating: 4.8 },
+      { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', rating: 4.3 },
+      { title: 'Beloved', author: 'Toni Morrison', rating: 4.4 },
+      { title: 'The Catcher in the Rye', author: 'J.D. Salinger', rating: 4.1 }
+    ]
+  },
+  {
+    id: 10,
+    category: 'Young Adult',
+    emoji: '🌟',
+    description: 'Teen protagonists, coming-of-age',
+    books: [
+      { title: 'The Fault in Our Stars', author: 'John Green', rating: 4.7 },
+      { title: 'The Hunger Games', author: 'Suzanne Collins', rating: 4.7 },
+      { title: 'Divergent', author: 'Veronica Roth', rating: 4.2 },
+      { title: 'Twilight', author: 'Stephenie Meyer', rating: 3.8 }
+    ]
+  },
+  {
+    id: 11,
+    category: 'Adventure',
+    emoji: '🗺️',
+    description: 'Exploration, survival, action',
+    books: [
+      { title: 'The Lord of the Rings', author: 'J.R.R. Tolkien', rating: 4.9 },
+      { title: 'Treasure Island', author: 'Robert Louis Stevenson', rating: 4.0 },
+      { title: 'Life of Pi', author: 'Yann Martel', rating: 4.2 },
+      { title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.3 }
+    ]
+  },
+  {
+    id: 12,
+    category: 'Philosophy',
+    emoji: '🤔',
+    description: 'Existential questions, ethics, consciousness',
+    books: [
+      { title: 'Meditations', author: 'Marcus Aurelius', rating: 4.5 },
+      { title: 'Thus Spoke Zarathustra', author: 'Friedrich Nietzsche', rating: 4.0 },
+      { title: 'The Republic', author: 'Plato', rating: 4.2 },
+      { title: 'Sophie\'s World', author: 'Jostein Gaarder', rating: 4.3 }
+    ]
+  }
+];
+
 // ─── HOME PAGE ──────────────────────────────────────────────────────────────
 const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats }) => {
   const [trendingBooks, setTrendingBooks] = useState([]);
@@ -670,7 +817,6 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   const [showBookDetails, setShowBookDetails] = useState(false);
   const [bookDetails, setBookDetails] = useState(null);
   const [loadingBookDetails, setLoadingBookDetails] = useState(false);
-  const [bookCovers, setBookCovers] = useState({});
 
   // Real-time stats
   const [userStats, setUserStats] = useState({
@@ -700,47 +846,28 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       
       if (data.success) {
         setTrendingBooks(data.books);
-        // Fetch covers for trending books
-        fetchBookCovers(data.books);
       } else {
         // Fallback to mock data
         const mockBooks = [
-          { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
-          { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
-          { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D' },
-          { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882' },
+          { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420 },
+          { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350 },
+          { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870 },
+          { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500 },
         ];
         setTrendingBooks(mockBooks);
-        fetchBookCovers(mockBooks);
       }
     } catch (error) {
       console.error('Error loading trending books:', error);
       const mockBooks = [
-        { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420, cover: '#E8A87C' },
-        { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350, cover: '#7B9EA6' },
-        { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870, cover: '#2D2D2D' },
-        { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500, cover: '#C4A882' },
+        { id: 1, title: 'Atomic Habits', author: 'James Clear', rating: 4.8, readers: 15420 },
+        { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7, readers: 12350 },
+        { id: 3, title: 'Deep Work', author: 'Cal Newport', rating: 4.6, readers: 9870 },
+        { id: 4, title: 'Sapiens', author: 'Yuval Harari', rating: 4.8, readers: 21500 },
       ];
       setTrendingBooks(mockBooks);
-      fetchBookCovers(mockBooks);
     } finally {
       setLoadingTrending(false);
     }
-  };
-
-  // Function to fetch book covers
-  const fetchBookCovers = async (books) => {
-    const coverMap = {};
-    for (const book of books) {
-      try {
-        // You'll need to import getCoverByTitle from your bookCoverAPI
-        // For now, we'll just use placeholder colors
-        coverMap[book.title] = null;
-      } catch (error) {
-        console.error('Error fetching cover:', error);
-      }
-    }
-    setBookCovers(coverMap);
   };
 
   const loadFeedPosts = () => {
@@ -886,10 +1013,9 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
               ) : bookDetails && (
                 <div className="space-y-4">
                   <div className="flex gap-4">
-                    <BookCover 
+                    <DynamicBookCover 
                       title={selectedBook.title}
                       author={selectedBook.author}
-                      coverUrl={selectedBook.coverUrl}
                       size="lg"
                     />
                     <div className="flex-1">
@@ -929,7 +1055,6 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                           genre: bookDetails.genre || 'General',
                           members: 1,
                           chats: 0,
-                          cover: selectedBook.cover || '#C8622A',
                           createdBy: user.email,
                           createdAt: new Date().toISOString(),
                           messages: []
@@ -1159,10 +1284,9 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                   className="shrink-0 w-32 cursor-pointer hover:scale-105 transition-transform"
                   onClick={() => handleBookClick(book)}
                 >
-                  <BookCover 
+                  <DynamicBookCover 
                     title={book.title}
                     author={book.author}
-                    coverUrl={book.coverUrl}
                     size="md"
                     className="mb-2"
                   />
@@ -1198,11 +1322,10 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                 className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition cursor-pointer"
                 onClick={() => setPage('crews')}
               >
-                <div className="h-16 flex items-center justify-center p-2" style={{ backgroundColor: crew.cover + '20' }}>
-                  <BookCover 
+                <div className="h-16 flex items-center justify-center p-2 bg-gray-50">
+                  <DynamicBookCover 
                     title={crew.name}
                     author={crew.author}
-                    coverUrl={crew.coverUrl}
                     size="xs"
                   />
                 </div>
@@ -1255,7 +1378,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [results, setResults] = useState([]);
   const [searched, setSearched] = useState(false);
   const [selectedTags, setSelectedTags] = useState([]);
-  const [bookCovers, setBookCovers] = useState({});
   const inputRef = useRef();
 
   const SUGGESTION_MAP = {
@@ -1341,7 +1463,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
       if (response.data.success && response.data.recommendations) {
         setResults(response.data.recommendations);
-        fetchBookCovers(response.data.recommendations);
       } else {
         throw new Error('No recommendations');
       }
@@ -1351,27 +1472,13 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
       const fallbackBooks = [
         { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', description: 'Tiny changes, remarkable results', rating: 4.8 },
         { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', description: 'Survival on Mars', rating: 4.7 },
+        { title: 'Deep Work', author: 'Cal Newport', genre: 'Productivity', description: 'Focused success in a distracted world', rating: 4.6 },
+        { title: 'Dune', author: 'Frank Herbert', genre: 'Sci-Fi', description: 'Epic desert planet saga', rating: 4.5 },
       ];
       setResults(fallbackBooks);
-      fetchBookCovers(fallbackBooks);
     } finally {
       setLoading(false);
     }
-  };
-
-  // Function to fetch book covers
-  const fetchBookCovers = async (books) => {
-    const coverMap = {};
-    for (const book of books) {
-      try {
-        // You'll need to import getCoverByTitle from your bookCoverAPI
-        // For now, we'll just use placeholder colors
-        coverMap[book.title] = null;
-      } catch (error) {
-        console.error('Error fetching cover:', error);
-      }
-    }
-    setBookCovers(coverMap);
   };
 
   const handleJoinCrew = (book) => {
@@ -1383,12 +1490,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
   const handleInvite = (book) => {
     alert('Share feature coming soon!');
-  };
-
-  const getBookColor = (title) => {
-    const colors = ['#C8622A', '#7B9EA6', '#8B5E3C', '#C8956C'];
-    const hash = title.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return colors[hash % colors.length];
   };
 
   // RESULTS VIEW
@@ -1420,24 +1521,39 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                 {results.map((book, i) => (
                   <div key={i} className="bg-white rounded-2xl border border-[#EDE8E3] p-4">
                     <div className="flex gap-4">
-                      <BookCover 
+                      <DynamicBookCover 
                         title={book.title}
                         author={book.author}
-                        coverUrl={book.coverUrl || bookCovers[book.title]}
                         size="md"
                       />
                       <div className="flex-1">
                         <h3 className="font-bold text-[#2D2419]">{book.title}</h3>
                         <p className="text-sm text-[#9B8E84]">by {book.author}</p>
-                        {book.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{book.genre}</span>}
-                        {book.description && <p className="text-xs text-[#6B5D52] mt-2">{book.description}</p>}
+                        {book.genre && (
+                          <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
+                            {book.genre}
+                          </span>
+                        )}
+                        {book.description && (
+                          <p className="text-xs text-[#6B5D52] mt-2 line-clamp-2">{book.description}</p>
+                        )}
+                        <div className="flex items-center gap-1 mt-2">
+                          <StarRating rating={book.rating || 4} size="xs" />
+                          <span className="text-xs text-gray-500">{book.rating || 4.0}</span>
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-2 mt-4">
-                      <button onClick={() => handleJoinCrew(book)} className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold">
+                      <button 
+                        onClick={() => handleJoinCrew(book)} 
+                        className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold"
+                      >
                         Join Crew
                       </button>
-                      <button onClick={() => handleInvite(book)} className="px-4 py-2.5 border border-[#EDE8E3] rounded-xl">
+                      <button 
+                        onClick={() => handleInvite(book)} 
+                        className="px-4 py-2.5 border border-[#EDE8E3] rounded-xl"
+                      >
                         <UserPlus className="w-4 h-4" />
                       </button>
                     </div>
@@ -1861,13 +1977,18 @@ const ReviewsPage = ({ user, setPage }) => {
           <div className="space-y-4">
             {reviews.map((review, idx) => (
               <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <div className="flex items-start justify-between mb-2">
-                  <div>
+                <div className="flex items-start gap-3 mb-2">
+                  <DynamicBookCover 
+                    title={review.bookName}
+                    author={review.author}
+                    size="sm"
+                  />
+                  <div className="flex-1">
                     <h3 className="font-semibold text-gray-900">{review.bookName}</h3>
                     <p className="text-xs text-gray-500">by {review.author}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <StarRating rating={review.rating} size="xs" />
+                    <div className="flex items-center gap-1 mt-1">
+                      <StarRating rating={review.rating} size="xs" />
+                    </div>
                   </div>
                 </div>
                 
@@ -1913,9 +2034,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     name: '',
     author: '',
     genre: '',
-    cover: '#C8622A'
   });
-  const [bookCovers, setBookCovers] = useState({});
   
   const messagesEndRef = useRef(null);
   const typingTimeoutRef = useRef(null);
@@ -1924,27 +2043,11 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
     // Load crews from localStorage
     const savedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
     setCrews(savedCrews.length > 0 ? savedCrews : initialCrews);
-    fetchBookCovers(savedCrews.length > 0 ? savedCrews : initialCrews);
     
     // Load joined crews
     const savedJoinedCrews = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
     setJoinedCrews(savedJoinedCrews);
   }, [user.email]);
-
-  // Function to fetch book covers
-  const fetchBookCovers = async (crews) => {
-    const coverMap = {};
-    for (const crew of crews) {
-      try {
-        // You'll need to import getCoverByTitle from your bookCoverAPI
-        // For now, we'll just use placeholder colors
-        coverMap[crew.name] = null;
-      } catch (error) {
-        console.error('Error fetching cover:', error);
-      }
-    }
-    setBookCovers(coverMap);
-  };
 
   useEffect(() => {
     if (selectedCrew) {
@@ -1987,10 +2090,10 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
   const loadSimilarBooks = async () => {
     try {
       const mockSimilar = [
-        { id: 101, title: 'The Five People You Meet in Heaven', author: 'Mitch Albom', rating: 4.5, cover: '#8B4513' },
-        { id: 102, title: 'For One More Day', author: 'Mitch Albom', rating: 4.3, cover: '#2C3E50' },
-        { id: 103, title: 'The Time Keeper', author: 'Mitch Albom', rating: 4.4, cover: '#4A4A4A' },
-        { id: 104, title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.7, cover: '#C8622A' }
+        { id: 101, title: 'The Five People You Meet in Heaven', author: 'Mitch Albom', rating: 4.5 },
+        { id: 102, title: 'For One More Day', author: 'Mitch Albom', rating: 4.3 },
+        { id: 103, title: 'The Time Keeper', author: 'Mitch Albom', rating: 4.4 },
+        { id: 104, title: 'The Alchemist', author: 'Paulo Coelho', rating: 4.7 }
       ];
       setSimilarBooks(mockSimilar);
     } catch (error) {
@@ -2161,7 +2264,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
       name: '',
       author: '',
       genre: '',
-      cover: '#C8622A'
     });
 
     setJoinMessage(`Crew "${newCrew.name}" created! 🎉`);
@@ -2211,10 +2313,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
           </button>
           <div className="flex items-center gap-2 flex-1 mx-3">
             <div className="relative">
-              <BookCover 
+              <DynamicBookCover 
                 title={selectedCrew.name}
                 author={selectedCrew.author}
-                coverUrl={selectedCrew.coverUrl || bookCovers[selectedCrew.name]}
                 size="xs"
               />
               {hasJoined && (
@@ -2373,10 +2474,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           <div className="flex gap-4 mb-6">
-            <BookCover 
+            <DynamicBookCover 
               title={selectedCrew.name}
               author={selectedCrew.author}
-              coverUrl={selectedCrew.coverUrl || bookCovers[selectedCrew.name]}
               size="lg"
             />
             <div className="flex-1">
@@ -2438,21 +2538,30 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               
               {[1, 2, 3].map((i) => (
                 <div key={i} className="bg-white rounded-xl p-4 border border-gray-200">
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                      R{i}
+                  <div className="flex items-start gap-3 mb-2">
+                    <DynamicBookCover 
+                      title={selectedCrew.name}
+                      author={selectedCrew.author}
+                      size="xs"
+                    />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
+                          R{i}
+                        </div>
+                        <div>
+                          <p className="font-semibold text-gray-900">Reader {i}</p>
+                          <StarRating rating={4} size="xs" />
+                        </div>
+                        <span className="text-xs text-gray-400 ml-auto">2 days ago</span>
+                      </div>
+                      <p className="text-sm text-gray-600 mt-2">
+                        {i === 1 && "Profound and heartwarming. Made me reflect on what truly matters in life!"}
+                        {i === 2 && "A beautiful story about life's most important lessons. Highly recommended!"}
+                        {i === 3 && "Reading this book feels like having a conversation with a wise old friend."}
+                      </p>
                     </div>
-                    <div>
-                      <p className="font-semibold text-gray-900">Reader {i}</p>
-                      <StarRating rating={4} size="xs" />
-                    </div>
-                    <span className="text-xs text-gray-400 ml-auto">2 days ago</span>
                   </div>
-                  <p className="text-sm text-gray-600">
-                    {i === 1 && "Profound and heartwarming. Made me reflect on what truly matters in life!"}
-                    {i === 2 && "A beautiful story about life's most important lessons. Highly recommended!"}
-                    {i === 3 && "Reading this book feels like having a conversation with a wise old friend."}
-                  </p>
                 </div>
               ))}
             </div>
@@ -2540,10 +2649,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               {similarBooks.map((book, i) => (
                 <div key={i} className="bg-white rounded-xl p-4 border border-gray-200 cursor-pointer hover:shadow-md transition">
                   <div className="flex items-start gap-3">
-                    <BookCover 
+                    <DynamicBookCover 
                       title={book.title}
                       author={book.author}
-                      coverUrl={book.coverUrl}
                       size="sm"
                     />
                     <div className="flex-1">
@@ -2664,10 +2772,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
                   </div>
                   <div className="h-20 relative">
                     <div className="absolute inset-0 flex items-center px-4 gap-4">
-                      <BookCover 
+                      <DynamicBookCover 
                         title={crew.name}
                         author={crew.author}
-                        coverUrl={crew.coverUrl || bookCovers[crew.name]}
                         size="sm"
                       />
                       <div>
@@ -2707,10 +2814,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage }) => {
               >
                 <div className="h-20 relative">
                   <div className="absolute inset-0 flex items-center px-4 gap-4">
-                    <BookCover 
+                    <DynamicBookCover 
                       title={crew.name}
                       author={crew.author}
-                      coverUrl={crew.coverUrl || bookCovers[crew.name]}
                       size="sm"
                     />
                     <div>
@@ -3072,10 +3178,10 @@ export default function App() {
   const [reviews, setReviews] = useState([]);
   const [showNotifications, setShowNotifications] = useState(false);
   const [crews, setCrews] = useState([
-    { id: 1, name: 'Atomic Habits', author: 'James Clear', genre: 'Self Improvement', members: 1, chats: 0, cover: '#E8A87C' },
-    { id: 2, name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 1, chats: 0, cover: '#C8622A' },
-    { id: 3, name: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', members: 1, chats: 0, cover: '#7B9EA6' },
-    { id: 4, name: 'Sapiens', author: 'Yuval Harari', genre: 'History', members: 1, chats: 0, cover: '#C4A882' },
+    { id: 1, name: 'Atomic Habits', author: 'James Clear', genre: 'Self Improvement', members: 1, chats: 0 },
+    { id: 2, name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 1, chats: 0 },
+    { id: 3, name: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', members: 1, chats: 0 },
+    { id: 4, name: 'Sapiens', author: 'Yuval Harari', genre: 'History', members: 1, chats: 0 },
   ]);
   const [loading, setLoading] = useState(false);
   const [notification, setNotification] = useState(null);
@@ -3153,7 +3259,6 @@ export default function App() {
       genre: book.genre || 'General',
       members: 1,
       chats: 0,
-      cover: '#C8622A',
       createdBy: currentUser.email,
       createdAt: new Date().toISOString(),
       messages: []
