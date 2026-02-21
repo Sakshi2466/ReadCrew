@@ -1743,7 +1743,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   );
 };
 
-// ─── ENHANCED EXPLORE PAGE ─────────────────────────────────────────────────
+// ─── ENHANCED EXPLORE PAGE (Updated to match backend chat behavior) ─────────
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [mode, setMode] = useState('chat'); // 'chat', 'results', 'character'
   const [chatHistory, setChatHistory] = useState([
@@ -1755,11 +1755,12 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [bookPage, setBookPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [sessionId] = useState(() => `session_${Date.now()}`);
+  const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`);
   const [charName, setCharName] = useState('');
   const [charBook, setCharBook] = useState('');
   const [charLoading, setCharLoading] = useState(false);
   const [charResult, setCharResult] = useState(null);
+  const [exchangeCount, setExchangeCount] = useState(0);
   const chatRef = useRef();
 
   useEffect(() => {
@@ -1774,6 +1775,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     setChatHistory(newHistory);
     setInput('');
     setLoading(true);
+    setExchangeCount(prev => prev + 1);
 
     try {
       const response = await axios.post(`${API_URL}/api/books/chat`, {
@@ -1781,38 +1783,47 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         sessionId
       });
 
-      const { reply, hasRecommendations, recommendations } = response.data;
+      const { reply, hasRecommendations, recommendations, exchangeCount: serverExchange } = response.data;
       
       setChatHistory(prev => [...prev, { role: 'assistant', content: reply }]);
+      setExchangeCount(serverExchange || exchangeCount + 1);
       
       if (hasRecommendations && recommendations?.length) {
         setBooks(recommendations);
         setBookPage(1);
         setHasMore(false);
-        setMode('results');
+        // Show results after a brief delay
+        setTimeout(() => setMode('results'), 500);
       }
     } catch (error) {
       console.error('Error in chat:', error);
       
-      // Fallback: direct recommendations
-      try {
-        const recResponse = await axios.post(`${API_URL}/api/books/recommend`, {
-          query: input.trim(),
-          page: 1
-        });
-        
-        if (recResponse.data.success) {
-          const reply = `Based on "${input.trim()}", here are some great books! Let me know if you'd like more. 📖`;
-          setChatHistory(prev => [...prev, { role: 'assistant', content: reply }]);
-          setBooks(recResponse.data.recommendations || []);
-          setBookPage(1);
-          setHasMore(recResponse.data.hasMore || false);
-          setTimeout(() => setMode('results'), 500);
+      // Fallback: direct recommendations after 2 exchanges
+      if (exchangeCount >= 1) {
+        try {
+          const recResponse = await axios.post(`${API_URL}/api/books/recommend`, {
+            query: input.trim(),
+            page: 1
+          });
+          
+          if (recResponse.data.success) {
+            const reply = `Based on "${input.trim()}", here are some great books! Let me know if you'd like more. 📖`;
+            setChatHistory(prev => [...prev, { role: 'assistant', content: reply }]);
+            setBooks(recResponse.data.recommendations || []);
+            setBookPage(1);
+            setHasMore(recResponse.data.hasMore || false);
+            setTimeout(() => setMode('results'), 500);
+          }
+        } catch (recError) {
+          setChatHistory(prev => [...prev, { 
+            role: 'assistant', 
+            content: "I'm having trouble connecting right now. Try searching directly — what are you in the mood to read?" 
+          }]);
         }
-      } catch (recError) {
+      } else {
         setChatHistory(prev => [...prev, { 
           role: 'assistant', 
-          content: "I'm having trouble connecting right now. Try searching directly — what are you in the mood to read?" 
+          content: "I'd love to help! What genres do you enjoy? Or tell me a book you've recently loved! 😊" 
         }]);
       }
     } finally {
@@ -1937,6 +1948,9 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                     <StarRating rating={book.rating || 4} size="xs" />
                     <span className="text-xs text-gray-500">{book.rating || 4.0}</span>
                   </div>
+                  {book.pages && (
+                    <p className="text-xs text-gray-400 mt-1">{book.pages} pages • {book.year}</p>
+                  )}
                 </div>
               </div>
               
@@ -1951,10 +1965,13 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   Create Crew
                 </button>
                 <button 
-                  onClick={() => onCreateCrew(book)} 
+                  onClick={() => {
+                    navigator.clipboard.writeText(`Check out "${book.title}" by ${book.author} on ReadCrew!`);
+                    alert('Link copied!');
+                  }} 
                   className="px-4 py-2.5 border border-[#EDE8E3] rounded-xl"
                 >
-                  <UserPlus className="w-4 h-4" />
+                  <Share2 className="w-4 h-4 text-gray-600" />
                 </button>
               </div>
             </div>
@@ -2177,7 +2194,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             '🔥 Something thrilling',
             '🌿 Calm and cozy',
             '🧠 Mind-blowing fiction',
-            '💪 Motivational'
+            '💪 Motivational',
+            '🎭 Complex characters'
           ].map(s => (
             <button 
               key={s} 
@@ -2189,6 +2207,13 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           ))}
         </div>
       </div>
+
+      {/* Exchange counter hint */}
+      {exchangeCount < 2 && exchangeCount > 0 && (
+        <p className="text-xs text-center text-[#8B7968] mt-2">
+          {exchangeCount === 1 ? "One more question, then I'll recommend books!" : ""}
+        </p>
+      )}
     </div>
   );
 };
