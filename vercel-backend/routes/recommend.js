@@ -2,121 +2,60 @@ const express = require('express');
 const router = express.Router();
 const Groq = require('groq-sdk');
 
-// Initialize Groq client with error handling
 let groq = null;
 try {
   if (process.env.GROQ_API_KEY) {
     groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    console.log('✅ Groq client initialized');
+    console.log('✅ Groq initialized');
   } else {
-    console.warn('⚠️ GROQ_API_KEY not found in environment');
+    console.warn('⚠️ GROQ_API_KEY missing');
   }
-} catch (error) {
-  console.error('❌ Failed to initialize Groq:', error.message);
+} catch (err) {
+  console.error('❌ Groq init failed:', err.message);
 }
 
-// Cache for trending books (refreshes daily)
-let trendingBooksCache = {
-  data: null,
-  lastUpdated: null,
-  expiresIn: 24 * 60 * 60 * 1000 // 24 hours
-};
+// ─── TRENDING CACHE ──────────────────────────────────────────────────────────
+let trendingCache = { data: null, lastUpdated: null, TTL: 24 * 60 * 60 * 1000 };
 
-// Fallback book database
-const bookDatabase = {
-  'fantasy': [
-    { title: 'Harry Potter', author: 'J.K. Rowling', genre: 'Fantasy', rating: 4.8 },
-    { title: 'Lord of the Rings', author: 'J.R.R. Tolkien', genre: 'Fantasy', rating: 4.9 }
-  ],
-  'self-help': [
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8 },
-    { title: 'Think and Grow Rich', author: 'Napoleon Hill', genre: 'Self-Help', rating: 4.5 }
-  ],
-  'space': [
-    { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.7 },
-    { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8 }
-  ],
-  'love': [
-    { title: 'Pride and Prejudice', author: 'Jane Austen', genre: 'Romance', rating: 4.8 },
-    { title: 'The Notebook', author: 'Nicholas Sparks', genre: 'Romance', rating: 4.3 }
-  ],
-  'motivation': [
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8 },
-    { title: 'The 7 Habits of Highly Effective People', author: 'Stephen Covey', genre: 'Self-Help', rating: 4.7 }
-  ]
-};
-
-// Get mock trending books as fallback
-function getMockTrendingBooks() {
-  console.log('📚 Using mock trending books (fallback)');
-  return [
-    {
-      title: 'Atomic Habits',
-      author: 'James Clear',
-      genre: 'Self-Help',
-      description: 'Tiny changes, remarkable results. A proven framework for improving your habits.',
-      rating: 4.8,
-      readers: 25000,
-      cover: '#E8A87C'
-    },
-    {
-      title: 'The Psychology of Money',
-      author: 'Morgan Housel',
-      genre: 'Finance',
-      description: 'Timeless lessons on wealth, greed, and happiness from a financial expert.',
-      rating: 4.7,
-      readers: 18000,
-      cover: '#7B9EA6'
-    },
-    {
-      title: 'Project Hail Mary',
-      author: 'Andy Weir',
-      genre: 'Sci-Fi',
-      description: 'A lone astronaut must save Earth. From the author of The Martian.',
-      rating: 4.8,
-      readers: 22000,
-      cover: '#C8622A'
-    },
-    {
-      title: 'The Midnight Library',
-      author: 'Matt Haig',
-      genre: 'Fiction',
-      description: 'Between life and death there is a library of infinite possibilities.',
-      rating: 4.6,
-      readers: 19000,
-      cover: '#C8956C'
-    },
-    {
-      title: 'Sapiens',
-      author: 'Yuval Noah Harari',
-      genre: 'History',
-      description: 'A brief history of humankind from the Stone Age to the modern age.',
-      rating: 4.7,
-      readers: 30000,
-      cover: '#C4A882'
-    }
+function mockTrending(page = 1) {
+  const all = [
+    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', description: 'Tiny changes, remarkable results.', rating: 4.8, readers: 25000 },
+    { title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', description: 'Timeless lessons on wealth.', rating: 4.7, readers: 18000 },
+    { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', description: 'A lone astronaut must save Earth.', rating: 4.8, readers: 22000 },
+    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', description: 'Between life and death lies infinite possibility.', rating: 4.6, readers: 19000 },
+    { title: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', description: 'A brief history of humankind.', rating: 4.7, readers: 30000 },
+    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', description: 'Dragons and forbidden romance at a war college.', rating: 4.6, readers: 28000 },
+    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', description: "A shepherd's journey to his personal legend.", rating: 4.7, readers: 27000 },
+    { title: 'Dune', author: 'Frank Herbert', genre: 'Sci-Fi', description: 'Epic desert planet saga.', rating: 4.8, readers: 31000 },
+    { title: 'It Ends with Us', author: 'Colleen Hoover', genre: 'Romance', description: 'A powerful story of resilience.', rating: 4.6, readers: 33000 },
+    { title: 'Tomorrow, and Tomorrow, and Tomorrow', author: 'Gabrielle Zevin', genre: 'Fiction', description: 'A love story about video games.', rating: 4.5, readers: 15000 },
   ];
+  const pageSize = 5;
+  const start = ((page - 1) % Math.ceil(all.length / pageSize)) * pageSize;
+  return all.slice(start, start + pageSize);
 }
 
-// Fetch daily trending books from AI
-async function fetchDailyTrendingBooks() {
-  console.log('🔥 Attempting to fetch daily trending books from Groq AI...');
-  
-  if (!groq) {
-    console.warn('⚠️ Groq client not initialized, using mock data');
-    return getMockTrendingBooks();
+async function getTrending(page = 1, force = false) {
+  const stale = !trendingCache.data || (Date.now() - trendingCache.lastUpdated) >= trendingCache.TTL;
+
+  if (!stale && !force && page === 1) {
+    return { books: trendingCache.data, cached: true };
   }
+
+  if (!groq) return { books: mockTrending(page), cached: false };
 
   try {
-    console.log('📡 Making Groq API call...');
-    
-    const completion = await groq.chat.completions.create({
+    const today = new Date().toISOString().split('T')[0];
+    const offset = (page - 1) * 5;
+
+    const res = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.8,
+      max_tokens: 1800,
       messages: [
         {
-          role: "system",
-          content: `You are a book expert. Generate exactly 5 trending books for today.
-
-CRITICAL: Return ONLY a valid JSON array, nothing else. No markdown, no explanation, no code blocks.
+          role: 'system',
+          content: `You are a book trend analyst. Today is ${today}. Return ONLY a valid JSON array, no markdown, no extra text.
 
 Format:
 [
@@ -124,517 +63,376 @@ Format:
     "title": "Book Title",
     "author": "Author Name",
     "genre": "Genre",
-    "description": "Brief description in 1-2 sentences",
+    "description": "1-2 sentences",
+    "trendReason": "Why trending now",
     "rating": 4.5,
     "readers": 15000
   }
-]
-
-Focus on currently popular books, bestsellers, and highly-rated recent releases.`
+]`
         },
         {
-          role: "user",
-          content: `What are the top 5 trending books today? Return ONLY the JSON array.`
+          role: 'user',
+          content: `Give me 5 trending books as of ${today} (items ${offset + 1}-${offset + 5}). Return ONLY the JSON array.`
         }
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 2000
+      ]
     });
 
-    let responseText = completion.choices[0].message.content;
-    console.log('📥 Raw Groq response:', responseText.substring(0, 200));
-    
-    // Clean response - remove ANY markdown or code blocks
-    responseText = responseText
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .replace(/`/g, '')
-      .trim();
-    
-    // Find JSON array in response
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      throw new Error('No JSON array found in response');
-    }
-    
-    const trendingBooks = JSON.parse(jsonMatch[0]);
-    
-    // Validate response
-    if (!Array.isArray(trendingBooks) || trendingBooks.length === 0) {
-      throw new Error('Invalid response format');
+    const text = res.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    if (!match) throw new Error('No JSON');
+
+    const books = JSON.parse(match[0]);
+
+    if (page === 1) {
+      trendingCache.data = books;
+      trendingCache.lastUpdated = Date.now();
     }
 
-    // Add color codes to books
-    const colors = ['#E8A87C', '#7B9EA6', '#C8622A', '#C8956C', '#C4A882'];
-    trendingBooks.forEach((book, idx) => {
-      book.cover = colors[idx % colors.length];
-      book.readers = book.readers || Math.floor(Math.random() * 20000) + 10000;
-    });
-    
-    // Update cache
-    trendingBooksCache.data = trendingBooks;
-    trendingBooksCache.lastUpdated = new Date();
-    
-    console.log(`✅ Daily trending books updated: ${trendingBooks.length} books from Groq AI`);
-    return trendingBooks;
-    
-  } catch (error) {
-    console.error('❌ Error fetching trending books from Groq:', error.message);
-    console.error('Stack:', error.stack);
-    return getMockTrendingBooks();
+    return { books, cached: false };
+  } catch (err) {
+    console.error('Trending AI error:', err.message);
+    return { books: mockTrending(page), cached: false };
   }
 }
 
-// Get trending books (with daily cache)
+// ─── CONVERSATION SESSIONS ───────────────────────────────────────────────────
+const sessions = new Map();
+
+function getSession(id) {
+  if (!sessions.has(id)) {
+    sessions.set(id, {
+      messages: [],
+      exchangeCount: 0,
+      hasRecommended: false,
+      created: Date.now()
+    });
+  }
+  return sessions.get(id);
+}
+
+setInterval(() => {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [id, s] of sessions) {
+    if (s.created < cutoff) sessions.delete(id);
+  }
+}, 60 * 60 * 1000);
+
+// ─── ROUTES ──────────────────────────────────────────────────────────────────
+
+// GET /api/books/trending?page=1
 router.get('/trending', async (req, res) => {
+  const page = parseInt(req.query.page) || 1;
   try {
-    console.log('📊 Trending books requested');
-    
-    // Check if cache is valid
-    const now = new Date();
-    const cacheAge = trendingBooksCache.lastUpdated 
-      ? now - trendingBooksCache.lastUpdated 
-      : Infinity;
-    
-    if (trendingBooksCache.data && cacheAge < trendingBooksCache.expiresIn) {
-      console.log(`✅ Returning cached trending books (age: ${Math.floor(cacheAge / 1000 / 60)} minutes)`);
-      return res.json({
-        success: true,
-        books: trendingBooksCache.data,
-        cached: true,
-        lastUpdated: trendingBooksCache.lastUpdated,
-        source: 'cache'
-      });
-    }
-    
-    // Fetch fresh data
-    console.log('🔄 Cache expired or empty, fetching fresh data...');
-    const trendingBooks = await fetchDailyTrendingBooks();
-    
-    res.json({
-      success: true,
-      books: trendingBooks,
-      cached: false,
-      lastUpdated: trendingBooksCache.lastUpdated,
-      source: groq ? 'groq-ai' : 'fallback'
-    });
-    
-  } catch (error) {
-    console.error('❌ Error in /trending endpoint:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message,
-      books: getMockTrendingBooks(),
-      source: 'error-fallback'
-    });
+    const { books, cached } = await getTrending(page);
+    res.json({ success: true, books, page, hasMore: page < 6, cached, source: groq ? 'groq-ai' : 'fallback' });
+  } catch (err) {
+    res.json({ success: true, books: mockTrending(page), page, hasMore: false, source: 'fallback' });
   }
 });
 
-// AI-powered recommendation endpoint
-router.post('/ai', async (req, res) => {
-  try {
-    const { query } = req.body;
-    
-    if (!query) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide a query'
-      });
-    }
+/**
+ * POST /api/books/chat
+ *
+ * BEHAVIOR:
+ * - Messages 1: Ask clarifying question (learn preferences)
+ * - Message 2-3: More chat OR recommend if enough info
+ * - Any time user says "more" or "another": show 5 NEW different books
+ * - After recommending, still invite for more
+ */
+router.post('/chat', async (req, res) => {
+  const { message, sessionId = 'default' } = req.body;
+  if (!message) return res.status(400).json({ success: false, message: 'Message required' });
 
-    console.log('🤖 AI Recommendation request for:', query);
+  const session = getSession(sessionId);
+  const userMsg = message.trim();
+  session.messages.push({ role: 'user', content: userMsg });
+  session.exchangeCount++;
 
-    // Check if Groq is available
-    if (!groq) {
-      console.warn('⚠️ Groq client not initialized, using fallback');
-      return useFallbackRecommendations(query, res);
-    }
+  if (!groq) {
+    const canRec = session.exchangeCount >= 2;
+    const reply = canRec
+      ? "Based on what you've shared, here are some great picks! 📖 Say 'more' for different recommendations."
+      : "I'd love to help! What genres do you enjoy, or tell me about a book you loved recently? 😊";
+    session.messages.push({ role: 'assistant', content: reply });
+    const recs = canRec ? getFallbackRecs() : [];
+    return res.json({ success: true, reply, hasRecommendations: canRec, recommendations: recs, sessionId });
+  }
 
-    try {
-      console.log('📡 Making Groq API call for recommendations...');
-      
-      const completion = await groq.chat.completions.create({
-        messages: [
-          {
-            role: "system",
-            content: `You are an enthusiastic book recommender AI. Recommend books based on user queries.
+  const wantsMore = /\b(more|another|again|next|else|different|other|add|continue)\b/i.test(userMsg);
+  const alreadyRecommended = session.hasRecommended;
 
-CRITICAL: Return ONLY a valid JSON array, nothing else. No markdown, no explanation, no code blocks.
+  const systemPrompt = `You are "Page Turner" — a warm, enthusiastic AI book guide for ReadCrew.
 
-Format:
+## Your Job
+Help users find their perfect next book through natural conversation, then recommend 5 books.
+
+## Conversation Strategy
+- Exchange 1 (first message): Ask ONE good question to understand what they want. Be specific: ask about genre + mood ("Are you more into fast-paced thrillers or slow-burn literary fiction?" or "What's the last book you loved?")
+- Exchange 2-3: If you have enough info, RECOMMEND. If not, one more question.
+- Always recommend by exchange 3 (even with partial info).
+- After recommending, tell them to say "more" for different picks.
+
+## When User Says "more" / "another"
+Give 5 COMPLETELY DIFFERENT books from last time. Never repeat.
+
+## Recommendation Format (MANDATORY when recommending)
+Always include this exact block when recommending:
+
+<!--REC_START-->
 [
   {
-    "title": "Book Title",
-    "author": "Author Name",
+    "title": "Exact Book Title",
+    "author": "Real Author Name",
     "genre": "Genre",
-    "description": "Brief description in 1-2 sentences",
-    "reason": "Why they would enjoy it in 1 sentence",
-    "rating": 4.5
+    "description": "2 sentences about the book",
+    "reason": "Personalized: why this specific user will love it based on their stated preferences",
+    "rating": 4.6
   }
 ]
+<!--REC_END-->
 
-Return exactly 5 book recommendations.`
-          },
-          {
-            role: "user",
-            content: `Recommend 5 books based on: ${query}. Return ONLY the JSON array.`
-          }
-        ],
-        model: "llama-3.3-70b-versatile",
-        temperature: 0.7,
-        max_tokens: 2000
-      });
+## Reply Text (before/after the hidden block)
+- Before: Brief enthusiastic intro ("Based on your love of fantasy, here are 5 magical reads! ✨")
+- After: "Say **'more'** for 5 different picks, or tell me more about what you're in the mood for!"
+- Keep text SHORT — the books are the star.
+- Never mention the JSON block to the user.
 
-      let responseText = completion.choices[0].message.content;
-      console.log('📥 Raw Groq recommendation response:', responseText.substring(0, 200));
-      
-      // Clean response
-      responseText = responseText
-        .replace(/```json\n?/g, '')
-        .replace(/```\n?/g, '')
-        .replace(/`/g, '')
-        .trim();
-      
-      // Find JSON array
-      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-      if (!jsonMatch) {
-        throw new Error('No JSON array found in AI response');
+Current exchange: ${session.exchangeCount}
+Already recommended before: ${alreadyRecommended}
+User wants more different books: ${wantsMore}`;
+
+  try {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.75,
+      max_tokens: 2000,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        ...session.messages.slice(-14)
+      ]
+    });
+
+    let reply = completion.choices[0].message.content;
+
+    // Extract recommendations
+    let recommendations = [];
+    let hasRecommendations = false;
+    const match = reply.match(/<!--REC_START-->([\s\S]*?)<!--REC_END-->/);
+
+    if (match) {
+      try {
+        const cleaned = match[1].trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+        const parsed = JSON.parse(cleaned);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          recommendations = parsed;
+          hasRecommendations = true;
+          session.hasRecommended = true;
+        }
+      } catch (e) {
+        console.error('Rec parse error:', e.message);
+        // Try fallback recommendations
+        recommendations = getFallbackRecs();
+        hasRecommendations = true;
       }
-      
-      const recommendations = JSON.parse(jsonMatch[0]);
-
-      // Validate
-      if (!Array.isArray(recommendations) || recommendations.length === 0) {
-        throw new Error('Invalid recommendations format');
-      }
-
-      console.log(`✅ AI generated ${recommendations.length} recommendations`);
-
-      res.json({
-        success: true,
-        query: query,
-        recommendations: recommendations,
-        source: 'Groq AI (Llama 3.3)',
-        isAI: true
-      });
-
-    } catch (aiError) {
-      console.error('❌ Groq AI Error:', aiError.message);
-      console.error('Stack:', aiError.stack);
-      return useFallbackRecommendations(query, res);
+      reply = reply.replace(/<!--REC_START-->[\s\S]*?<!--REC_END-->/, '').trim();
     }
 
-  } catch (error) {
-    console.error('❌ Error in /ai endpoint:', error);
-    res.status(500).json({
-      success: false,
-      message: error.message
+    // If exchange 3+ and still no recommendations, force them
+    if (session.exchangeCount >= 3 && !hasRecommendations) {
+      recommendations = getFallbackRecs();
+      hasRecommendations = true;
+      reply = reply + '\n\nHere are some great picks based on our conversation! 📚 Say **"more"** for different recommendations.';
+      session.hasRecommended = true;
+    }
+
+    session.messages.push({ role: 'assistant', content: reply });
+
+    res.json({
+      success: true,
+      reply,
+      hasRecommendations,
+      recommendations,
+      sessionId,
+      exchangeCount: session.exchangeCount
+    });
+
+  } catch (err) {
+    console.error('Chat error:', err.message);
+
+    const fallbackReply = session.exchangeCount >= 2
+      ? "Here are some great book picks for you! 📚 Say 'more' for different recommendations."
+      : "I'd love to help find your next read! What genres do you enjoy? Or tell me a book you've recently loved! 😊";
+
+    const recs = session.exchangeCount >= 2 ? getFallbackRecs() : [];
+    session.messages.push({ role: 'assistant', content: fallbackReply });
+
+    res.json({
+      success: true,
+      reply: fallbackReply,
+      hasRecommendations: recs.length > 0,
+      recommendations: recs,
+      sessionId
     });
   }
 });
 
-// Fallback recommendation function
-function useFallbackRecommendations(query, res) {
-  console.log('📚 Using fallback recommendations for:', query);
-  
-  const keywordsLower = query.toLowerCase();
-  let suggestions = [];
+// POST /api/books/recommend — direct search with pagination
+router.post('/recommend', async (req, res) => {
+  const { query, page = 1 } = req.body;
+  if (!query) return res.status(400).json({ success: false, message: 'Query required' });
 
-  // Search in database
-  Object.keys(bookDatabase).forEach(genre => {
-    if (keywordsLower.includes(genre)) {
-      suggestions = [...suggestions, ...bookDatabase[genre]];
-    }
-  });
+  if (!groq) return res.json({ success: true, recommendations: getFallbackRecs(), page, hasMore: false, source: 'fallback' });
 
-  // Default recommendations
-  if (suggestions.length === 0) {
-    suggestions = [
-      { 
-        title: 'The Alchemist', 
-        author: 'Paulo Coelho', 
-        genre: 'Inspirational', 
-        rating: 4.7, 
-        description: 'A shepherd\'s journey to find his personal legend', 
-        reason: 'Inspiring story about following your dreams' 
-      },
-      { 
-        title: 'Atomic Habits', 
-        author: 'James Clear', 
-        genre: 'Self-Help', 
-        rating: 4.8, 
-        description: 'Build better habits step by step', 
-        reason: 'Practical advice for personal growth' 
-      },
-      { 
-        title: 'Harry Potter', 
-        author: 'J.K. Rowling', 
-        genre: 'Fantasy', 
-        rating: 4.8, 
-        description: 'Magical adventure at Hogwarts', 
-        reason: 'Perfect blend of fantasy and adventure' 
-      },
-      { 
-        title: '1984', 
-        author: 'George Orwell', 
-        genre: 'Fiction', 
-        rating: 4.6, 
-        description: 'Dystopian masterpiece', 
-        reason: 'Thought-provoking and relevant' 
-      },
-      { 
-        title: 'The Hobbit', 
-        author: 'J.R.R. Tolkien', 
-        genre: 'Fantasy', 
-        rating: 4.7, 
-        description: 'Epic adventure in Middle Earth', 
-        reason: 'Classic fantasy adventure' 
-      }
-    ];
+  const offset = (page - 1) * 5;
+  try {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.8,
+      max_tokens: 2000,
+      messages: [
+        {
+          role: 'system',
+          content: 'Return ONLY valid JSON array, no markdown.\n[{"title":"","author":"","genre":"","description":"2 sentences","reason":"why they\'d love it","rating":4.5,"pages":300,"year":2020}]'
+        },
+        {
+          role: 'user',
+          content: `Recommend 5 books for: "${query}". ${offset > 0 ? `These are picks ${offset+1}-${offset+5}, DIFFERENT from the first ${offset}.` : ''} Return ONLY JSON array.`
+        }
+      ]
+    });
+
+    const text = completion.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    const books = match ? JSON.parse(match[0]) : getFallbackRecs();
+    res.json({ success: true, query, recommendations: books, page, hasMore: page < 5, source: 'groq-ai' });
+
+  } catch (err) {
+    console.error('Recommend error:', err.message);
+    res.json({ success: true, recommendations: getFallbackRecs(), page, hasMore: false, source: 'fallback' });
+  }
+});
+
+// POST /api/books/character-search
+router.post('/character-search', async (req, res) => {
+  const { character, fromBook } = req.body;
+  if (!character) return res.status(400).json({ success: false, message: 'Character name required' });
+
+  if (!groq) {
+    return res.json({
+      success: true, character, fromBook,
+      characterAnalysis: `Fans of "${character}" will enjoy books with similarly compelling characters.`,
+      recommendations: getFallbackRecs()
+    });
   }
 
-  // Shuffle and limit to 5
-  suggestions = suggestions
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 5);
+  try {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.7,
+      max_tokens: 2000,
+      messages: [
+        {
+          role: 'system',
+          content: 'Return ONLY valid JSON object, no markdown.\n{"characterAnalysis":"What makes this character compelling","recommendations":[{"title":"","author":"","genre":"","description":"","reason":"why fans of [character] will love","rating":4.5,"similarCharacter":"similar character name in this book"}]}'
+        },
+        {
+          role: 'user',
+          content: `Find 5 books for readers who love "${character}"${fromBook ? ` from "${fromBook}"` : ''}. Return ONLY JSON object.`
+        }
+      ]
+    });
 
-  res.json({
-    success: true,
-    query: query,
-    recommendations: suggestions,
-    source: 'Curated Database',
-    isAI: false
-  });
+    const text = completion.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    const result = match ? JSON.parse(match[0]) : { characterAnalysis: `Great character choice! Here are similar reads.`, recommendations: getFallbackRecs() };
+    res.json({ success: true, character, fromBook, ...result, source: 'groq-ai' });
+
+  } catch (err) {
+    console.error('Character search error:', err.message);
+    res.json({ success: true, character, fromBook, characterAnalysis: `Great choice! These books have similarly compelling characters.`, recommendations: getFallbackRecs(), source: 'fallback' });
+  }
+});
+
+// POST /api/books/book-details
+router.post('/book-details', async (req, res) => {
+  const { bookName, author } = req.body;
+  if (!bookName || !author) return res.status(400).json({ success: false, message: 'bookName and author required' });
+
+  if (!groq) return res.json({ success: true, details: { description: `${bookName} by ${author} is a compelling read.`, pages: 280, published: '2020' }, source: 'fallback' });
+
+  try {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.4,
+      max_tokens: 1000,
+      messages: [
+        { role: 'system', content: 'Return ONLY valid JSON, no markdown.\n{"description":"2-3 paragraphs","pages":0,"published":"year","publisher":"name","genres":[""],"themes":[""],"awards":[""]}' },
+        { role: 'user', content: `Details for "${bookName}" by ${author}. Return ONLY JSON.` }
+      ]
+    });
+
+    const text = completion.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const match = text.match(/\{[\s\S]*\}/);
+    const details = match ? JSON.parse(match[0]) : { description: `${bookName} by ${author} is a remarkable book.` };
+    res.json({ success: true, details, source: 'groq-ai' });
+
+  } catch (err) {
+    res.json({ success: true, details: { description: `${bookName} by ${author} is a remarkable book.`, pages: 280, published: '2020' }, source: 'fallback' });
+  }
+});
+
+// POST /api/books/similar-books
+router.post('/similar-books', async (req, res) => {
+  const { bookName, author, genre } = req.body;
+  if (!bookName || !author) return res.status(400).json({ success: false, message: 'bookName and author required' });
+
+  if (!groq) return res.json({ success: true, books: getFallbackRecs(), source: 'fallback' });
+
+  try {
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.3-70b-versatile',
+      temperature: 0.7,
+      max_tokens: 1500,
+      messages: [
+        { role: 'system', content: 'Return ONLY valid JSON array.\n[{"title":"","author":"","genre":"","rating":4.5,"similarity":"why similar"}]' },
+        { role: 'user', content: `5 books similar to "${bookName}" by ${author}${genre ? ` (Genre: ${genre})` : ''}.` }
+      ]
+    });
+
+    const text = completion.choices[0].message.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const match = text.match(/\[[\s\S]*\]/);
+    const books = match ? JSON.parse(match[0]) : getFallbackRecs();
+    res.json({ success: true, books, source: 'groq-ai' });
+
+  } catch (err) {
+    res.json({ success: true, books: getFallbackRecs(), source: 'fallback' });
+  }
+});
+
+// ─── HELPERS ─────────────────────────────────────────────────────────────────
+function getFallbackRecs() {
+  return [
+    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', rating: 4.7, description: "A shepherd's journey to his personal legend.", reason: 'Timeless and inspiring', pages: 197, year: 1988 },
+    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8, description: 'Build better habits with tiny changes.', reason: 'Practical and life-changing', pages: 320, year: 2018 },
+    { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, description: 'A lone astronaut must save Earth.', reason: 'Gripping and emotional', pages: 476, year: 2021 },
+    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6, description: 'Between life and death lies infinite possibility.', reason: 'Beautiful and philosophical', pages: 288, year: 2020 },
+    { title: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', rating: 4.7, description: 'A brief history of humankind.', reason: 'Eye-opening and fascinating', pages: 443, year: 2011 },
+  ];
 }
 
-// Initialize trending books cache on server start
+// ─── STARTUP ─────────────────────────────────────────────────────────────────
 (async () => {
-  console.log('🚀 Initializing trending books cache on startup...');
-  try {
-    await fetchDailyTrendingBooks();
-    console.log('✅ Trending books cache initialized');
-  } catch (error) {
-    console.error('❌ Failed to initialize trending books cache:', error.message);
-  }
+  console.log('🚀 Pre-loading trending books...');
+  try { await getTrending(1, true); console.log('✅ Cache ready'); }
+  catch (err) { console.error('Cache init failed:', err.message); }
 })();
 
-// Refresh trending books daily at midnight
 setInterval(async () => {
   const now = new Date();
   if (now.getHours() === 0 && now.getMinutes() === 0) {
-    console.log('🔄 Midnight refresh: Updating trending books...');
-    await fetchDailyTrendingBooks();
+    console.log('🔄 Midnight refresh...');
+    await getTrending(1, true);
   }
-}, 60 * 1000); // Check every minute
-
-module.exports = router;
-// Get book details from Groq AI
-router.post('/book-details', async (req, res) => {
-  try {
-    const { bookName, author } = req.body;
-    
-    if (!bookName || !author) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide book name and author'
-      });
-    }
-
-    console.log(`📖 Fetching details for: ${bookName} by ${author}`);
-
-    if (!groq) {
-      console.warn('⚠️ Groq client not initialized, using fallback');
-      return res.json({
-        success: true,
-        details: {
-          description: `${bookName} by ${author} is a compelling work that has resonated with readers worldwide. This book explores profound themes through engaging storytelling and memorable characters.`,
-          pages: 250,
-          published: '2020',
-          publisher: 'Unknown',
-          isbn: 'N/A'
-        },
-        source: 'fallback'
-      });
-    }
-
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: `You are a book expert. Provide detailed information about books.
-
-CRITICAL: Return ONLY a valid JSON object, nothing else. No markdown, no explanation, no code blocks.
-
-Format:
-{
-  "description": "2-3 paragraph book description",
-  "pages": 250,
-  "published": "2020",
-  "publisher": "Publisher Name",
-  "isbn": "ISBN number or N/A",
-  "genres": ["Genre1", "Genre2"],
-  "themes": ["Theme1", "Theme2"]
-}`
-        },
-        {
-          role: "user",
-          content: `Tell me about the book "${bookName}" by ${author}. Return ONLY the JSON object.`
-        }
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.5,
-      max_tokens: 1000
-    });
-
-    let responseText = completion.choices[0].message.content;
-    console.log('📥 Raw Groq response:', responseText.substring(0, 200));
-    
-    // Clean response
-    responseText = responseText
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .replace(/`/g, '')
-      .trim();
-    
-    // Find JSON object
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('No JSON object found in response');
-    }
-    
-    const details = JSON.parse(jsonMatch[0]);
-
-    console.log(`✅ Book details fetched successfully`);
-
-    res.json({
-      success: true,
-      details: details,
-      source: 'groq-ai'
-    });
-
-  } catch (error) {
-    console.error('❌ Error fetching book details:', error.message);
-    res.json({
-      success: true,
-      details: {
-        description: `${req.body.bookName} by ${req.body.author} is a remarkable book that has captivated readers with its unique perspective and engaging narrative.`,
-        pages: 250,
-        published: '2020',
-        publisher: 'Unknown',
-        isbn: 'N/A'
-      },
-      source: 'error-fallback'
-    });
-  }
-});
-
-// Get similar books from Groq AI
-router.post('/similar-books', async (req, res) => {
-  try {
-    const { bookName, author, genre } = req.body;
-    
-    if (!bookName || !author) {
-      return res.status(400).json({
-        success: false,
-        message: 'Please provide book name and author'
-      });
-    }
-
-    console.log(`🔍 Finding similar books to: ${bookName} by ${author}`);
-
-    if (!groq) {
-      console.warn('⚠️ Groq client not initialized, using fallback');
-      return res.json({
-        success: true,
-        books: getMockSimilarBooks(genre),
-        source: 'fallback'
-      });
-    }
-
-    const completion = await groq.chat.completions.create({
-      messages: [
-        {
-          role: "system",
-          content: `You are a book recommendation expert. Find similar books.
-
-CRITICAL: Return ONLY a valid JSON array, nothing else. No markdown, no explanation, no code blocks.
-
-Format:
-[
-  {
-    "title": "Book Title",
-    "author": "Author Name",
-    "genre": "Genre",
-    "rating": 4.5,
-    "similarity": "Brief explanation of why it's similar"
-  }
-]
-
-Return exactly 5 similar books.`
-        },
-        {
-          role: "user",
-          content: `Find 5 books similar to "${bookName}" by ${author}${genre ? ` (Genre: ${genre})` : ''}. Return ONLY the JSON array.`
-        }
-      ],
-      model: "llama-3.3-70b-versatile",
-      temperature: 0.7,
-      max_tokens: 2000
-    });
-
-    let responseText = completion.choices[0].message.content;
-    console.log('📥 Raw Groq response:', responseText.substring(0, 200));
-    
-    // Clean response
-    responseText = responseText
-      .replace(/```json\n?/g, '')
-      .replace(/```\n?/g, '')
-      .replace(/`/g, '')
-      .trim();
-    
-    // Find JSON array
-    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-    if (!jsonMatch) {
-      throw new Error('No JSON array found in response');
-    }
-    
-    const similarBooks = JSON.parse(jsonMatch[0]);
-
-    // Add colors
-    const colors = ['#E8A87C', '#7B9EA6', '#C8622A', '#C8956C', '#C4A882'];
-    similarBooks.forEach((book, idx) => {
-      book.cover = colors[idx % colors.length];
-    });
-
-    console.log(`✅ Found ${similarBooks.length} similar books`);
-
-    res.json({
-      success: true,
-      books: similarBooks,
-      source: 'groq-ai'
-    });
-
-  } catch (error) {
-    console.error('❌ Error fetching similar books:', error.message);
-    res.json({
-      success: true,
-      books: getMockSimilarBooks(req.body.genre),
-      source: 'error-fallback'
-    });
-  }
-});
-
-// Mock similar books fallback
-function getMockSimilarBooks(genre) {
-  const colors = ['#E8A87C', '#7B9EA6', '#C8622A', '#C8956C', '#C4A882'];
-  return [
-    { title: 'The Alchemist', author: 'Paulo Coelho', genre: genre || 'Fiction', rating: 4.7, similarity: 'Similar inspirational themes', cover: colors[0] },
-    { title: 'The Five People You Meet in Heaven', author: 'Mitch Albom', genre: genre || 'Fiction', rating: 4.5, similarity: 'Same author, similar style', cover: colors[1] },
-    { title: 'Life of Pi', author: 'Yann Martel', genre: genre || 'Fiction', rating: 4.3, similarity: 'Spiritual journey theme', cover: colors[2] },
-    { title: 'The Kite Runner', author: 'Khaled Hosseini', genre: genre || 'Fiction', rating: 4.6, similarity: 'Emotional depth', cover: colors[3] },
-    { title: 'A Man Called Ove', author: 'Fredrik Backman', genre: genre || 'Fiction', rating: 4.5, similarity: 'Heartwarming story', cover: colors[4] }
-  ];
-}
+}, 60 * 1000);
 
 module.exports = router;
