@@ -6,42 +6,42 @@ const router = express.Router();
 
 let globalPosts = [
   {
-    id: 'demo1', userName: 'Priya Sharma', userEmail: 'priya@readcrew.app',
+    id: 'demo1', userName: 'Sakshi', userEmail: 'priya@readcrew.app',
     content: "Just finished 'Atomic Habits' and my mind is blown 🤯 The 1% improvement concept is life-changing. If you haven't read it yet, what are you waiting for?",
     bookName: 'Atomic Habits', author: 'James Clear',
     likes: 24, comments: 5, shares: 3,
     createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), isPublic: true
   },
   {
-    id: 'demo2', userName: 'Rahul Mehta', userEmail: 'rahul@readcrew.app',
+    id: 'demo2', userName: 'Sakshi', userEmail: 'rahul@readcrew.app',
     content: "The ending of 'Project Hail Mary' had me in tears. Andy Weir is a genius. Rocky is the best fictional character ever created 🛸",
     bookName: 'Project Hail Mary', author: 'Andy Weir',
     likes: 41, comments: 12, shares: 7,
     createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), isPublic: true
   },
   {
-    id: 'demo3', userName: 'Aisha Khan', userEmail: 'aisha@readcrew.app',
+    id: 'demo3', userName: 'Sakshi', userEmail: 'aisha@readcrew.app',
     content: "3 AM and I can't stop reading 'The Silent Patient'. Who else has been completely wrecked by this book? The twist... I did NOT see that coming 😱",
     bookName: 'The Silent Patient', author: 'Alex Michaelides',
     likes: 67, comments: 23, shares: 11,
     createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), isPublic: true
   },
   {
-    id: 'demo4', userName: 'Vikram Nair', userEmail: 'vikram@readcrew.app',
+    id: 'demo4', userName: 'Unknown', userEmail: 'vikram@readcrew.app',
     content: "Reading 'Sapiens' for the second time. It hits different when you're older. Harari makes you question everything about human civilization 🌍",
     bookName: 'Sapiens', author: 'Yuval Noah Harari',
     likes: 33, comments: 8, shares: 5,
     createdAt: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(), isPublic: true
   },
   {
-    id: 'demo5', userName: 'Sneha Patel', userEmail: 'sneha@readcrew.app',
+    id: 'demo5', userName: 'Sneha', userEmail: 'sneha@readcrew.app',
     content: "Beach Read by Emily Henry is the perfect summer novel 🌊☀️ It's funny, it's heartfelt, and the slow burn romance is CHEF'S KISS. Highly recommend!",
     bookName: 'Beach Read', author: 'Emily Henry',
     likes: 52, comments: 15, shares: 9,
     createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), isPublic: true
   },
   {
-    id: 'demo6', userName: 'Arjun Reddy', userEmail: 'arjun@readcrew.app',
+    id: 'demo6', userName: 'Arjun', userEmail: 'arjun@readcrew.app',
     content: "Fourth Wing crew where you at? 🐉 Just joined the dragon riders academy and I'm absolutely obsessed. Xaden Riorson can fight me any day 😍",
     bookName: 'Fourth Wing', author: 'Rebecca Yarros',
     likes: 89, comments: 31, shares: 14,
@@ -121,6 +121,59 @@ let globalCrews = [
   },
 ];
 
+// ─── GLOBAL COMMENTS STORAGE ─────────────────────────────────────────────────
+// Store comments by postId for global access
+let globalComments = new Map();
+
+// Pre-seed comments for demo posts
+const seedComments = () => {
+  const demoComments = [
+    {
+      id: 'comment1', postId: 'demo1', userId: 'user1', userName: 'Rahul Mehta',
+      userEmail: 'rahul@readcrew.app', userInitials: 'RM',
+      content: "Completely agree! The 1% rule has helped me build a consistent reading habit.", 
+      timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
+      parentId: null, likes: 5
+    },
+    {
+      id: 'comment2', postId: 'demo1', userId: 'user2', userName: 'Aisha Khan',
+      userEmail: 'aisha@readcrew.app', userInitials: 'AK',
+      content: "Which chapter was your favorite? I loved the part about habit stacking!",
+      timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+      parentId: null, likes: 3
+    },
+    {
+      id: 'comment3', postId: 'demo2', userId: 'user3', userName: 'Arjun',
+      userEmail: 'arjun@readcrew.app', userInitials: 'AR',
+      content: "Rocky is the best! The scene where they first communicate made me so emotional 😭",
+      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+      parentId: null, likes: 8
+    },
+    {
+      id: 'comment4', postId: 'demo3', userId: 'user4', userName: 'Sneha Patel',
+      userEmail: 'sneha@readcrew.app', userInitials: 'SP',
+      content: "That twist ruined my sleep for a week! Still not over it 🔥",
+      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
+      parentId: null, likes: 12
+    },
+    {
+      id: 'comment5', postId: 'demo6', userId: 'user5', userName: 'Vikram Nair',
+      userEmail: 'vikram@readcrew.app', userInitials: 'VN',
+      content: "Team Xaden forever! The tension in this book is unreal 🔥",
+      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
+      parentId: null, likes: 15
+    }
+  ];
+
+  demoComments.forEach(comment => {
+    const postComments = globalComments.get(comment.postId) || [];
+    postComments.push(comment);
+    globalComments.set(comment.postId, postComments);
+  });
+};
+
+seedComments();
+
 // ─── POSTS ───────────────────────────────────────────────────────────────────
 
 // GET /api/social/posts?page=1&limit=20
@@ -129,7 +182,26 @@ router.get('/posts', (req, res) => {
   const limit = parseInt(req.query.limit) || 20;
   const start = (page - 1) * limit;
   const posts = globalPosts.slice(start, start + limit);
-  res.json({ success: true, posts, total: globalPosts.length, hasMore: start + limit < globalPosts.length });
+  
+  // Add comment counts to posts
+  const postsWithCommentCounts = posts.map(post => {
+    const comments = globalComments.get(post.id) || [];
+    return {
+      ...post,
+      commentsCount: comments.length
+    };
+  });
+  
+  res.json({ success: true, posts: postsWithCommentCounts, total: globalPosts.length, hasMore: start + limit < globalPosts.length });
+});
+
+// GET /api/social/posts/:id
+router.get('/posts/:id', (req, res) => {
+  const post = globalPosts.find(p => p.id === req.params.id);
+  if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+  
+  const comments = globalComments.get(post.id) || [];
+  res.json({ success: true, post: { ...post, commentsCount: comments.length } });
 });
 
 // POST /api/social/posts
@@ -141,11 +213,17 @@ router.post('/posts', (req, res) => {
     content, bookName: bookName || '', author: author || '',
     image: image || null, isPublic: isPublic !== false,
     userName, userEmail: userEmail || '',
-    likes: 0, comments: 0, shares: 0,
+    likes: 0, shares: 0,
     createdAt: new Date().toISOString()
   };
   globalPosts.unshift(post);
   if (globalPosts.length > 500) globalPosts = globalPosts.slice(0, 500);
+  
+  // Initialize empty comments array for this post
+  if (!globalComments.has(post.id)) {
+    globalComments.set(post.id, []);
+  }
+  
   res.json({ success: true, post });
 });
 
@@ -155,6 +233,121 @@ router.post('/posts/:id/like', (req, res) => {
   if (!post) return res.status(404).json({ success: false });
   post.likes = (post.likes || 0) + 1;
   res.json({ success: true, likes: post.likes });
+});
+
+// ─── COMMENTS ────────────────────────────────────────────────────────────────
+
+// GET /api/social/posts/:id/comments
+router.get('/posts/:id/comments', (req, res) => {
+  const comments = globalComments.get(req.params.id) || [];
+  // Sort by timestamp (newest first? or oldest first? Let's do oldest first for conversation flow)
+  const sortedComments = comments.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+  res.json({ success: true, comments: sortedComments });
+});
+
+// POST /api/social/posts/:id/comments
+router.post('/posts/:id/comments', (req, res) => {
+  const { userId, userName, userEmail, userInitials, content, parentId } = req.body;
+  const postId = req.params.id;
+  
+  if (!content || !userName) {
+    return res.status(400).json({ success: false, message: 'Content and userName required' });
+  }
+  
+  // Check if post exists
+  const post = globalPosts.find(p => p.id === postId);
+  if (!post) {
+    return res.status(404).json({ success: false, message: 'Post not found' });
+  }
+  
+  const comment = {
+    id: `comment_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    postId,
+    userId: userId || `user_${Date.now()}`,
+    userName,
+    userEmail: userEmail || '',
+    userInitials: userInitials || userName.slice(0, 2).toUpperCase(),
+    content,
+    timestamp: new Date().toISOString(),
+    parentId: parentId || null,
+    likes: 0
+  };
+  
+  const postComments = globalComments.get(postId) || [];
+  postComments.push(comment);
+  
+  // Keep only last 500 comments per post to prevent memory issues
+  if (postComments.length > 500) {
+    postComments.splice(0, postComments.length - 500);
+  }
+  
+  globalComments.set(postId, postComments);
+  
+  res.json({ success: true, comment });
+});
+
+// POST /api/social/comments/:id/like
+router.post('/comments/:id/like', (req, res) => {
+  const commentId = req.params.id;
+  let foundComment = null;
+  let foundPostId = null;
+  
+  // Search for the comment across all posts
+  for (const [postId, comments] of globalComments.entries()) {
+    const comment = comments.find(c => c.id === commentId);
+    if (comment) {
+      foundComment = comment;
+      foundPostId = postId;
+      break;
+    }
+  }
+  
+  if (!foundComment) {
+    return res.status(404).json({ success: false, message: 'Comment not found' });
+  }
+  
+  foundComment.likes = (foundComment.likes || 0) + 1;
+  
+  // Update in storage
+  const postComments = globalComments.get(foundPostId);
+  const updatedComments = postComments.map(c => 
+    c.id === commentId ? foundComment : c
+  );
+  globalComments.set(foundPostId, updatedComments);
+  
+  res.json({ success: true, likes: foundComment.likes });
+});
+
+// DELETE /api/social/comments/:id
+router.delete('/comments/:id', (req, res) => {
+  const commentId = req.params.id;
+  const { userId } = req.body; // For authorization
+  
+  let foundPostId = null;
+  
+  // Search for the comment across all posts
+  for (const [postId, comments] of globalComments.entries()) {
+    const comment = comments.find(c => c.id === commentId);
+    if (comment) {
+      // Check if user is authorized (optional - you can add more logic here)
+      foundPostId = postId;
+      break;
+    }
+  }
+  
+  if (!foundPostId) {
+    return res.status(404).json({ success: false, message: 'Comment not found' });
+  }
+  
+  // Remove comment and all its replies
+  const postComments = globalComments.get(foundPostId);
+  const filteredComments = postComments.filter(c => 
+    c.id !== commentId && c.parentId !== commentId
+  );
+  
+  globalComments.set(foundPostId, filteredComments);
+  
+  res.json({ success: true, message: 'Comment deleted' });
 });
 
 // ─── REVIEWS ─────────────────────────────────────────────────────────────────
