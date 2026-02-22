@@ -496,12 +496,13 @@ const InlinePostCard = ({ post, user, profileSrc, updateNotificationCount, onSha
 
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-bold text-gray-900 text-sm">{post.userName || 'Anonymous'}</span>
-              {isPostAuthor && (
-                <span className="text-[10px] px-2 py-0.5 bg-orange-500 text-white rounded-full font-bold">Admin</span>
-              )}
-              <span className="text-xs text-gray-400">{formatTimeAgo(post.createdAt || Date.now())}</span>
-            </div>
+  <span className="font-bold text-gray-900 text-sm">{post.userName || 'Anonymous'}</span>
+  {/* Only show Author/Admin badge if it's NOT the current user's post */}
+  {isPostAuthor && post.userEmail !== user.email && (
+    <span className="text-[10px] px-2 py-0.5 bg-orange-500 text-white rounded-full font-bold">Admin</span>
+  )}
+  <span className="text-xs text-gray-400">{formatTimeAgo(post.createdAt || Date.now())}</span>
+</div>
             {post.bookName && (
               <div className="flex items-center gap-1.5 mt-0.5">
                 <BookOpen className="w-3 h-3 text-orange-400" />
@@ -1705,8 +1706,48 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const [showCreateForm, setShowCreateCrewForm] = useState(false);
   const [newCrewData, setNewCrewData] = useState({ name: '', author: '', genre: '' });
   const [selectedTab, setSelectedTab] = useState('chat');
+  const [showCrewShare, setShowCrewShare] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+
+  // Crew Share Modal Component
+  const CrewShareModal = ({ crew, onClose }) => {
+    const shareUrl = window.location.href;
+    const shareText = `Join me in the "${crew.name}" reading crew on ReadCrew! We're discussing this book by ${crew.author}.`;
+    
+    const handlers = {
+      whatsapp: () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank'),
+      facebook: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank'),
+      twitter: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank'),
+      copyLink: () => { navigator.clipboard.writeText(shareUrl); alert('Link copied!'); }
+    };
+    
+    return (
+      <div className="fixed inset-0 bg-black/50 z-[70] flex items-end justify-center max-w-md mx-auto">
+        <div className="bg-white rounded-t-2xl w-full p-5">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-semibold">Share Crew</h3>
+            <button onClick={onClose}><X className="w-5 h-5" /></button>
+          </div>
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            {[
+              ['whatsapp','#25D366','W'], 
+              ['facebook','#1877F2','F'], 
+              ['twitter','#1DA1F2','T']
+            ].map(([key, color, letter]) => (
+              <button key={key} onClick={handlers[key]} className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg" style={{backgroundColor: color}}>{letter}</div>
+                <span className="text-xs text-gray-600 capitalize">{key}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={handlers.copyLink} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50">
+            <Link2 className="w-5 h-5 text-orange-500" /><span className="font-medium">Copy Link</span>
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   useEffect(() => {
     const loadCrews = async () => {
@@ -1858,14 +1899,27 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         <Toast />
         <div className="flex-shrink-0 bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setView('detail'); onViewChange?.('detail'); }} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
+            <button onClick={() => { setView('detail'); onViewChange?.('detail'); }} className="p-1 hover:bg-gray-100 rounded-full">
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            </button>
             <DynamicBookCover title={selectedCrew.name} author={selectedCrew.author} size="xs" />
             <div>
               <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
               <p className="text-xs text-gray-500">{crewMembers.length} members</p>
             </div>
           </div>
-          <button className="p-2 hover:bg-gray-100 rounded-full"><MoreHorizontal className="w-5 h-5 text-gray-600" /></button>
+          <div className="flex items-center gap-1">
+            <button 
+              onClick={() => setShowCrewShare(true)} 
+              className="p-2 hover:bg-gray-100 rounded-full"
+              title="Share Crew"
+            >
+              <Share2 className="w-5 h-5 text-gray-600" />
+            </button>
+            <button className="p-2 hover:bg-gray-100 rounded-full">
+              <MoreHorizontal className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
@@ -1886,7 +1940,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                       <div key={msg.id} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         <div className={`flex max-w-[78%] items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
                           {!isOwn && <div className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0">{msg.userInitials}</div>}
-                          <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#dcf8c6] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
+                          {/* CHANGED: Changed from bg-[#dcf8c6] to bg-[#FEF3E2] for orange theme */}
+                          <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#FEF3E2] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
                             {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
                             {msg.type === 'image' ? <img src={msg.content} alt="Shared" className="max-w-full rounded-xl max-h-60" /> : <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>}
                             <p className="text-[10px] text-gray-400 text-right mt-0.5">{formatTime(msg.timestamp)}{isOwn && <span className="ml-1 text-blue-400">✓✓</span>}</p>
@@ -1919,6 +1974,10 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
               </button>
             </div>
           </div>
+        )}
+
+        {showCrewShare && (
+          <CrewShareModal crew={selectedCrew} onClose={() => setShowCrewShare(false)} />
         )}
       </div>
     );
