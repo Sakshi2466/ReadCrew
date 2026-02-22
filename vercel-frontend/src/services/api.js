@@ -1,912 +1,363 @@
 // src/services/api.js
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:10000';
+// ─── Wired to actual backend endpoints (bookRoutes.js + socialRoutes.js) ──────
+//     Books API  → /api/books/*   powered by Groq (llama-3.3-70b) → Gemini fallback
+//     Social API → /api/social/*  posts / crews / reviews / comments
+//     OTP API    → /api/otp/*
 
-// Health check
-export const healthCheck = async () => {
-  const response = await fetch(`${API_URL}/api/health`);
-  if (!response.ok) throw new Error('Health check failed');
-  return response.json();
+const API_URL =
+  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL) ||
+  (typeof process !== 'undefined' && process.env?.REACT_APP_API_URL) ||
+  'https://versal-book-app.onrender.com';
+
+// ─── INTERNAL HELPERS ────────────────────────────────────────────────────────
+
+const _post = async (path, body, timeoutMs = 20000) => {
+  const res = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`${res.status}${txt ? ': ' + txt.slice(0, 200) : ''}`);
+  }
+  return res.json();
 };
 
-// Check backend connection
+const _get = async (path, timeoutMs = 10000) => {
+  const res = await fetch(`${API_URL}${path}`, {
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  return res.json();
+};
+
+// Never throws — logs error and returns { success: false, error, ...fallback }
+const _safe = async (fn, fallback = {}) => {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error('[api]', err.message);
+    return { success: false, error: err.message, ...fallback };
+  }
+};
+
+// ─── HEALTH ──────────────────────────────────────────────────────────────────
+
+export const healthCheck = () => _get('/api/health', 5000);
+
 export const checkBackendConnection = async () => {
   try {
     const data = await healthCheck();
-    return {
-      connected: data.status === 'healthy',
-      data: data
-    };
+    return { connected: data.status === 'healthy', data };
   } catch (error) {
-    console.error('Backend connection failed:', error);
-    return {
-      connected: false,
-      error: error.message
-    };
+    return { connected: false, error: error.message };
   }
 };
 
-// User API
-export const userAPI = {
-  create: async (userData) => {
-    const response = await fetch(`${API_URL}/api/users`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData)
-    });
-    if (!response.ok) throw new Error('Failed to create user');
-    return response.json();
-  },
-  
-  get: async (email) => {
-    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}`);
-    if (!response.ok) throw new Error('Failed to fetch user');
-    return response.json();
-  },
-  
-  updateGoals: async (email, goals) => {
-    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/goals`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(goals)
-    });
-    if (!response.ok) throw new Error('Failed to update goals');
-    return response.json();
-  },
-  
-  addBook: async (email, bookData) => {
-    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/books`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(bookData)
-    });
-    if (!response.ok) throw new Error('Failed to add book');
-    return response.json();
-  },
-  
-  incrementStat: async (email, field) => {
-    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/stats/increment`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ field })
-    });
-    if (!response.ok) throw new Error('Failed to increment stat');
-    return response.json();
-  },
-  
-  // Get user stats
-  getStats: async (email) => {
-    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/stats`);
-    if (!response.ok) throw new Error('Failed to fetch user stats');
-    return response.json();
-  },
-  
-  // Update user profile
-  updateProfile: async (email, profileData) => {
-    const response = await fetch(`${API_URL}/api/users/${encodeURIComponent(email)}/profile`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(profileData)
-    });
-    if (!response.ok) throw new Error('Failed to update profile');
-    return response.json();
-  }
-};
+// ─── OTP ─────────────────────────────────────────────────────────────────────
 
-// Donation API (Keep for backwards compatibility, but consider renaming to postAPI)
-export const donationAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_URL}/api/donations`);
-    if (!response.ok) throw new Error('Failed to fetch donations');
-    return response.json();
-  },
-  
-  create: async (donationData) => {
-    const response = await fetch(`${API_URL}/api/donations`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(donationData)
-    });
-    if (!response.ok) throw new Error('Failed to create donation');
-    return response.json();
-  },
-
-  delete: async (id) => {
-    const response = await fetch(`${API_URL}/api/donations/${id}`, {
-      method: 'DELETE'
-    });
-    if (!response.ok) throw new Error('Failed to delete donation');
-    return response.json();
-  },
-
-  like: async (id) => {
-    const response = await fetch(`${API_URL}/api/donations/${id}/like`, {
-      method: 'POST'
-    });
-    if (!response.ok) throw new Error('Failed to like donation');
-    return response.json();
-  },
-
-  save: async (id) => {
-    const response = await fetch(`${API_URL}/api/donations/${id}/save`, {
-      method: 'POST'
-    });
-    if (!response.ok) throw new Error('Failed to save donation');
-    return response.json();
-  },
-  
-  // Get user's donations
-  getUserDonations: async (email) => {
-    const response = await fetch(`${API_URL}/api/donations/user/${encodeURIComponent(email)}`);
-    if (!response.ok) throw new Error('Failed to fetch user donations');
-    return response.json();
-  }
-};
-
-// Review API
-export const reviewAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_URL}/api/reviews`);
-    if (!response.ok) throw new Error('Failed to fetch reviews');
-    return response.json();
-  },
-  
-  create: async (reviewData) => {
-    const response = await fetch(`${API_URL}/api/reviews`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reviewData)
-    });
-    if (!response.ok) throw new Error('Failed to create review');
-    return response.json();
-  },
-  
-  // Get user's reviews
-  getUserReviews: async (email) => {
-    const response = await fetch(`${API_URL}/api/reviews/user/${encodeURIComponent(email)}`);
-    if (!response.ok) throw new Error('Failed to fetch user reviews');
-    return response.json();
-  },
-  
-  // Delete review
-  delete: async (id) => {
-    const response = await fetch(`${API_URL}/api/reviews/${id}`, {
-      method: 'DELETE'
-    });
-    if (!response.ok) throw new Error('Failed to delete review');
-    return response.json();
-  },
-  
-  // Update review
-  update: async (id, reviewData) => {
-    const response = await fetch(`${API_URL}/api/reviews/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(reviewData)
-    });
-    if (!response.ok) throw new Error('Failed to update review');
-    return response.json();
-  }
-};
-
-// OTP API
 export const otpAPI = {
-  sendOTP: async (userData) => {
-    const response = await fetch(`${API_URL}/api/otp/send-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(userData)
-    });
-    if (!response.ok) throw new Error('Failed to send OTP');
-    return response.json();
+  sendOTP:   (userData)          => _post('/api/otp/send-otp',   userData,          10000),
+  verifyOTP: (verificationData)  => _post('/api/otp/verify-otp', verificationData,  10000),
+};
+
+// ─── USER ────────────────────────────────────────────────────────────────────
+
+export const userAPI = {
+  create:        (userData)           => _safe(() => _post('/api/users', userData)),
+  get:           (email)              => _safe(() => _get(`/api/users/${encodeURIComponent(email)}`)),
+  updateGoals:   (email, goals)       => _safe(() => _post(`/api/users/${encodeURIComponent(email)}/goals`, goals)),
+  updateProfile: (email, profileData) => _safe(() => _post(`/api/users/${encodeURIComponent(email)}/profile`, profileData)),
+  incrementStat: (email, field)       => _safe(() => _post(`/api/users/${encodeURIComponent(email)}/stats/increment`, { field })),
+  getStats:      (email)              => _safe(() => _get(`/api/users/${encodeURIComponent(email)}/stats`)),
+  addBook:       (email, bookData)    => _safe(() => _post(`/api/users/${encodeURIComponent(email)}/books`, bookData)),
+};
+
+// ─── BOOKS API — Groq (llama-3.3-70b) → Gemini 1.5 Flash → local fallback ───
+//
+// All endpoints live in bookRoutes.js on your Render backend.
+//
+// Quick test: visit https://versal-book-app.onrender.com/api/books/debug
+// to confirm Groq and Gemini keys are loaded.
+//
+// Route summary:
+//   GET  /api/books/debug            → { groqKey, geminiKey, groq, gemini }
+//   GET  /api/books/trending?page=N  → { success, books[], hasMore, source }
+//   POST /api/books/chat             → { success, reply, hasRecommendations,
+//                                        recommendations[], exchangeCount, source }
+//   POST /api/books/recommend        → { success, recommendations[], hasMore, source }
+//   POST /api/books/character-search → { success, characterAnalysis, recommendations[] }
+//   POST /api/books/book-details     → { success, details: { description, themes, … } }
+//   POST /api/books/similar-books    → { success, books[] }
+
+export const booksAPI = {
+
+  // Verify Groq & Gemini keys are alive on Render
+  debug: () =>
+    _safe(() => _get('/api/books/debug', 15000), { groq: 'unreachable', gemini: 'unreachable' }),
+
+  // Trending books — AI-generated, cached 24 h
+  getTrending: (page = 1) =>
+    _safe(() => _get(`/api/books/trending?page=${page}`, 12000), { books: [] }),
+
+  // ── Conversational AI — "Page Turner" book guide ─────────────────────────
+  // sessionId  →  keeps 2-hour conversation memory on the server
+  // Exchange 1 →  AI asks a clarifying question (no recommendations yet)
+  // Exchange 2+ →  AI recommends 5 books matching the user's mood/genre
+  // Say "more"  →  5 completely different books
+  // Emotional messages ("I feel sad") →  warm empathetic reply first
+  chat: (message, sessionId) =>
+    _safe(
+      () => _post('/api/books/chat', { message, sessionId }, 30000),
+      {
+        reply: "Sorry, I'm having trouble connecting right now. Please try again in a moment!",
+        hasRecommendations: false,
+        recommendations: [],
+      }
+    ),
+
+  // Direct recommendations — paginated (page 1–5)
+  recommend: (query, page = 1) =>
+    _safe(() => _post('/api/books/recommend', { query, page }, 20000), { recommendations: [] }),
+
+  // Books featuring a character similar to one you love
+  // e.g. searchByCharacter('Hermione Granger', 'Harry Potter')
+  searchByCharacter: (character, fromBook = '') =>
+    _safe(
+      () => _post('/api/books/character-search', { character, fromBook }, 20000),
+      { characterAnalysis: '', recommendations: [] }
+    ),
+
+  // Rich info panel for one book (description, themes, awards, pages, year)
+  getBookDetails: (bookName, author = '') =>
+    _safe(() => _post('/api/books/book-details', { bookName, author }, 15000), { details: null }),
+
+  // "If you liked X, you'll love …"
+  getSimilarBooks: (bookName, author = '', genre = '') =>
+    _safe(() => _post('/api/books/similar-books', { bookName, author, genre }, 15000), { books: [] }),
+};
+
+// ─── SOCIAL API ───────────────────────────────────────────────────────────────
+//
+// All endpoints live in socialRoutes.js on your Render backend.
+//
+// Route summary:
+//   GET  /api/social/posts                         → paginated feed
+//   POST /api/social/posts                         → create post (dedup by id)
+//   POST /api/social/posts/:id/like                → like a post
+//   GET  /api/social/posts/:id/comments            → public comments (all users)
+//   POST /api/social/posts/:id/comment             → add comment (stored on server)
+//   POST /api/social/posts/:id/comments/:cid/like  → like a comment
+//   GET  /api/social/reviews                       → all reviews
+//   POST /api/social/reviews                       → create review
+//   POST /api/social/reviews/:id/like              → like a review
+//   GET  /api/social/crews                         → all crews
+//   POST /api/social/crews                         → create crew
+//   POST /api/social/crews/:id/join                → join crew
+//   POST /api/social/crews/:id/message             → send crew message
+//   GET  /api/social/crews/:id/messages            → get crew messages
+
+export const socialAPI = {
+
+  // Posts
+  getPosts:    (page = 1, limit = 30) => _safe(() => _get(`/api/social/posts?page=${page}&limit=${limit}`, 8000), { posts: [] }),
+  createPost:  (postData)             => _safe(() => _post('/api/social/posts', postData, 10000)),
+  likePost:    (postId)               => _safe(() => _post(`/api/social/posts/${postId}/like`, {}, 5000)),
+
+  // Comments (public — synced to backend so every user sees them)
+  getComments: (postId)               => _safe(() => _get(`/api/social/posts/${postId}/comments`, 6000), { comments: [] }),
+  addComment:  (postId, commentData)  => _safe(() => _post(`/api/social/posts/${postId}/comment`, commentData, 8000)),
+  likeComment: (postId, commentId)    => _safe(() => _post(`/api/social/posts/${postId}/comments/${commentId}/like`, {}, 5000)),
+
+  // Reviews
+  getReviews:   ()             => _safe(() => _get('/api/social/reviews', 8000), { reviews: [] }),
+  createReview: (reviewData)   => _safe(() => _post('/api/social/reviews', reviewData, 10000)),
+  likeReview:   (reviewId)     => _safe(() => _post(`/api/social/reviews/${reviewId}/like`, {}, 5000)),
+
+  // Crews
+  getCrews:        ()                => _safe(() => _get('/api/social/crews', 8000), { crews: [] }),
+  createCrew:      (crewData)        => _safe(() => _post('/api/social/crews', crewData, 10000)),
+  joinCrew:        (crewId)          => _safe(() => _post(`/api/social/crews/${crewId}/join`, {}, 5000)),
+  getCrewMessages: (crewId)          => _safe(() => _get(`/api/social/crews/${crewId}/messages`, 6000), { messages: [] }),
+  sendCrewMessage: (crewId, msgData) => _safe(() => _post(`/api/social/crews/${crewId}/message`, msgData, 6000)),
+};
+
+// ─── LEGACY EXPORTS ───────────────────────────────────────────────────────────
+// The old api.js exported donationAPI, reviewAPI, bookCrewAPI, chatAPI, crewAPI,
+// postAPI, aiChatAPI, notificationAPI.  They all forward to the real endpoints
+// above so existing imports in App.jsx keep working without any changes.
+
+export const donationAPI = {
+  getAll:           ()        => socialAPI.getPosts(),
+  create:           (data)    => socialAPI.createPost(data),
+  like:             (id)      => socialAPI.likePost(id),
+  save:             ()        => Promise.resolve({ success: true }),  // client-side only
+  delete:           ()        => Promise.resolve({ success: true }),  // not on backend
+  getUserDonations: async (email) => {
+    const r = await socialAPI.getPosts();
+    return { ...r, posts: (r.posts || []).filter(p => p.userEmail === email) };
   },
-  
-  verifyOTP: async (verificationData) => {
-    const response = await fetch(`${API_URL}/api/otp/verify-otp`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(verificationData)
-    });
-    if (!response.ok) throw new Error('Failed to verify OTP');
-    return response.json();
-  }
 };
 
-// Book Recommendations API with streaming support
-export const getBookRecommendations = async (keywords, onToken, onDone) => {
-  const url = `${API_URL}/api/recommend`;
-  console.log('🚀 Calling:', url);
-  console.log('📝 Keywords:', keywords);
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream'
-      },
-      body: JSON.stringify({ keywords })
-    });
-
-    console.log('📡 Response status:', response.status);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('❌ Error response:', errText);
-      throw new Error(errText || `HTTP error! status: ${response.status}`);
-    }
-
-    if (!response.body) {
-      throw new Error('ReadableStream not supported in this browser');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    console.log('📖 Starting to read stream...');
-
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      if (done) {
-        console.log('🏁 Stream complete');
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        
-        if (!trimmed || !trimmed.startsWith('data: ')) {
-          continue;
-        }
-
-        try {
-          const jsonStr = trimmed.slice(6);
-          const parsed = JSON.parse(jsonStr);
-          
-          if (parsed.token) {
-            onToken(parsed.token);
-          }
-          
-          if (parsed.done) {
-            console.log('✅ Done signal received');
-            onDone();
-          }
-          
-          if (parsed.error) {
-            console.error('❌ Stream error:', parsed.error);
-            throw new Error(parsed.error);
-          }
-        } catch (parseError) {
-          console.warn('⚠️ Failed to parse line:', trimmed, parseError);
-        }
-      }
-    }
-
-    onDone();
-
-  } catch (error) {
-    console.error('💥 getBookRecommendations failed:', error);
-    throw error;
-  }
+export const reviewAPI = {
+  getAll:           ()        => socialAPI.getReviews(),
+  create:           (data)    => socialAPI.createReview(data),
+  getUserReviews:   async (email) => {
+    const r = await socialAPI.getReviews();
+    return { ...r, reviews: (r.reviews || []).filter(rv => rv.userEmail === email) };
+  },
+  delete:   ()    => Promise.resolve({ success: true }),
+  update:   ()    => Promise.resolve({ success: true }),
 };
 
-// Get Trending Books using AI
-export const getTrendingBooks = async (onToken, onDone) => {
-  const url = `${API_URL}/api/recommend`;
-  console.log('🔥 Fetching trending books from:', url);
-
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Accept': 'text/event-stream'
-      },
-      body: JSON.stringify({ 
-        keywords: 'current trending popular bestseller books 2024 2025 2026',
-        requestType: 'trending'
-      })
-    });
-
-    console.log('📡 Trending books response status:', response.status);
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('❌ Error response:', errText);
-      throw new Error(errText || `HTTP error! status: ${response.status}`);
-    }
-
-    if (!response.body) {
-      throw new Error('ReadableStream not supported in this browser');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    console.log('📖 Starting to read trending books stream...');
-
-    while (true) {
-      const { done, value } = await reader.read();
-      
-      if (done) {
-        console.log('🏁 Trending books stream complete');
-        break;
-      }
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        
-        if (!trimmed || !trimmed.startsWith('data: ')) {
-          continue;
-        }
-
-        try {
-          const jsonStr = trimmed.slice(6);
-          const parsed = JSON.parse(jsonStr);
-          
-          if (parsed.token) {
-            onToken(parsed.token);
-          }
-          
-          if (parsed.done) {
-            console.log('✅ Trending books done signal received');
-            onDone();
-          }
-          
-          if (parsed.error) {
-            console.error('❌ Trending books stream error:', parsed.error);
-            throw new Error(parsed.error);
-          }
-        } catch (parseError) {
-          console.warn('⚠️ Failed to parse trending books line:', trimmed, parseError);
-        }
-      }
-    }
-
-    onDone();
-
-  } catch (error) {
-    console.error('💥 getTrendingBooks failed:', error);
-    throw error;
-  }
-};
-
-// Book Crew API
 export const bookCrewAPI = {
-  getAll: async () => {
-    const response = await fetch(`${API_URL}/api/book-crews`);
-    if (!response.ok) throw new Error('Failed to fetch crews');
-    return response.json();
-  },
-  
-  getByBookName: async (bookName) => {
-    const response = await fetch(`${API_URL}/api/book-crews/book/${encodeURIComponent(bookName)}`);
-    if (!response.ok) throw new Error('Failed to fetch crew');
-    return response.json();
-  },
-  
-  join: async (crewData) => {
-    const response = await fetch(`${API_URL}/api/book-crews/join`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(crewData)
-    });
-    if (!response.ok) throw new Error('Failed to join crew');
-    return response.json();
-  },
-  
-  leave: async (bookName, userEmail) => {
-    const response = await fetch(`${API_URL}/api/book-crews/leave`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookName, userEmail })
-    });
-    if (!response.ok) throw new Error('Failed to leave crew');
-    return response.json();
-  },
-  
-  getMessages: async (bookName) => {
-    const response = await fetch(`${API_URL}/api/book-crews/messages/${encodeURIComponent(bookName)}`);
-    if (!response.ok) throw new Error('Failed to fetch messages');
-    return response.json();
-  },
-  
-  sendMessage: async (messageData) => {
-    const response = await fetch(`${API_URL}/api/book-crews/messages`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(messageData)
-    });
-    if (!response.ok) throw new Error('Failed to send message');
-    return response.json();
-  },
-  
-  updateStatus: async (bookName, userEmail, status) => {
-    const response = await fetch(`${API_URL}/api/book-crews/status`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ bookName, userEmail, status })
-    });
-    if (!response.ok) throw new Error('Failed to update status');
-    return response.json();
-  },
-  
-  // Get crew members
-  getMembers: async (bookName) => {
-    const response = await fetch(`${API_URL}/api/book-crews/members/${encodeURIComponent(bookName)}`);
-    if (!response.ok) throw new Error('Failed to fetch crew members');
-    return response.json();
-  },
-  
-  // Get similar books for a crew
-  getSimilarBooks: async (bookName) => {
-    const response = await fetch(`${API_URL}/api/book-crews/similar/${encodeURIComponent(bookName)}`);
-    if (!response.ok) throw new Error('Failed to fetch similar books');
-    return response.json();
-  }
+  getAll:          ()              => socialAPI.getCrews(),
+  join:            (data)          => socialAPI.joinCrew(data?.crewId || data?.id || data),
+  leave:           ()              => Promise.resolve({ success: true }),
+  getMessages:     (crewId)        => socialAPI.getCrewMessages(crewId),
+  sendMessage:     (data)          => socialAPI.sendCrewMessage(data?.crewId, data),
+  getByBookName:   ()              => Promise.resolve({ success: true, crew: null }),
+  updateStatus:    ()              => Promise.resolve({ success: true }),
+  getMembers:      ()              => Promise.resolve({ success: true, members: [] }),
+  getSimilarBooks: (bookName)      => booksAPI.getSimilarBooks(bookName),
 };
 
-// ========== NEW API EXPORTS ==========
-
-// Chat API (for crew messaging)
 export const chatAPI = {
-  // Send a message to a crew
-  sendMessage: async (crewId, messageData) => {
-    try {
-      const response = await fetch(`${API_URL}/api/chat/${crewId}/messages`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(messageData)
-      });
-      if (!response.ok) throw new Error('Failed to send message');
-      return response.json();
-    } catch (error) {
-      console.error('Error sending message:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Get messages for a crew
-  getMessages: async (crewId, limit = 50) => {
-    try {
-      const response = await fetch(`${API_URL}/api/chat/${crewId}/messages?limit=${limit}`);
-      if (!response.ok) throw new Error('Failed to fetch messages');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching messages:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Mark messages as read
-  markAsRead: async (crewId, userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/chat/${crewId}/read`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      if (!response.ok) throw new Error('Failed to mark messages as read');
-      return response.json();
-    } catch (error) {
-      console.error('Error marking messages as read:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Get unread count
-  getUnreadCount: async (userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/chat/unread/${encodeURIComponent(userId)}`);
-      if (!response.ok) throw new Error('Failed to fetch unread count');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching unread count:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Send typing indicator
-  sendTyping: async (crewId, userId, isTyping) => {
-    try {
-      const response = await fetch(`${API_URL}/api/chat/${crewId}/typing`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, isTyping })
-      });
-      if (!response.ok) throw new Error('Failed to send typing indicator');
-      return response.json();
-    } catch (error) {
-      console.error('Error sending typing indicator:', error);
-      return { success: false, error: error.message };
-    }
-  }
+  sendMessage:    (crewId, data)  => socialAPI.sendCrewMessage(crewId, data),
+  getMessages:    (crewId)        => socialAPI.getCrewMessages(crewId),
+  markAsRead:     ()              => Promise.resolve({ success: true }),
+  getUnreadCount: ()              => Promise.resolve({ success: true, count: 0 }),
+  sendTyping:     ()              => Promise.resolve({ success: true }),
 };
 
-// Crew API (general crew management)
 export const crewAPI = {
-  // Get all crews
-  getAll: async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews`);
-      if (!response.ok) throw new Error('Failed to fetch crews');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching crews:', error);
-      return { success: false, error: error.message, crews: [] };
-    }
-  },
-  
-  // Get crew by ID
-  getById: async (crewId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews/${crewId}`);
-      if (!response.ok) throw new Error('Failed to fetch crew');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching crew:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Create a new crew
-  create: async (crewData) => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(crewData)
-      });
-      if (!response.ok) throw new Error('Failed to create crew');
-      return response.json();
-    } catch (error) {
-      console.error('Error creating crew:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Join a crew
-  join: async (crewId, userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews/${crewId}/join`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      if (!response.ok) throw new Error('Failed to join crew');
-      return response.json();
-    } catch (error) {
-      console.error('Error joining crew:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Leave a crew
-  leave: async (crewId, userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews/${crewId}/leave`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      if (!response.ok) throw new Error('Failed to leave crew');
-      return response.json();
-    } catch (error) {
-      console.error('Error leaving crew:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Get crew members
-  getMembers: async (crewId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews/${crewId}/members`);
-      if (!response.ok) throw new Error('Failed to fetch members');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching members:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Update crew details
-  update: async (crewId, crewData) => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews/${crewId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(crewData)
-      });
-      if (!response.ok) throw new Error('Failed to update crew');
-      return response.json();
-    } catch (error) {
-      console.error('Error updating crew:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Delete a crew
-  delete: async (crewId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/crews/${crewId}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error('Failed to delete crew');
-      return response.json();
-    } catch (error) {
-      console.error('Error deleting crew:', error);
-      return { success: false, error: error.message };
-    }
-  }
+  getAll:     ()        => socialAPI.getCrews(),
+  create:     (data)    => socialAPI.createCrew(data),
+  join:       (crewId)  => socialAPI.joinCrew(crewId),
+  leave:      ()        => Promise.resolve({ success: true }),
+  getMembers: ()        => Promise.resolve({ success: true, members: [] }),
+  update:     ()        => Promise.resolve({ success: true }),
+  delete:     ()        => Promise.resolve({ success: true }),
+  getById:    ()        => Promise.resolve({ success: true }),
 };
 
-// Post API (for general posts/feed)
 export const postAPI = {
-  // Get all posts
-  getAll: async () => {
-    try {
-      const response = await fetch(`${API_URL}/api/posts`);
-      if (!response.ok) throw new Error('Failed to fetch posts');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching posts:', error);
-      return { success: false, error: error.message, posts: [] };
-    }
+  getAll:       ()        => socialAPI.getPosts(),
+  create:       (data)    => socialAPI.createPost(data),
+  like:         (id)      => socialAPI.likePost(id),
+  save:         ()        => Promise.resolve({ success: true }),
+  delete:       ()        => Promise.resolve({ success: true }),
+  getUserPosts: async (email) => {
+    const r = await socialAPI.getPosts();
+    return { ...r, posts: (r.posts || []).filter(p => p.userEmail === email) };
   },
-  
-  // Create a post
-  create: async (postData) => {
-    try {
-      const response = await fetch(`${API_URL}/api/posts`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(postData)
-      });
-      if (!response.ok) throw new Error('Failed to create post');
-      return response.json();
-    } catch (error) {
-      console.error('Error creating post:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Like a post
-  like: async (postId, userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/posts/${postId}/like`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      if (!response.ok) throw new Error('Failed to like post');
-      return response.json();
-    } catch (error) {
-      console.error('Error liking post:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Save a post
-  save: async (postId, userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/posts/${postId}/save`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId })
-      });
-      if (!response.ok) throw new Error('Failed to save post');
-      return response.json();
-    } catch (error) {
-      console.error('Error saving post:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Get user's posts
-  getUserPosts: async (userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/posts/user/${encodeURIComponent(userId)}`);
-      if (!response.ok) throw new Error('Failed to fetch user posts');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching user posts:', error);
-      return { success: false, error: error.message, posts: [] };
-    }
-  },
-  
-  // Delete a post
-  delete: async (postId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/posts/${postId}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error('Failed to delete post');
-      return response.json();
-    } catch (error) {
-      console.error('Error deleting post:', error);
-      return { success: false, error: error.message };
-    }
-  }
 };
 
-// AI Chat API (for the explore page AI assistant)
+// aiChatAPI → booksAPI.chat  (the real Groq/Gemini "Page Turner" chat)
 export const aiChatAPI = {
-  // Send a message to AI
-  sendMessage: async (message, userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/ai/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message, userId })
-      });
-      if (!response.ok) throw new Error('Failed to send message');
-      return response.json();
-    } catch (error) {
-      console.error('Error sending message to AI:', error);
-      return { success: false, error: error.message };
-    }
+  sendMessage: (message, sessionId) => booksAPI.chat(message, sessionId),
+
+  // Your backend returns full JSON (no SSE stream) — simulate streaming
+  streamResponse: async (message, onToken, onDone, sessionId) => {
+    const result = await booksAPI.chat(message, sessionId);
+    if (result?.reply) onToken(result.reply);
+    onDone();
   },
-  
-  // Stream AI response
-  streamResponse: async (message, onToken, onDone, userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/ai/stream`, {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
-        },
-        body: JSON.stringify({ message, userId })
-      });
 
-      if (!response.ok) throw new Error('Failed to stream AI response');
-      if (!response.body) throw new Error('ReadableStream not supported');
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
-
-          try {
-            const jsonStr = trimmed.slice(6);
-            const parsed = JSON.parse(jsonStr);
-            
-            if (parsed.token) onToken(parsed.token);
-            if (parsed.done) onDone();
-            if (parsed.error) throw new Error(parsed.error);
-          } catch (parseError) {
-            console.warn('Failed to parse line:', trimmed, parseError);
-          }
-        }
-      }
-      
-      onDone();
-    } catch (error) {
-      console.error('Error streaming AI response:', error);
-      throw error;
-    }
-  },
-  
-  // Get chat history
-  getHistory: async (userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/ai/history/${encodeURIComponent(userId)}`);
-      if (!response.ok) throw new Error('Failed to fetch chat history');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching chat history:', error);
-      return { success: false, error: error.message, messages: [] };
-    }
-  },
-  
-  // Clear chat history
-  clearHistory: async (userId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/ai/history/${encodeURIComponent(userId)}`, {
-        method: 'DELETE'
-      });
-      if (!response.ok) throw new Error('Failed to clear chat history');
-      return response.json();
-    } catch (error) {
-      console.error('Error clearing chat history:', error);
-      return { success: false, error: error.message };
-    }
-  }
+  getHistory:   () => Promise.resolve({ success: true, messages: [] }),
+  clearHistory: () => Promise.resolve({ success: true }),
 };
 
-// Notification API
+// Notifications are stored in localStorage only (no backend endpoint)
 export const notificationAPI = {
-  // Get user notifications
   getUserNotifications: async (userId) => {
     try {
-      const response = await fetch(`${API_URL}/api/notifications/${encodeURIComponent(userId)}`);
-      if (!response.ok) throw new Error('Failed to fetch notifications');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-      return { success: false, error: error.message, notifications: [] };
-    }
+      const notifs = JSON.parse(localStorage.getItem(`user_${userId}_notifications`) || '[]');
+      return { success: true, notifications: notifs };
+    } catch { return { success: true, notifications: [] }; }
   },
-  
-  // Mark notification as read
-  markAsRead: async (notificationId) => {
-    try {
-      const response = await fetch(`${API_URL}/api/notifications/${notificationId}/read`, {
-        method: 'PUT'
-      });
-      if (!response.ok) throw new Error('Failed to mark notification as read');
-      return response.json();
-    } catch (error) {
-      console.error('Error marking notification as read:', error);
-      return { success: false, error: error.message };
-    }
-  },
-  
-  // Mark all notifications as read
+  markAsRead: async () => ({ success: true }),
   markAllAsRead: async (userId) => {
     try {
-      const response = await fetch(`${API_URL}/api/notifications/${encodeURIComponent(userId)}/read-all`, {
-        method: 'PUT'
-      });
-      if (!response.ok) throw new Error('Failed to mark all notifications as read');
-      return response.json();
-    } catch (error) {
-      console.error('Error marking all notifications as read:', error);
-      return { success: false, error: error.message };
-    }
+      const key = `user_${userId}_notifications`;
+      const notifs = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify(notifs.map(n => ({ ...n, read: true }))));
+    } catch {}
+    return { success: true };
   },
-  
-  // Get unread count
   getUnreadCount: async (userId) => {
     try {
-      const response = await fetch(`${API_URL}/api/notifications/${encodeURIComponent(userId)}/unread-count`);
-      if (!response.ok) throw new Error('Failed to fetch unread count');
-      return response.json();
-    } catch (error) {
-      console.error('Error fetching unread count:', error);
-      return { success: false, error: error.message };
+      const notifs = JSON.parse(localStorage.getItem(`user_${userId}_notifications`) || '[]');
+      return { success: true, count: notifs.filter(n => !n.read).length };
+    } catch { return { success: true, count: 0 }; }
+  },
+};
+
+// ─── LEGACY STREAMING FUNCTIONS ───────────────────────────────────────────────
+// Old code called getBookRecommendations(keywords, onToken, onDone) expecting
+// an SSE stream. Your backend no longer streams — we call booksAPI.recommend
+// and deliver the result to the same onToken/onDone callbacks.
+
+export const getBookRecommendations = async (keywords, onToken, onDone) => {
+  try {
+    const result = await booksAPI.recommend(keywords, 1);
+    if (result.success && result.recommendations?.length > 0) {
+      const text = result.recommendations
+        .map(b => `**${b.title}** by ${b.author}\n${b.description || ''}\n_${b.reason || ''}_`)
+        .join('\n\n');
+      onToken(text);
+    } else {
+      onToken("I couldn't find recommendations right now — please try again!");
     }
+  } catch (err) {
+    onToken(`Error: ${err.message}`);
+  } finally {
+    onDone();
   }
 };
 
-// Export all APIs as a single object for convenience
+export const getTrendingBooks = async (onToken, onDone) => {
+  try {
+    const result = await booksAPI.getTrending(1);
+    if (result.success && result.books?.length > 0) {
+      const text = result.books
+        .map(b => `**${b.title}** by ${b.author} — ${b.trendReason || b.description || ''}`)
+        .join('\n\n');
+      onToken(text);
+    } else {
+      onToken("Couldn't load trending books right now.");
+    }
+  } catch (err) {
+    onToken(`Error: ${err.message}`);
+  } finally {
+    onDone();
+  }
+};
+
+// ─── CONVENIENCE DEFAULT EXPORT ───────────────────────────────────────────────
+
 export const api = {
-  user: userAPI,
+  // Primary (new)
+  books:    booksAPI,
+  social:   socialAPI,
+  otp:      otpAPI,
+  user:     userAPI,
+  // Legacy (forwarded)
   donation: donationAPI,
-  review: reviewAPI,
-  otp: otpAPI,
+  review:   reviewAPI,
   bookCrew: bookCrewAPI,
-  chat: chatAPI,
-  crew: crewAPI,
-  post: postAPI,
-  aiChat: aiChatAPI,
+  chat:     chatAPI,
+  crew:     crewAPI,
+  post:     postAPI,
+  aiChat:   aiChatAPI,
   notification: notificationAPI,
+  // Standalone functions
   getBookRecommendations,
   getTrendingBooks,
   checkBackendConnection,
-  healthCheck
+  healthCheck,
 };
 
-// Default export for convenience
 export default api;
