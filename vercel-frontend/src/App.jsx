@@ -37,7 +37,7 @@ const DynamicBookCover = ({ title, author, className = 'w-32 h-40', onClick, siz
     setIsLoading(true); setError(false);
     const query = author ? `${title} ${author}`.trim() : title;
 
-    // ── Strategy 1: Google Books API (most reliable, no key needed for basic use) ──
+    // ── Strategy 1: Google Books API ──
     try {
       const res = await fetch(
         `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1&projection=lite`,
@@ -49,7 +49,6 @@ const DynamicBookCover = ({ title, author, className = 'w-32 h-40', onClick, siz
         if (links) {
           const raw = links.extraLarge || links.large || links.medium || links.thumbnail || links.smallThumbnail;
           if (raw) {
-            // Force HTTPS, higher zoom, no curl effect
             const clean = raw.replace('http:', 'https:').replace('&edge=curl', '').replace(/zoom=\d/, 'zoom=3');
             setCoverUrl(clean);
             setIsLoading(false);
@@ -73,15 +72,6 @@ const DynamicBookCover = ({ title, author, className = 'w-32 h-40', onClick, siz
         else if (book?.isbn?.length > 0) cover = `https://covers.openlibrary.org/b/isbn/${book.isbn[0]}-L.jpg`;
         else if (book?.cover_edition_key) cover = `https://covers.openlibrary.org/b/olid/${book.cover_edition_key}-L.jpg`;
         if (cover) { setCoverUrl(cover); setIsLoading(false); return; }
-      }
-    } catch { /* fall through */ }
-
-    // ── Strategy 3: Open Library cover by title search directly ──
-    try {
-      const titleOnly = encodeURIComponent(title.split(' ').slice(0, 3).join(' '));
-      const res = await fetch(`https://covers.openlibrary.org/b/title/${titleOnly}-L.jpg`, { signal: AbortSignal.timeout(3000) });
-      if (res.ok && res.headers.get('content-type')?.startsWith('image')) {
-        setCoverUrl(res.url); setIsLoading(false); return;
       }
     } catch { /* fall through */ }
 
