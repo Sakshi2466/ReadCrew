@@ -86,6 +86,8 @@ const otpRoutes = require('./routes/otp');
 const recommendRoutes = require('./routes/recommend');
 const bookCrewRoutes = require('./routes/bookCrew');
 const userRoutes = require('./routes/user');
+const socialRoutes = require('./routes/social');
+
 
 // Mount routes ONCE (no duplicates!)
 app.use('/api/auth', authRoutes);
@@ -95,6 +97,7 @@ app.use('/api/otp', otpRoutes);
 app.use('/api/recommend', recommendRoutes);
 app.use('/api/book-crews', bookCrewRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/social', socialRoutes);
 
 // Socket.IO for real-time chat
 const CrewMessage = require('./models/CrewMessage');
