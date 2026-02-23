@@ -1,442 +1,836 @@
+// routes/socialRoutes.js
+// ─── PUBLIC SOCIAL FEATURES ────────────────────────────────────────────────────
+// All data is stored in server-side memory so EVERY user sees the same
+// comments, likes, and profile photos — no more per-device localStorage silos.
+//
+// Route map:
+//   POSTS
+//     GET  /api/social/posts                         paginated feed (newest first)
+//     GET  /api/social/posts/:id                     single post
+//     POST /api/social/posts                         create post
+//     POST /api/social/posts/:id/like                toggle like (per user)
+//     DELETE /api/social/posts/:id                   delete (author only)
+//
+//   COMMENTS  ← stored globally — every user sees every comment
+//     GET  /api/social/posts/:id/comments            all comments for a post
+//     POST /api/social/posts/:id/comments            add comment
+//     POST /api/social/posts/:id/comment             [legacy alias]
+//     POST /api/social/comments/:cid/like            toggle comment like
+//     POST /api/social/posts/:id/comments/:cid/like  [legacy alias]
+//     DELETE /api/social/comments/:cid               delete comment (author only)
+//
+//   PROFILE PHOTOS  ← upload once, served to all users
+//     POST /api/social/profile/photo                 upload / update photo
+//     GET  /api/social/profile/photo/:email          fetch any user's photo
+//     GET  /api/social/profiles/batch                fetch multiple profiles at once
+//
+//   USERS / FOLLOWS
+//     GET  /api/social/users/:email                  public profile card
+//     POST /api/social/users/:email/follow           toggle follow
+//     GET  /api/social/users/:email/followers        follower list
+//     GET  /api/social/users/:email/following        following list
+//
+//   REVIEWS
+//     GET  /api/social/reviews                       all reviews
+//     POST /api/social/reviews                       create review
+//     POST /api/social/reviews/:id/like              toggle like
+//     DELETE /api/social/reviews/:id                 delete review (author only)
+//
+//   CREWS
+//     GET  /api/social/crews                         all crews
+//     POST /api/social/crews                         create crew (1-book-1-crew policy)
+//     POST /api/social/crews/:id/join                join crew
+//     POST /api/social/crews/:id/leave               leave crew
+//     POST /api/social/crews/:id/message             send message
+//     GET  /api/social/crews/:id/messages            get messages
+//
+//   NOTIFICATIONS
+//     GET  /api/social/notifications/:email          get notifications
+//     GET  /api/social/notifications/:email/count    unread count
+//     POST /api/social/notifications/:email/read     mark all as read
+
+'use strict';
+
 const express = require('express');
-const router = express.Router();
+const router  = express.Router();
 
-// ─── In-memory global storage (persists while server is up) ─────────────────
-// Pre-seeded with demo content so new users immediately see a live community
+// ─── SMALL UTILITIES ──────────────────────────────────────────────────────────
 
-let globalPosts = [
-  {
-    id: 'demo1', userName: 'Sakshi', userEmail: 'priya@readcrew.app',
-    content: "Just finished 'Atomic Habits' and my mind is blown 🤯 The 1% improvement concept is life-changing. If you haven't read it yet, what are you waiting for?",
-    bookName: 'Atomic Habits', author: 'James Clear',
-    likes: 24, comments: 5, shares: 3,
-    createdAt: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), isPublic: true
-  },
-  {
-    id: 'demo2', userName: 'Sakshi', userEmail: 'rahul@readcrew.app',
-    content: "The ending of 'Project Hail Mary' had me in tears. Andy Weir is a genius. Rocky is the best fictional character ever created 🛸",
-    bookName: 'Project Hail Mary', author: 'Andy Weir',
-    likes: 41, comments: 12, shares: 7,
-    createdAt: new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(), isPublic: true
-  },
-  {
-    id: 'demo3', userName: 'Sakshi', userEmail: 'aisha@readcrew.app',
-    content: "3 AM and I can't stop reading 'The Silent Patient'. Who else has been completely wrecked by this book? The twist... I did NOT see that coming 😱",
-    bookName: 'The Silent Patient', author: 'Alex Michaelides',
-    likes: 67, comments: 23, shares: 11,
-    createdAt: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), isPublic: true
-  },
-  {
-    id: 'demo4', userName: 'Unknown', userEmail: 'vikram@readcrew.app',
-    content: "Reading 'Sapiens' for the second time. It hits different when you're older. Harari makes you question everything about human civilization 🌍",
-    bookName: 'Sapiens', author: 'Yuval Noah Harari',
-    likes: 33, comments: 8, shares: 5,
-    createdAt: new Date(Date.now() - 18 * 60 * 60 * 1000).toISOString(), isPublic: true
-  },
-  {
-    id: 'demo5', userName: 'Sneha', userEmail: 'sneha@readcrew.app',
-    content: "Beach Read by Emily Henry is the perfect summer novel 🌊☀️ It's funny, it's heartfelt, and the slow burn romance is CHEF'S KISS. Highly recommend!",
-    bookName: 'Beach Read', author: 'Emily Henry',
-    likes: 52, comments: 15, shares: 9,
-    createdAt: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(), isPublic: true
-  },
-  {
-    id: 'demo6', userName: 'Arjun', userEmail: 'arjun@readcrew.app',
-    content: "Fourth Wing crew where you at? 🐉 Just joined the dragon riders academy and I'm absolutely obsessed. Xaden Riorson can fight me any day 😍",
-    bookName: 'Fourth Wing', author: 'Rebecca Yarros',
-    likes: 89, comments: 31, shares: 14,
-    createdAt: new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString(), isPublic: true
-  },
-];
+const nowISO = () => new Date().toISOString();
+const uid    = () => `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
-let globalReviews = [
-  {
-    id: 'rev1', bookName: 'Atomic Habits', author: 'James Clear', rating: 5,
-    review: "This book permanently changed how I think about self-improvement. The concept of identity-based habits is revolutionary. Instead of setting goals, you become the type of person who achieves those goals. Best self-help book I've ever read — practical, science-backed, and beautifully written.",
-    sentiment: 'positive', userName: 'Priya Sharma', userEmail: 'priya@readcrew.app',
-    createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(), likes: 28
-  },
-  {
-    id: 'rev2', bookName: 'The Silent Patient', author: 'Alex Michaelides', rating: 5,
-    review: "I stayed up until 4 AM to finish this. The psychological thriller genre has a new king. Alicia's silence is deafening throughout the book, and when the truth finally unravels... I literally gasped out loud. The ending is perfection. A must-read.",
-    sentiment: 'positive', userName: 'Aisha Khan', userEmail: 'aisha@readcrew.app',
-    createdAt: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), likes: 45
-  },
-  {
-    id: 'rev3', bookName: 'Project Hail Mary', author: 'Andy Weir', rating: 5,
-    review: "Andy Weir has done it again but better. The science is fascinating (and apparently real!), but what makes this book special is the friendship that develops. I laughed, I cried, I cheered. If you liked The Martian, this is 10x better. Best sci-fi I've read in years.",
-    sentiment: 'positive', userName: 'Rahul Mehta', userEmail: 'rahul@readcrew.app',
-    createdAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(), likes: 61
-  },
-  {
-    id: 'rev4', bookName: 'It Ends with Us', author: 'Colleen Hoover', rating: 4,
-    review: "This book is important. Colleen Hoover tackles a difficult subject with sensitivity and grace. I went through a full box of tissues. It's not an easy read, but it's a necessary one. The title perfectly describes the emotional journey of the protagonist.",
-    sentiment: 'positive', userName: 'Sneha Patel', userEmail: 'sneha@readcrew.app',
-    createdAt: new Date(Date.now() - 10 * 24 * 60 * 60 * 1000).toISOString(), likes: 37
-  },
-  {
-    id: 'rev5', bookName: 'The Psychology of Money', author: 'Morgan Housel', rating: 5,
-    review: "Every person who earns or spends money should read this book (which is everyone). Housel's 19 short stories about wealth and happiness are more insightful than any finance textbook. My favorite insight: getting rich and staying rich are two different skills. Life-changing perspective.",
-    sentiment: 'positive', userName: 'Vikram Nair', userEmail: 'vikram@readcrew.app',
-    createdAt: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(), likes: 52
-  },
-];
-
-let globalCrews = [
-  {
-    id: 'crew1', name: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help',
-    members: 47, chats: 283, createdBy: 'system', createdByName: 'ReadCrew',
-    createdAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
-    description: 'Building better habits together, one tiny change at a time!'
-  },
-  {
-    id: 'crew2', name: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi',
-    members: 38, chats: 195, createdBy: 'system', createdByName: 'ReadCrew',
-    createdAt: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
-    description: 'Rocky fan club & science nerd discussion group 🛸'
-  },
-  {
-    id: 'crew3', name: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy',
-    members: 91, chats: 512, createdBy: 'system', createdByName: 'ReadCrew',
-    createdAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000).toISOString(),
-    description: 'Dragon riders unite! Discussing all things Basgiath War College 🐉'
-  },
-  {
-    id: 'crew4', name: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational',
-    members: 63, chats: 341, createdBy: 'system', createdByName: 'ReadCrew',
-    createdAt: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString(),
-    description: 'Following our Personal Legends together ✨'
-  },
-  {
-    id: 'crew5', name: 'The Silent Patient', author: 'Alex Michaelides', genre: 'Thriller',
-    members: 55, chats: 278, createdBy: 'system', createdByName: 'ReadCrew',
-    createdAt: new Date(Date.now() - 18 * 24 * 60 * 60 * 1000).toISOString(),
-    description: 'We need to talk about THAT twist 😱 Spoilers welcome!'
-  },
-  {
-    id: 'crew6', name: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History',
-    members: 42, chats: 167, createdBy: 'system', createdByName: 'ReadCrew',
-    createdAt: new Date(Date.now() - 22 * 24 * 60 * 60 * 1000).toISOString(),
-    description: 'Questioning everything about humankind since 70,000 BCE 🌍'
-  },
-];
-
-// ─── GLOBAL COMMENTS STORAGE ─────────────────────────────────────────────────
-// Store comments by postId for global access
-let globalComments = new Map();
-
-// Pre-seed comments for demo posts
-const seedComments = () => {
-  const demoComments = [
-    {
-      id: 'comment1', postId: 'demo1', userId: 'user1', userName: 'Rahul Mehta',
-      userEmail: 'rahul@readcrew.app', userInitials: 'RM',
-      content: "Completely agree! The 1% rule has helped me build a consistent reading habit.", 
-      timestamp: new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString(),
-      parentId: null, likes: 5
-    },
-    {
-      id: 'comment2', postId: 'demo1', userId: 'user2', userName: 'Aisha Khan',
-      userEmail: 'aisha@readcrew.app', userInitials: 'AK',
-      content: "Which chapter was your favorite? I loved the part about habit stacking!",
-      timestamp: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
-      parentId: null, likes: 3
-    },
-    {
-      id: 'comment3', postId: 'demo2', userId: 'user3', userName: 'Arjun',
-      userEmail: 'arjun@readcrew.app', userInitials: 'AR',
-      content: "Rocky is the best! The scene where they first communicate made me so emotional 😭",
-      timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
-      parentId: null, likes: 8
-    },
-    {
-      id: 'comment4', postId: 'demo3', userId: 'user4', userName: 'Sneha Patel',
-      userEmail: 'sneha@readcrew.app', userInitials: 'SP',
-      content: "That twist ruined my sleep for a week! Still not over it 🔥",
-      timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(),
-      parentId: null, likes: 12
-    },
-    {
-      id: 'comment5', postId: 'demo6', userId: 'user5', userName: 'Vikram Nair',
-      userEmail: 'vikram@readcrew.app', userInitials: 'VN',
-      content: "Team Xaden forever! The tension in this book is unreal 🔥",
-      timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString(),
-      parentId: null, likes: 15
-    }
-  ];
-
-  demoComments.forEach(comment => {
-    const postComments = globalComments.get(comment.postId) || [];
-    postComments.push(comment);
-    globalComments.set(comment.postId, postComments);
-  });
+/** Toggle a value inside an array (like a Set). Returns a new array. */
+const toggleInArray = (arr = [], val) => {
+  const s = new Set(arr);
+  s.has(val) ? s.delete(val) : s.add(val);
+  return [...s];
 };
 
-seedComments();
+// ─── IN-MEMORY DATA STORES ────────────────────────────────────────────────────
 
-// ─── POSTS ───────────────────────────────────────────────────────────────────
+// ── Posts ──────────────────────────────────────────────────────────────────────
+let posts = [
+  {
+    id: 'demo1', userName: 'Priya Sharma', userEmail: 'priya@readcrew.app',
+    userPhoto: null, userInitials: 'PS',
+    content: "Just finished 'Atomic Habits' and my mind is blown 🤯 The 1% improvement concept is life-changing. If you haven't read it yet, what are you waiting for?",
+    bookName: 'Atomic Habits', author: 'James Clear', image: null,
+    likes: 24, likedBy: [], comments: 5, shares: 3,
+    createdAt: new Date(Date.now() - 2  * 3600000).toISOString(), isPublic: true,
+  },
+  {
+    id: 'demo2', userName: 'Rahul Mehta', userEmail: 'rahul@readcrew.app',
+    userPhoto: null, userInitials: 'RM',
+    content: "The ending of 'Project Hail Mary' had me in tears. Andy Weir is a genius. Rocky is the best fictional character ever created 🛸",
+    bookName: 'Project Hail Mary', author: 'Andy Weir', image: null,
+    likes: 41, likedBy: [], comments: 12, shares: 7,
+    createdAt: new Date(Date.now() - 5  * 3600000).toISOString(), isPublic: true,
+  },
+  {
+    id: 'demo3', userName: 'Aisha Khan', userEmail: 'aisha@readcrew.app',
+    userPhoto: null, userInitials: 'AK',
+    content: "3 AM and I can't stop reading 'The Silent Patient'. The twist… I did NOT see that coming 😱",
+    bookName: 'The Silent Patient', author: 'Alex Michaelides', image: null,
+    likes: 67, likedBy: [], comments: 23, shares: 11,
+    createdAt: new Date(Date.now() - 12 * 3600000).toISOString(), isPublic: true,
+  },
+  {
+    id: 'demo4', userName: 'Vikram Nair', userEmail: 'vikram@readcrew.app',
+    userPhoto: null, userInitials: 'VN',
+    content: "Reading 'Sapiens' for the second time. It hits different when you're older. Harari makes you question everything 🌍",
+    bookName: 'Sapiens', author: 'Yuval Noah Harari', image: null,
+    likes: 33, likedBy: [], comments: 8, shares: 5,
+    createdAt: new Date(Date.now() - 18 * 3600000).toISOString(), isPublic: true,
+  },
+  {
+    id: 'demo5', userName: 'Sneha Patel', userEmail: 'sneha@readcrew.app',
+    userPhoto: null, userInitials: 'SP',
+    content: "Beach Read by Emily Henry is the perfect summer novel 🌊☀️ The slow-burn romance is CHEF'S KISS. Highly recommend!",
+    bookName: 'Beach Read', author: 'Emily Henry', image: null,
+    likes: 52, likedBy: [], comments: 15, shares: 9,
+    createdAt: new Date(Date.now() - 24 * 3600000).toISOString(), isPublic: true,
+  },
+  {
+    id: 'demo6', userName: 'Arjun Sharma', userEmail: 'arjun@readcrew.app',
+    userPhoto: null, userInitials: 'AS',
+    content: "Fourth Wing crew where you at? 🐉 Just joined the dragon riders academy and I'm absolutely obsessed. Xaden Riorson can fight me any day 😍",
+    bookName: 'Fourth Wing', author: 'Rebecca Yarros', image: null,
+    likes: 89, likedBy: [], comments: 31, shares: 14,
+    createdAt: new Date(Date.now() - 30 * 3600000).toISOString(), isPublic: true,
+  },
+];
+
+// ── Comments: Map<postId, Comment[]> ─────────────────────────────────────────
+const commentsByPost = new Map();
+
+(function seedComments() {
+  const seed = [
+    { id: 'sc1', postId: 'demo1', userName: 'Rahul Mehta',  userEmail: 'rahul@readcrew.app',  userInitials: 'RM', content: "Completely agree! The 1% rule changed my reading habit too.",              parentId: null, likes: 5,  likedBy: [], timestamp: new Date(Date.now() - 3600000).toISOString() },
+    { id: 'sc2', postId: 'demo1', userName: 'Aisha Khan',   userEmail: 'aisha@readcrew.app',  userInitials: 'AK', content: "Which chapter hit you hardest? I loved the Habit Stacking part!",         parentId: null, likes: 3,  likedBy: [], timestamp: new Date(Date.now() - 1800000).toISOString() },
+    { id: 'sc3', postId: 'demo2', userName: 'Arjun Sharma', userEmail: 'arjun@readcrew.app',  userInitials: 'AS', content: "Rocky is the best! The first communication scene made me cry 😭",          parentId: null, likes: 8,  likedBy: [], timestamp: new Date(Date.now() - 7200000).toISOString() },
+    { id: 'sc4', postId: 'demo3', userName: 'Sneha Patel',  userEmail: 'sneha@readcrew.app',  userInitials: 'SP', content: "That twist ruined my sleep for a week! Still not over it 🔥",              parentId: null, likes: 12, likedBy: [], timestamp: new Date(Date.now() - 21600000).toISOString() },
+    { id: 'sc5', postId: 'demo4', userName: 'Priya Sharma', userEmail: 'priya@readcrew.app',  userInitials: 'PS', content: "The chapter on religion completely changed how I see the world.",           parentId: null, likes: 7,  likedBy: [], timestamp: new Date(Date.now() - 14400000).toISOString() },
+    { id: 'sc6', postId: 'demo5', userName: 'Aisha Khan',   userEmail: 'aisha@readcrew.app',  userInitials: 'AK', content: "Emily Henry is queen! Have you read People We Meet on Vacation yet?",     parentId: null, likes: 6,  likedBy: [], timestamp: new Date(Date.now() - 18000000).toISOString() },
+    { id: 'sc7', postId: 'demo6', userName: 'Vikram Nair',  userEmail: 'vikram@readcrew.app', userInitials: 'VN', content: "Team Xaden forever! The tension in this book is absolutely unreal 🔥",     parentId: null, likes: 15, likedBy: [], timestamp: new Date(Date.now() - 86400000).toISOString() },
+    { id: 'sc8', postId: 'demo6', userName: 'Sneha Patel',  userEmail: 'sneha@readcrew.app',  userInitials: 'SP', content: "Violettttt! She is my favourite fantasy protagonist of all time 😍",       parentId: null, likes: 11, likedBy: [], timestamp: new Date(Date.now() - 72000000).toISOString() },
+  ];
+  seed.forEach(c => {
+    const arr = commentsByPost.get(c.postId) || [];
+    arr.push({ ...c, userPhoto: null, isAuthor: false });
+    commentsByPost.set(c.postId, arr);
+  });
+})();
+
+// ── Reviews ────────────────────────────────────────────────────────────────────
+let reviews = [
+  { id: 'rev1', bookName: 'Atomic Habits',          author: 'James Clear',        rating: 5, review: "This book permanently changed how I think about self-improvement. The identity-based habit framework is revolutionary — and it actually works.", sentiment: 'positive', userName: 'Priya Sharma',  userEmail: 'priya@readcrew.app',  userPhoto: null, userInitials: 'PS', createdAt: new Date(Date.now() -  3 * 86400000).toISOString(), likes: 28, likedBy: [] },
+  { id: 'rev2', bookName: 'The Silent Patient',      author: 'Alex Michaelides',   rating: 5, review: "I stayed up until 4 AM to finish this. The psychological thriller genre has a new king. The ending is absolute perfection — cannot recommend this more.",  sentiment: 'positive', userName: 'Aisha Khan',    userEmail: 'aisha@readcrew.app',  userPhoto: null, userInitials: 'AK', createdAt: new Date(Date.now() -  5 * 86400000).toISOString(), likes: 45, likedBy: [] },
+  { id: 'rev3', bookName: 'Project Hail Mary',       author: 'Andy Weir',          rating: 5, review: "Andy Weir has done it again but even better. The science is wild and actually real, and the friendship at the heart of the book made me cry.",              sentiment: 'positive', userName: 'Rahul Mehta',   userEmail: 'rahul@readcrew.app',  userPhoto: null, userInitials: 'RM', createdAt: new Date(Date.now() -  7 * 86400000).toISOString(), likes: 61, likedBy: [] },
+  { id: 'rev4', bookName: 'It Ends with Us',         author: 'Colleen Hoover',     rating: 4, review: "This book is important. Colleen Hoover tackles a very difficult subject with sensitivity and grace. Bring a box of tissues — you will need them.",           sentiment: 'positive', userName: 'Sneha Patel',   userEmail: 'sneha@readcrew.app',  userPhoto: null, userInitials: 'SP', createdAt: new Date(Date.now() - 10 * 86400000).toISOString(), likes: 37, likedBy: [] },
+  { id: 'rev5', bookName: 'The Psychology of Money', author: 'Morgan Housel',      rating: 5, review: "Everyone who earns or spends money should read this book — which is everyone! Housel's 19 short stories are more insightful than any finance textbook.",  sentiment: 'positive', userName: 'Vikram Nair',   userEmail: 'vikram@readcrew.app', userPhoto: null, userInitials: 'VN', createdAt: new Date(Date.now() - 14 * 86400000).toISOString(), likes: 52, likedBy: [] },
+];
+
+// ── Crews ──────────────────────────────────────────────────────────────────────
+let crews = [
+  { id: 'crew1', name: 'Atomic Habits',       author: 'James Clear',       genre: 'Self-Help',    members: 47, memberEmails: [], chats: 283, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date(Date.now() - 30 * 86400000).toISOString(), description: 'Building better habits together, one tiny change at a time!' },
+  { id: 'crew2', name: 'Project Hail Mary',   author: 'Andy Weir',         genre: 'Sci-Fi',       members: 38, memberEmails: [], chats: 195, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date(Date.now() - 20 * 86400000).toISOString(), description: 'Rocky fan club & science nerd discussion group 🛸' },
+  { id: 'crew3', name: 'Fourth Wing',         author: 'Rebecca Yarros',    genre: 'Fantasy',      members: 91, memberEmails: [], chats: 512, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date(Date.now() - 15 * 86400000).toISOString(), description: 'Dragon riders unite! Discussing all things Basgiath War College 🐉' },
+  { id: 'crew4', name: 'The Alchemist',       author: 'Paulo Coelho',      genre: 'Inspirational',members: 63, memberEmails: [], chats: 341, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date(Date.now() - 25 * 86400000).toISOString(), description: 'Following our Personal Legends together ✨' },
+  { id: 'crew5', name: 'The Silent Patient',  author: 'Alex Michaelides',  genre: 'Thriller',     members: 55, memberEmails: [], chats: 278, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date(Date.now() - 18 * 86400000).toISOString(), description: 'We need to talk about THAT twist 😱 Spoilers welcome!' },
+  { id: 'crew6', name: 'Sapiens',             author: 'Yuval Noah Harari', genre: 'History',      members: 42, memberEmails: [], chats: 167, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date(Date.now() - 22 * 86400000).toISOString(), description: 'Questioning everything about humankind since 70,000 BCE 🌍' },
+];
+
+// Map<crewId, Message[]>
+const crewMessages = new Map();
+
+// ── User profiles: Map<email, Profile> ───────────────────────────────────────
+// Stores display name, photo (base64), bio, followers[], following[]
+const userProfiles = new Map([
+  ['priya@readcrew.app',  { name: 'Priya Sharma',  initials: 'PS', photo: null, bio: 'Bookworm & coffee addict ☕',   followers: [], following: [] }],
+  ['rahul@readcrew.app',  { name: 'Rahul Mehta',   initials: 'RM', photo: null, bio: 'Sci-fi & history lover 🚀',     followers: [], following: [] }],
+  ['aisha@readcrew.app',  { name: 'Aisha Khan',    initials: 'AK', photo: null, bio: 'Thriller addict 🔪',             followers: [], following: [] }],
+  ['vikram@readcrew.app', { name: 'Vikram Nair',   initials: 'VN', photo: null, bio: 'Non-fiction evangelist 🌍',      followers: [], following: [] }],
+  ['sneha@readcrew.app',  { name: 'Sneha Patel',   initials: 'SP', photo: null, bio: 'Romance & cozy fiction ❤️',     followers: [], following: [] }],
+  ['arjun@readcrew.app',  { name: 'Arjun Sharma',  initials: 'AS', photo: null, bio: 'Fantasy & gaming nerd 🐉',      followers: [], following: [] }],
+]);
+
+// ── Notifications: Map<email, Notification[]> ──────────────────────────────────
+const userNotifications = new Map();
+
+// ─── PROFILE HELPERS ─────────────────────────────────────────────────────────
+
+/** Get profile, returning a safe default if not found. */
+function getProfile(email) {
+  return userProfiles.get(email) || { name: email || 'User', initials: (email || 'U').slice(0, 2).toUpperCase(), photo: null, bio: '', followers: [], following: [] };
+}
+
+/** Ensure a profile row exists, creating one if needed. Returns the profile. */
+function ensureProfile(email, name) {
+  if (!email) return getProfile(null);
+  if (!userProfiles.has(email)) {
+    userProfiles.set(email, {
+      name:      name || email,
+      initials:  (name || email).slice(0, 2).toUpperCase(),
+      photo:     null,
+      bio:       '',
+      followers: [],
+      following: [],
+    });
+  }
+  return userProfiles.get(email);
+}
+
+/**
+ * Attach the server-side photo & initials to any object that has `userEmail`.
+ * This means a user who uploads a new photo will immediately be reflected
+ * on ALL their posts and comments served to other users.
+ */
+function withPhoto(obj) {
+  if (!obj.userEmail) return obj;
+  const p = getProfile(obj.userEmail);
+  return { ...obj, userPhoto: p.photo, userInitials: p.initials || obj.userInitials };
+}
+
+/** Propagate a profile update to every post, comment, review, and message. */
+function propagateProfileUpdate(email) {
+  const p = getProfile(email);
+  posts.forEach(post => {
+    if (post.userEmail === email) {
+      post.userPhoto    = p.photo;
+      post.userInitials = p.initials;
+    }
+  });
+  for (const arr of commentsByPost.values()) {
+    arr.forEach(c => {
+      if (c.userEmail === email) {
+        c.userPhoto    = p.photo;
+        c.userInitials = p.initials;
+      }
+    });
+  }
+  reviews.forEach(r => {
+    if (r.userEmail === email) {
+      r.userPhoto    = p.photo;
+      r.userInitials = p.initials;
+    }
+  });
+  for (const msgs of crewMessages.values()) {
+    msgs.forEach(m => {
+      if (m.userEmail === email) {
+        m.userPhoto    = p.photo;
+        m.userInitials = p.initials;
+      }
+    });
+  }
+}
+
+// ─── NOTIFICATION HELPER ─────────────────────────────────────────────────────
+
+function addNotification(targetEmail, data) {
+  if (!targetEmail) return;
+  const arr = userNotifications.get(targetEmail) || [];
+  arr.unshift({ id: uid(), ...data, timestamp: nowISO(), read: false });
+  if (arr.length > 150) arr.length = 150;
+  userNotifications.set(targetEmail, arr);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  POSTS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/social/posts?page=1&limit=20
 router.get('/posts', (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const limit = parseInt(req.query.limit) || 20;
+  const page  = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit = Math.min(50, parseInt(req.query.limit) || 20);
   const start = (page - 1) * limit;
-  const posts = globalPosts.slice(start, start + limit);
-  
-  // Add comment counts to posts
-  const postsWithCommentCounts = posts.map(post => {
-    const comments = globalComments.get(post.id) || [];
-    return {
-      ...post,
-      commentsCount: comments.length
-    };
-  });
-  
-  res.json({ success: true, posts: postsWithCommentCounts, total: globalPosts.length, hasMore: start + limit < globalPosts.length });
+
+  const slice = posts.slice(start, start + limit).map(p => ({
+    ...withPhoto(p),
+    commentsCount: (commentsByPost.get(p.id) || []).length,
+  }));
+
+  res.json({ success: true, posts: slice, total: posts.length, page, hasMore: start + limit < posts.length });
 });
 
 // GET /api/social/posts/:id
 router.get('/posts/:id', (req, res) => {
-  const post = globalPosts.find(p => p.id === req.params.id);
+  const post = posts.find(p => p.id === req.params.id);
   if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
-  
-  const comments = globalComments.get(post.id) || [];
-  res.json({ success: true, post: { ...post, commentsCount: comments.length } });
+  res.json({ success: true, post: { ...withPhoto(post), commentsCount: (commentsByPost.get(post.id) || []).length } });
 });
 
 // POST /api/social/posts
 router.post('/posts', (req, res) => {
   const { content, bookName, author, image, isPublic, userName, userEmail } = req.body;
-  if (!content || !userName) return res.status(400).json({ success: false, message: 'Content and userName required' });
-  const post = {
-    id: `post_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    content, bookName: bookName || '', author: author || '',
-    image: image || null, isPublic: isPublic !== false,
-    userName, userEmail: userEmail || '',
-    likes: 0, shares: 0,
-    createdAt: new Date().toISOString()
-  };
-  globalPosts.unshift(post);
-  if (globalPosts.length > 500) globalPosts = globalPosts.slice(0, 500);
-  
-  // Initialize empty comments array for this post
-  if (!globalComments.has(post.id)) {
-    globalComments.set(post.id, []);
+  if (!content?.trim() || !userName) {
+    return res.status(400).json({ success: false, message: 'content and userName are required' });
   }
-  
-  res.json({ success: true, post });
+
+  ensureProfile(userEmail, userName);
+  const profile = getProfile(userEmail);
+
+  // Dedup by client-supplied id
+  if (req.body.id) {
+    const dup = posts.find(p => String(p.id) === String(req.body.id));
+    if (dup) return res.json({ success: true, post: withPhoto(dup), duplicate: true });
+  }
+
+  const post = {
+    id:           req.body.id || `post_${uid()}`,
+    content:      content.trim(),
+    bookName:     bookName  || '',
+    author:       author    || '',
+    image:        image     || null,
+    isPublic:     isPublic  !== false,
+    userName,
+    userEmail:    userEmail || '',
+    userPhoto:    profile.photo,
+    userInitials: profile.initials,
+    likes:        0,
+    likedBy:      [],
+    comments:     0,
+    shares:       0,
+    createdAt:    nowISO(),
+  };
+
+  posts.unshift(post);
+  if (posts.length > 500) posts = posts.slice(0, 500);
+  commentsByPost.set(post.id, []);
+
+  res.json({ success: true, post: withPhoto(post) });
 });
 
-// POST /api/social/posts/:id/like
+// POST /api/social/posts/:id/like   — toggle per user (send userEmail in body)
 router.post('/posts/:id/like', (req, res) => {
-  const post = globalPosts.find(p => p.id === req.params.id);
-  if (!post) return res.status(404).json({ success: false });
+  const post = posts.find(p => p.id === req.params.id);
+  if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+
+  const { userEmail, userName } = req.body;
+
+  if (userEmail) {
+    post.likedBy = toggleInArray(post.likedBy, userEmail);
+    post.likes   = post.likedBy.length;
+    const liked  = post.likedBy.includes(userEmail);
+
+    if (liked && userEmail !== post.userEmail) {
+      const liker = getProfile(userEmail);
+      addNotification(post.userEmail, {
+        type:      'like',
+        fromUser:  liker.name || userName || userEmail,
+        fromEmail: userEmail,
+        fromPhoto: liker.photo,
+        message:   `${liker.name || userName || userEmail} liked your post`,
+        postId:    post.id,
+      });
+    }
+
+    return res.json({ success: true, likes: post.likes, likedBy: post.likedBy, liked });
+  }
+
+  // Fallback: anonymous increment
   post.likes = (post.likes || 0) + 1;
-  res.json({ success: true, likes: post.likes });
+  res.json({ success: true, likes: post.likes, likedBy: post.likedBy, liked: true });
 });
 
-// ─── COMMENTS ────────────────────────────────────────────────────────────────
+// DELETE /api/social/posts/:id
+router.delete('/posts/:id', (req, res) => {
+  const { userEmail } = req.body;
+  const idx = posts.findIndex(p => p.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ success: false, message: 'Post not found' });
+  if (userEmail && posts[idx].userEmail !== userEmail) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+  posts.splice(idx, 1);
+  commentsByPost.delete(req.params.id);
+  res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  COMMENTS  — the critical globally-synced piece
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/social/posts/:id/comments
 router.get('/posts/:id/comments', (req, res) => {
-  const comments = globalComments.get(req.params.id) || [];
-  // Sort by timestamp (newest first? or oldest first? Let's do oldest first for conversation flow)
-  const sortedComments = comments.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-  res.json({ success: true, comments: sortedComments });
+  const all = (commentsByPost.get(req.params.id) || []).map(withPhoto);
+  all.sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)); // oldest first
+  res.json({ success: true, comments: all, count: all.length });
 });
+
+// Internal handler used by both POST /comments and the legacy POST /comment
+function handleAddComment(postId, body, res) {
+  const { userId, userName, userEmail, content, parentId, id: clientId } = body;
+
+  if (!content?.trim() || !userName) {
+    return res.status(400).json({ success: false, message: 'content and userName are required' });
+  }
+
+  const post = posts.find(p => p.id === postId);
+  if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+
+  const arr = commentsByPost.get(postId) || [];
+
+  // Dedup by client id
+  if (clientId) {
+    const dup = arr.find(c => String(c.id) === String(clientId));
+    if (dup) return res.json({ success: true, comment: withPhoto(dup), duplicate: true });
+  }
+
+  ensureProfile(userEmail, userName);
+  const profile = getProfile(userEmail);
+
+  const comment = {
+    id:           clientId || `cmt_${uid()}`,
+    postId,
+    userId:       userId || userEmail,
+    userName,
+    userEmail:    userEmail || '',
+    userPhoto:    profile.photo,
+    userInitials: profile.initials,
+    content:      content.trim(),
+    timestamp:    nowISO(),
+    parentId:     parentId || null,
+    likes:        0,
+    likedBy:      [],
+    isAuthor:     userEmail === post.userEmail,
+  };
+
+  arr.push(comment);
+  if (arr.length > 500) arr.splice(0, arr.length - 500);
+  commentsByPost.set(postId, arr);
+  post.comments = arr.filter(c => !c.parentId).length;
+
+  // Notify post author (not for own comments)
+  if (userEmail !== post.userEmail) {
+    addNotification(post.userEmail, {
+      type:      'comment',
+      fromUser:  userName,
+      fromEmail: userEmail,
+      fromPhoto: profile.photo,
+      message:   `${userName} commented: "${content.slice(0, 50)}"`,
+      postId,
+      commentId: comment.id,
+    });
+  }
+
+  return res.json({ success: true, comment: withPhoto(comment) });
+}
 
 // POST /api/social/posts/:id/comments
 router.post('/posts/:id/comments', (req, res) => {
-  const { userId, userName, userEmail, userInitials, content, parentId } = req.body;
-  const postId = req.params.id;
-  
-  if (!content || !userName) {
-    return res.status(400).json({ success: false, message: 'Content and userName required' });
-  }
-  
-  // Check if post exists
-  const post = globalPosts.find(p => p.id === postId);
-  if (!post) {
-    return res.status(404).json({ success: false, message: 'Post not found' });
-  }
-  
-  const comment = {
-    id: `comment_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    postId,
-    userId: userId || `user_${Date.now()}`,
-    userName,
-    userEmail: userEmail || '',
-    userInitials: userInitials || userName.slice(0, 2).toUpperCase(),
-    content,
-    timestamp: new Date().toISOString(),
-    parentId: parentId || null,
-    likes: 0
-  };
-  
-  const postComments = globalComments.get(postId) || [];
-  postComments.push(comment);
-  
-  // Keep only last 500 comments per post to prevent memory issues
-  if (postComments.length > 500) {
-    postComments.splice(0, postComments.length - 500);
-  }
-  
-  globalComments.set(postId, postComments);
-  
-  res.json({ success: true, comment });
+  handleAddComment(req.params.id, req.body, res);
 });
 
-// POST /api/social/comments/:id/like
-router.post('/comments/:id/like', (req, res) => {
-  const commentId = req.params.id;
-  let foundComment = null;
-  let foundPostId = null;
-  
-  // Search for the comment across all posts
-  for (const [postId, comments] of globalComments.entries()) {
-    const comment = comments.find(c => c.id === commentId);
-    if (comment) {
-      foundComment = comment;
-      foundPostId = postId;
-      break;
+// POST /api/social/posts/:id/comment  (legacy — singular)
+router.post('/posts/:id/comment', (req, res) => {
+  handleAddComment(req.params.id, req.body, res);
+});
+
+// POST /api/social/comments/:cid/like
+function handleLikeComment(cid, body, res) {
+  const { userEmail } = body;
+  let found = null;
+  for (const arr of commentsByPost.values()) {
+    const c = arr.find(x => x.id === cid);
+    if (c) { found = c; break; }
+  }
+  if (!found) return res.status(404).json({ success: false, message: 'Comment not found' });
+
+  if (userEmail) {
+    found.likedBy = toggleInArray(found.likedBy, userEmail);
+    found.likes   = found.likedBy.length;
+    return res.json({ success: true, likes: found.likes, likedBy: found.likedBy, liked: found.likedBy.includes(userEmail) });
+  }
+  found.likes = (found.likes || 0) + 1;
+  res.json({ success: true, likes: found.likes, liked: true });
+}
+
+router.post('/comments/:cid/like', (req, res) => handleLikeComment(req.params.cid, req.body, res));
+
+// Legacy alias: POST /api/social/posts/:id/comments/:cid/like
+router.post('/posts/:id/comments/:cid/like', (req, res) => handleLikeComment(req.params.cid, req.body, res));
+
+// DELETE /api/social/comments/:cid
+router.delete('/comments/:cid', (req, res) => {
+  const { userEmail } = req.body;
+  for (const [postId, arr] of commentsByPost.entries()) {
+    const idx = arr.findIndex(c => c.id === req.params.cid);
+    if (idx !== -1) {
+      if (userEmail && arr[idx].userEmail !== userEmail) {
+        return res.status(403).json({ success: false, message: 'Forbidden' });
+      }
+      // Remove comment + all its replies
+      const filtered = arr.filter(c => c.id !== req.params.cid && c.parentId !== req.params.cid);
+      commentsByPost.set(postId, filtered);
+      const post = posts.find(p => p.id === postId);
+      if (post) post.comments = filtered.filter(c => !c.parentId).length;
+      return res.json({ success: true });
     }
   }
-  
-  if (!foundComment) {
-    return res.status(404).json({ success: false, message: 'Comment not found' });
-  }
-  
-  foundComment.likes = (foundComment.likes || 0) + 1;
-  
-  // Update in storage
-  const postComments = globalComments.get(foundPostId);
-  const updatedComments = postComments.map(c => 
-    c.id === commentId ? foundComment : c
-  );
-  globalComments.set(foundPostId, updatedComments);
-  
-  res.json({ success: true, likes: foundComment.likes });
+  res.status(404).json({ success: false, message: 'Comment not found' });
 });
 
-// DELETE /api/social/comments/:id
-router.delete('/comments/:id', (req, res) => {
-  const commentId = req.params.id;
-  const { userId } = req.body; // For authorization
-  
-  let foundPostId = null;
-  
-  // Search for the comment across all posts
-  for (const [postId, comments] of globalComments.entries()) {
-    const comment = comments.find(c => c.id === commentId);
-    if (comment) {
-      // Check if user is authorized (optional - you can add more logic here)
-      foundPostId = postId;
-      break;
-    }
-  }
-  
-  if (!foundPostId) {
-    return res.status(404).json({ success: false, message: 'Comment not found' });
-  }
-  
-  // Remove comment and all its replies
-  const postComments = globalComments.get(foundPostId);
-  const filteredComments = postComments.filter(c => 
-    c.id !== commentId && c.parentId !== commentId
-  );
-  
-  globalComments.set(foundPostId, filteredComments);
-  
-  res.json({ success: true, message: 'Comment deleted' });
+// ═══════════════════════════════════════════════════════════════════════════════
+//  PROFILE PHOTOS  — one upload, everyone sees it
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// POST /api/social/profile/photo
+// Body: { email, name?, bio?, photo: 'data:image/jpeg;base64,...' }
+router.post('/profile/photo', (req, res) => {
+  const { email, name, bio, photo } = req.body;
+  if (!email) return res.status(400).json({ success: false, message: 'email is required' });
+
+  const profile = ensureProfile(email, name);
+  if (photo !== undefined) profile.photo    = photo;   // null clears the photo
+  if (name  !== undefined) profile.name     = name;
+  if (bio   !== undefined) profile.bio      = bio;
+  profile.initials = (profile.name || email).slice(0, 2).toUpperCase();
+
+  // Push updated photo to every post / comment / review by this user
+  propagateProfileUpdate(email);
+
+  res.json({
+    success: true,
+    profile: { email, name: profile.name, initials: profile.initials, photo: profile.photo, bio: profile.bio },
+  });
 });
 
-// ─── REVIEWS ─────────────────────────────────────────────────────────────────
+// GET /api/social/profile/photo/:email  — fetch any user's photo
+router.get('/profile/photo/:email', (req, res) => {
+  const email   = decodeURIComponent(req.params.email);
+  const profile = getProfile(email);
+  res.json({ success: true, email, name: profile.name, initials: profile.initials, photo: profile.photo, bio: profile.bio });
+});
+
+// GET /api/social/profiles/batch?emails=a@b.com,c@d.com
+router.get('/profiles/batch', (req, res) => {
+  const emails = (req.query.emails || '').split(',').map(e => e.trim()).filter(Boolean);
+  const result = {};
+  emails.forEach(email => {
+    const p = getProfile(email);
+    result[email] = { name: p.name, initials: p.initials, photo: p.photo, bio: p.bio };
+  });
+  res.json({ success: true, profiles: result });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  USERS / FOLLOWS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/social/users/:email
+router.get('/users/:email', (req, res) => {
+  const email   = decodeURIComponent(req.params.email);
+  const profile = getProfile(email);
+  res.json({
+    success: true,
+    user: {
+      email,
+      name:         profile.name,
+      initials:     profile.initials,
+      photo:        profile.photo,
+      bio:          profile.bio,
+      followers:    profile.followers.length,
+      following:    profile.following.length,
+      postsCount:   posts.filter(p => p.userEmail === email).length,
+      reviewsCount: reviews.filter(r => r.userEmail === email).length,
+    },
+  });
+});
+
+// POST /api/social/users/:email/follow   body: { followerEmail, followerName }
+router.post('/users/:email/follow', (req, res) => {
+  const targetEmail           = decodeURIComponent(req.params.email);
+  const { followerEmail, followerName } = req.body;
+  if (!followerEmail) return res.status(400).json({ success: false, message: 'followerEmail required' });
+
+  ensureProfile(targetEmail);
+  ensureProfile(followerEmail, followerName);
+
+  const target   = getProfile(targetEmail);
+  const follower = getProfile(followerEmail);
+  const isNowFollowing = !target.followers.includes(followerEmail);
+
+  if (isNowFollowing) {
+    target.followers.push(followerEmail);
+    follower.following.push(targetEmail);
+    addNotification(targetEmail, {
+      type:      'follow',
+      fromUser:  follower.name || followerEmail,
+      fromEmail: followerEmail,
+      fromPhoto: follower.photo,
+      message:   `${follower.name || followerEmail} started following you`,
+    });
+  } else {
+    target.followers   = target.followers.filter(e => e !== followerEmail);
+    follower.following = follower.following.filter(e => e !== targetEmail);
+  }
+
+  res.json({ success: true, isFollowing: isNowFollowing, followersCount: target.followers.length });
+});
+
+// GET /api/social/users/:email/followers
+router.get('/users/:email/followers', (req, res) => {
+  const email = decodeURIComponent(req.params.email);
+  const list  = getProfile(email).followers.map(e => {
+    const p = getProfile(e);
+    return { email: e, name: p.name, photo: p.photo, initials: p.initials };
+  });
+  res.json({ success: true, followers: list, count: list.length });
+});
+
+// GET /api/social/users/:email/following
+router.get('/users/:email/following', (req, res) => {
+  const email = decodeURIComponent(req.params.email);
+  const list  = getProfile(email).following.map(e => {
+    const p = getProfile(e);
+    return { email: e, name: p.name, photo: p.photo, initials: p.initials };
+  });
+  res.json({ success: true, following: list, count: list.length });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  REVIEWS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/social/reviews
 router.get('/reviews', (req, res) => {
-  res.json({ success: true, reviews: globalReviews });
+  res.json({ success: true, reviews: reviews.map(withPhoto) });
 });
 
 // POST /api/social/reviews
 router.post('/reviews', (req, res) => {
   const { bookName, author, rating, review, sentiment, userName, userEmail } = req.body;
-  if (!bookName || !review || !userName) return res.status(400).json({ success: false, message: 'bookName, review, userName required' });
-  const reviewData = {
-    id: `rev_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    bookName, author: author || '', rating: rating || 5, review,
-    sentiment: sentiment || 'positive', userName, userEmail: userEmail || '',
-    createdAt: new Date().toISOString(), likes: 0
+  if (!bookName || !review?.trim() || !userName) {
+    return res.status(400).json({ success: false, message: 'bookName, review, userName required' });
+  }
+
+  ensureProfile(userEmail, userName);
+  const profile = getProfile(userEmail);
+
+  const rv = {
+    id:           req.body.id || `rev_${uid()}`,
+    bookName,
+    author:       author    || '',
+    rating:       rating    || 5,
+    review:       review.trim(),
+    sentiment:    sentiment || 'positive',
+    userName,
+    userEmail:    userEmail || '',
+    userPhoto:    profile.photo,
+    userInitials: profile.initials,
+    createdAt:    nowISO(),
+    likes:        0,
+    likedBy:      [],
   };
-  globalReviews.unshift(reviewData);
-  if (globalReviews.length > 200) globalReviews = globalReviews.slice(0, 200);
-  res.json({ success: true, review: reviewData });
+
+  reviews.unshift(rv);
+  if (reviews.length > 200) reviews = reviews.slice(0, 200);
+  res.json({ success: true, review: withPhoto(rv) });
 });
 
 // POST /api/social/reviews/:id/like
 router.post('/reviews/:id/like', (req, res) => {
-  const review = globalReviews.find(r => r.id === req.params.id);
-  if (!review) return res.status(404).json({ success: false });
-  review.likes = (review.likes || 0) + 1;
-  res.json({ success: true, likes: review.likes });
+  const { userEmail, userName } = req.body;
+  const rv = reviews.find(r => r.id === req.params.id);
+  if (!rv) return res.status(404).json({ success: false, message: 'Review not found' });
+
+  if (userEmail) {
+    rv.likedBy = toggleInArray(rv.likedBy, userEmail);
+    rv.likes   = rv.likedBy.length;
+    const liked = rv.likedBy.includes(userEmail);
+    if (liked && userEmail !== rv.userEmail) {
+      const liker = getProfile(userEmail);
+      addNotification(rv.userEmail, {
+        type:      'like',
+        fromUser:  liker.name || userName || userEmail,
+        fromEmail: userEmail,
+        fromPhoto: liker.photo,
+        message:   `${liker.name || userName || userEmail} liked your review of "${rv.bookName}"`,
+        reviewId:  rv.id,
+      });
+    }
+    return res.json({ success: true, likes: rv.likes, likedBy: rv.likedBy, liked });
+  }
+
+  rv.likes = (rv.likes || 0) + 1;
+  res.json({ success: true, likes: rv.likes, liked: true });
 });
 
-// ─── CREWS ───────────────────────────────────────────────────────────────────
+// DELETE /api/social/reviews/:id
+router.delete('/reviews/:id', (req, res) => {
+  const { userEmail } = req.body;
+  const idx = reviews.findIndex(r => r.id === req.params.id);
+  if (idx === -1) return res.status(404).json({ success: false, message: 'Review not found' });
+  if (userEmail && reviews[idx].userEmail !== userEmail) {
+    return res.status(403).json({ success: false, message: 'Forbidden' });
+  }
+  reviews.splice(idx, 1);
+  res.json({ success: true });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  CREWS
+// ═══════════════════════════════════════════════════════════════════════════════
 
 // GET /api/social/crews
 router.get('/crews', (req, res) => {
-  res.json({ success: true, crews: globalCrews });
+  res.json({ success: true, crews });
 });
 
 // POST /api/social/crews
 router.post('/crews', (req, res) => {
   const { name, author, genre, createdBy, createdByName, description } = req.body;
-  if (!name || !createdBy) return res.status(400).json({ success: false, message: 'name and createdBy required' });
-  // Check if crew for this book already exists
-  const existing = globalCrews.find(c => c.name.toLowerCase() === name.toLowerCase());
+  if (!name || !createdBy) {
+    return res.status(400).json({ success: false, message: 'name and createdBy required' });
+  }
+  // One-book-one-crew policy
+  const existing = crews.find(
+    c => c.name.toLowerCase() === name.toLowerCase() &&
+         (c.author || '').toLowerCase() === (author || '').toLowerCase()
+  );
   if (existing) return res.json({ success: true, crew: existing, alreadyExists: true });
+
   const crew = {
-    id: `crew_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    name, author: author || '', genre: genre || 'General',
-    members: 1, chats: 0, createdBy, createdByName: createdByName || createdBy,
-    description: description || `Discussing "${name}" together!`,
-    createdAt: new Date().toISOString()
+    id:            `crew_${uid()}`,
+    name,
+    author:        author        || '',
+    genre:         genre         || 'General',
+    members:       1,
+    memberEmails:  [createdBy],
+    chats:         0,
+    createdBy,
+    createdByName: createdByName || createdBy,
+    description:   description   || `Discussing "${name}" together!`,
+    createdAt:     nowISO(),
   };
-  globalCrews.unshift(crew);
+
+  crews.unshift(crew);
+  crewMessages.set(crew.id, []);
   res.json({ success: true, crew });
 });
 
 // POST /api/social/crews/:id/join
 router.post('/crews/:id/join', (req, res) => {
-  const crew = globalCrews.find(c => c.id === req.params.id);
-  if (!crew) return res.status(404).json({ success: false });
-  crew.members = (crew.members || 1) + 1;
+  const { userEmail } = req.body;
+  const crew = crews.find(c => c.id === req.params.id);
+  if (!crew) return res.status(404).json({ success: false, message: 'Crew not found' });
+
+  if (userEmail && !crew.memberEmails.includes(userEmail)) {
+    crew.memberEmails.push(userEmail);
+    crew.members = crew.memberEmails.length;
+  }
+  res.json({ success: true, members: crew.members, memberEmails: crew.memberEmails });
+});
+
+// POST /api/social/crews/:id/leave
+router.post('/crews/:id/leave', (req, res) => {
+  const { userEmail } = req.body;
+  const crew = crews.find(c => c.id === req.params.id);
+  if (!crew) return res.status(404).json({ success: false, message: 'Crew not found' });
+
+  if (userEmail) {
+    crew.memberEmails = crew.memberEmails.filter(e => e !== userEmail);
+    crew.members = Math.max(0, crew.memberEmails.length);
+  }
   res.json({ success: true, members: crew.members });
 });
 
-// POST /api/social/crews/:id/message — store crew message globally
-const crewMessages = new Map();
+// POST /api/social/crews/:id/message
 router.post('/crews/:id/message', (req, res) => {
-  const { userId, userName, userInitials, content, type } = req.body;
-  if (!content || !userName) return res.status(400).json({ success: false });
-  const crew = globalCrews.find(c => c.id === req.params.id);
-  if (crew) { crew.chats = (crew.chats || 0) + 1; }
+  const { userId, userName, userEmail, content, type } = req.body;
+  if (!content?.trim() || !userName) {
+    return res.status(400).json({ success: false, message: 'content and userName required' });
+  }
+
+  const crew = crews.find(c => c.id === req.params.id);
+  if (crew) crew.chats = (crew.chats || 0) + 1;
+
+  ensureProfile(userEmail, userName);
+  const profile = getProfile(userEmail);
+
   const msg = {
-    id: `msg_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    userId, userName, userInitials, content, type: type || 'text',
-    timestamp: new Date().toISOString()
+    id:           `msg_${uid()}`,
+    userId:       userId || userEmail,
+    userName,
+    userEmail:    userEmail || '',
+    userPhoto:    profile.photo,
+    userInitials: profile.initials,
+    content:      content.trim(),
+    type:         type || 'text',
+    timestamp:    nowISO(),
   };
+
   const msgs = crewMessages.get(req.params.id) || [];
   msgs.push(msg);
-  if (msgs.length > 200) msgs.splice(0, msgs.length - 200);
+  if (msgs.length > 300) msgs.splice(0, msgs.length - 300);
   crewMessages.set(req.params.id, msgs);
-  res.json({ success: true, message: msg });
+
+  res.json({ success: true, message: withPhoto(msg) });
 });
 
 // GET /api/social/crews/:id/messages
 router.get('/crews/:id/messages', (req, res) => {
-  const msgs = crewMessages.get(req.params.id) || [];
+  const msgs = (crewMessages.get(req.params.id) || []).map(withPhoto);
   res.json({ success: true, messages: msgs });
 });
 
+// ═══════════════════════════════════════════════════════════════════════════════
+//  NOTIFICATIONS  — server-side so they survive page reloads
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/social/notifications/:email
+router.get('/notifications/:email', (req, res) => {
+  const email  = decodeURIComponent(req.params.email);
+  const notifs = userNotifications.get(email) || [];
+  res.json({ success: true, notifications: notifs, unread: notifs.filter(n => !n.read).length });
+});
+
+// GET /api/social/notifications/:email/count
+router.get('/notifications/:email/count', (req, res) => {
+  const email  = decodeURIComponent(req.params.email);
+  const notifs = userNotifications.get(email) || [];
+  res.json({ success: true, count: notifs.filter(n => !n.read).length });
+});
+
+// POST /api/social/notifications/:email/read  — mark all as read
+router.post('/notifications/:email/read', (req, res) => {
+  const email  = decodeURIComponent(req.params.email);
+  const notifs = userNotifications.get(email) || [];
+  notifs.forEach(n => { n.read = true; });
+  res.json({ success: true });
+});
+
+// POST /api/social/notifications/:email/read/:id  — mark single as read
+router.post('/notifications/:email/read/:id', (req, res) => {
+  const email  = decodeURIComponent(req.params.email);
+  const notifs = userNotifications.get(email) || [];
+  const notif  = notifs.find(n => n.id === req.params.id);
+  if (notif) notif.read = true;
+  res.json({ success: true });
+});
+
+// ─── EXPORTS ─────────────────────────────────────────────────────────────────
 module.exports = router;
-module.exports.globalCrews = globalCrews;
+
+// Named exports so other route files (e.g. bookRoutes) can share global crews
+module.exports.globalCrews   = crews;
+module.exports.userProfiles  = userProfiles;

@@ -87,7 +87,7 @@ const recommendRoutes = require('./routes/recommend');
 const bookCrewRoutes = require('./routes/bookCrew');
 const userRoutes = require('./routes/user');
 const socialRoutes = require('./routes/social');
-
+const booksRouter = require('./routes/books');
 
 // Mount routes ONCE (no duplicates!)
 app.use('/api/auth', authRoutes);
@@ -100,6 +100,8 @@ app.use('/api/users', userRoutes);
 app.use('/api/social', socialRoutes);
 app.use('/api/nearby', require('./routes/nearby'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/books', booksRouter);
+
 
 // Socket.IO for real-time chat
 const CrewMessage = require('./models/CrewMessage');
