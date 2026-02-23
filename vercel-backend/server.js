@@ -98,6 +98,8 @@ app.use('/api/recommend', recommendRoutes);
 app.use('/api/book-crews', bookCrewRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/social', socialRoutes);
+app.use('/api/nearby', require('./routes/nearby'));
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Socket.IO for real-time chat
 const CrewMessage = require('./models/CrewMessage');
