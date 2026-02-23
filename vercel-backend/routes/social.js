@@ -289,6 +289,15 @@ router.post('/posts', (req, res) => {
   ensureProfile(userEmail, userName);
   const profile = getProfile(userEmail);
 
+  // ✅ If client sends a userPhoto (base64), store it in the profile so all users see it
+  if (req.body.userPhoto && userEmail) {
+    profile.photo = req.body.userPhoto;
+    if (!profile.initials) profile.initials = userName?.slice(0,2).toUpperCase() || '??';
+    userProfiles.set(userEmail, profile);
+    // Propagate to existing content
+    propagateProfileUpdate(userEmail);
+  }
+
   // Dedup by client-supplied id
   if (req.body.id) {
     const dup = posts.find(p => String(p.id) === String(req.body.id));
@@ -304,8 +313,8 @@ router.post('/posts', (req, res) => {
     isPublic:     isPublic  !== false,
     userName,
     userEmail:    userEmail || '',
-    userPhoto:    profile.photo,
-    userInitials: profile.initials,
+    userPhoto:    profile.photo || req.body.userPhoto || null,
+    userInitials: profile.initials || req.body.userInitials || userName?.slice(0,2).toUpperCase(),
     likes:        0,
     likedBy:      [],
     comments:     0,
@@ -398,14 +407,21 @@ function handleAddComment(postId, body, res) {
   ensureProfile(userEmail, userName);
   const profile = getProfile(userEmail);
 
+  // ✅ If client sends userPhoto (base64), store it so future fetches include it
+  if (body.userPhoto && userEmail) {
+    profile.photo = body.userPhoto;
+    if (!profile.initials) profile.initials = userName?.slice(0,2).toUpperCase() || '??';
+    userProfiles.set(userEmail, profile);
+  }
+
   const comment = {
     id:           clientId || `cmt_${uid()}`,
     postId,
     userId:       userId || userEmail,
     userName,
     userEmail:    userEmail || '',
-    userPhoto:    profile.photo,
-    userInitials: profile.initials,
+    userPhoto:    profile.photo || body.userPhoto || null,
+    userInitials: profile.initials || body.userInitials || userName?.slice(0,2).toUpperCase(),
     content:      content.trim(),
     timestamp:    nowISO(),
     parentId:     parentId || null,
