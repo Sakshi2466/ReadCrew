@@ -13,6 +13,13 @@ import {
 
 import { otpAPI } from './services/api';
 import axios from 'axios';
+// frontend/src/App.jsx
+import ExplorePage from './components/ExplorePage';
+
+// And render it:
+{currentPage === 'explore' && (
+  <ExplorePage user={currentUser} setPage={setCurrentPage} onCreateCrew={handleCreateCrew} />
+)}
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 
