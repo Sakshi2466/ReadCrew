@@ -101,6 +101,7 @@ app.use('/api/social', socialRoutes);
 app.use('/api/nearby', require('./routes/nearby'));
 app.use('/api/analytics', require('./routes/analytics'));
 app.use('/api/books', booksRouter);
+app.use('/api/auth', require('./routes/authRoutes'));
 
 
 // Socket.IO for real-time chat
