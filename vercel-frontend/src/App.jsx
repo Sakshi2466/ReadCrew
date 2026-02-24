@@ -1303,66 +1303,56 @@ const BOOK_DB = {
     { title: 'Pillars of the Earth', author: 'Ken Follett', genre: 'Historical Fiction', description: 'The epic story of building a cathedral in medieval England across generations.', reason: 'Massive scope, endlessly fascinating historical detail', rating: 4.7, pages: 973, year: 1989 },
     { title: 'Wolf Hall', author: 'Hilary Mantel', genre: 'Historical Fiction', description: 'Thomas Cromwell navigates the treacherous court of Henry VIII.', reason: 'Immersive, intelligent historical fiction at its absolute finest', rating: 4.5, pages: 650, year: 2009 },
   ],
+  emotional: [
+    { title: 'A Little Life', author: 'Hanya Yanagihara', genre: 'Literary Fiction', description: 'Four friends navigate life, trauma and love over decades. Devastating and beautiful.', reason: 'One of the most emotionally powerful novels ever written', rating: 4.6, pages: 720, year: 2015 },
+    { title: 'The Fault in Our Stars', author: 'John Green', genre: 'YA Fiction', description: 'Two teenagers with cancer fall in love. Simple premise, devastating execution.', reason: 'Cathartic sad — you will cry but feel better for it', rating: 4.7, pages: 313, year: 2012 },
+    { title: 'Me Before You', author: 'Jojo Moyes', genre: 'Romance', description: 'A young woman becomes caretaker to a paralyzed man. Their bond changes everything.', reason: 'Beautifully bittersweet — the kind of sad that feels meaningful', rating: 4.6, pages: 369, year: 2012 },
+    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', description: 'Between life and death lies a library of every life you could have lived.', reason: 'Starts sad but becomes surprisingly hopeful — perfect when you feel down', rating: 4.5, pages: 288, year: 2020 },
+    { title: 'Flowers for Algernon', author: 'Daniel Keyes', genre: 'Sci-Fi', description: 'A man with an intellectual disability becomes a genius through a dangerous experiment.', reason: 'One of the saddest, most beautiful books ever written', rating: 4.6, pages: 311, year: 1966 },
+  ],
+  feelgood: [
+    { title: 'The House in the Cerulean Sea', author: 'TJ Klune', genre: 'Fantasy', description: 'A caseworker for magical children discovers a mysterious orphanage and unexpected love.', reason: 'Cozy, wholesome and genuinely delightful from start to finish', rating: 4.7, pages: 396, year: 2020 },
+    { title: 'A Man Called Ove', author: 'Fredrik Backman', genre: 'Fiction', description: 'A grumpy widower finds new purpose through his annoying new neighbors.', reason: 'Will make you laugh and cry — but mostly feel warm inside', rating: 4.7, pages: 337, year: 2012 },
+    { title: 'The Rosie Project', author: 'Graeme Simsion', genre: 'Romance', description: 'A socially awkward professor creates a questionnaire to find the perfect wife.', reason: 'Funny, sweet and completely charming', rating: 4.5, pages: 295, year: 2013 },
+    { title: 'Beach Read', author: 'Emily Henry', genre: 'Romance', description: 'Two rival authors swap genres and accidentally fall in love over a summer.', reason: 'Light and funny — the kind of book you finish smiling', rating: 4.6, pages: 361, year: 2020 },
+    { title: 'Eleanor Oliphant is Completely Fine', author: 'Gail Honeyman', genre: 'Fiction', description: 'A socially isolated woman slowly opens up to friendship and life.', reason: 'Tender, funny and ultimately deeply uplifting', rating: 4.6, pages: 327, year: 2017 },
+  ],
 };
 
 // Smart client-side AI response generator — runs instantly, no server needed
-const generateClientResponse = (userText, exchangeCount, previousBooks = []) => {
+const generateClientResponse = (userText, previousBooks = []) => {
   const text = userText.toLowerCase();
   const detectCategory = () => {
     if (/thrille|suspens|crime|murder|dark|creepy|horror|detective/i.test(text)) return 'thriller';
-    if (/fantasy|magic|dragon|wizard|sword|epic|dnd|tolkien|harry potter/i.test(text)) return 'fantasy';
-    if (/romance|love|relat|couple|swoony|kiss|dating|enemies.to.lovers/i.test(text)) return 'romance';
-    if (/sci.?fi|space|future|robot|alien|tech|science|mars|nasa/i.test(text)) return 'scifi';
-    if (/self.?help|habit|product|motivat|improve|success|mindset|business|finance|money/i.test(text)) return 'selfhelp';
-    if (/mystery|whodun|cozy|clue|puzzle|detective|agatha/i.test(text)) return 'mystery';
+    if (/fantasy|magic|dragon|wizard|sword|epic|tolkien|harry potter/i.test(text)) return 'fantasy';
+    if (/romance|love|swoony|kiss|dating|enemies.to.lovers/i.test(text)) return 'romance';
+    if (/sci.?fi|space|future|robot|alien|tech|mars|nasa/i.test(text)) return 'scifi';
+    if (/self.?help|habit|product|motivat|improve|success|mindset|business|finance/i.test(text)) return 'selfhelp';
+    if (/mystery|whodun|cozy|clue|puzzle|agatha/i.test(text)) return 'mystery';
     if (/histor|period|war|ancient|medieval|century|wwii|world war/i.test(text)) return 'historical';
-    if (/literary|fiction|prose|character|emotion|feel|sad|beautiful|meaning/i.test(text)) return 'literary';
-    if (/alchemist|paulo|coelho/i.test(text)) return 'literary';
-    if (/atomic habits|james clear|psychology of money|morgan housel|sapiens/i.test(text)) return 'selfhelp';
-    if (/dune|martian|project hail|andy weir|ender/i.test(text)) return 'scifi';
-    if (/fourth wing|mistborn|sanderson|name of the wind/i.test(text)) return 'fantasy';
-    if (/gone girl|silent patient|girl with dragon/i.test(text)) return 'thriller';
-    return null;
+    if (/sad|depress|cry|grief|mournful|heartbreak|lonely|melanchol/i.test(text)) return 'emotional';
+    if (/happy|fun|light|cozy|comfort|feel.?good|laugh|cheer/i.test(text)) return 'feelgood';
+    if (/literary|fiction|prose|character|emotion|feel|beautiful|meaning/i.test(text)) return 'literary';
+    return 'literary';
   };
   const category = detectCategory();
-  if (exchangeCount === 1 && !category) {
-    const qs = [
-      "Great! To find the perfect book — are you in the mood for something fast-paced and plot-driven, or slower and more character-focused? 📖",
-      "Love it! Quick question: thriller/mystery, fantasy/sci-fi, romance, or literary fiction — which sounds best right now? ✨",
-      "Happy to help! What's the last book you read and loved? That'll help me nail your next pick 😊",
-    ];
-    return { reply: qs[Math.floor(Math.random() * qs.length)], books: [] };
-  }
-  if (exchangeCount === 1 && category) {
-    const teasers = {
-      thriller: "Thriller fan! Are you into psychological mind-games (Gone Girl style) or fast-paced action-packed stories?",
-      fantasy: "A fantasy reader! Do you prefer epic multi-book series or satisfying standalones?",
-      romance: "Romance! ❤️ Enemies-to-lovers, second chance, or just pure swoony meet-cutes?",
-      scifi: "Sci-fi! Hard science (The Martian) or more character-driven space opera?",
-      selfhelp: "Looking to grow — love it! Finance/productivity, or more philosophy and mindset?",
-      mystery: "Mystery lover! Cozy and charming, or dark psychological with teeth?",
-      literary: "Literary fiction 📚 — the good stuff. Do you want uplifting or emotionally devastating (in the best way)?",
-      historical: "Historical fiction! Any era you're drawn to, or just a great story regardless of period?",
-    };
-    return { reply: teasers[category] || "Tell me a bit more — what kind of mood are you in right now?", books: [] };
-  }
   const bookList = BOOK_DB[category] || BOOK_DB.literary;
   const prevTitles = new Set(previousBooks.map(b => b.title));
   const fresh = bookList.filter(b => !prevTitles.has(b.title));
   const recs = (fresh.length >= 3 ? fresh : bookList).slice(0, 5);
   const intros = {
-    thriller: "Based on what you love, here are 5 pulse-pounding thrillers! 🔪",
-    fantasy: "Here are 5 magical worlds waiting for you! ✨",
+    thriller: "Here are 5 gripping thrillers you won't be able to put down! 🔪",
+    fantasy: "5 magical worlds waiting for you to explore ✨",
     romance: "5 romance reads that will give you all the feels ❤️",
-    scifi: "Buckle up — 5 sci-fi journeys you won't forget 🚀",
+    scifi: "5 sci-fi journeys that will blow your mind 🚀",
     selfhelp: "5 books that will genuinely change how you think 💡",
     mystery: "5 mysteries that'll keep you guessing until the last page 🔍",
-    literary: "5 beautifully written books that will stay with you for years 📚",
     historical: "5 historical novels that transport you completely 🏰",
-    default: "Based on what you've told me, here are 5 perfect picks! 📚",
+    emotional: "5 beautifully emotional books for when you need to feel seen 🥺",
+    feelgood: "5 feel-good reads guaranteed to lift your spirits 🌟",
+    literary: "5 beautifully written books that will stay with you 📚",
   };
-  const intro = `${category ? intros[category] : intros.default}\n\nSay **'more'** for 5 different recommendations, or tell me more about your mood!`;
-  return { reply: intro, books: recs };
+  return { reply: intros[category] || "Here are 5 great picks for you! 📚", books: recs };
 };
 
 // ─── EXPLORE PAGE ────────────────────────────────────────────────────────────
@@ -1437,7 +1427,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     return () => observer.disconnect();
   }, [hasMoreBooks, currentBookPage, lastQuery]);
 
-  // ── Send chat message — instant client response + silent Groq upgrade ──
+  // ── Send chat message — calls Groq directly, clean client fallback ──
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userText = input.trim();
@@ -1446,62 +1436,40 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     setExchangeCount(newExchange);
     setChatMessages(prev => [...prev, { role: 'user', content: userText, timestamp: new Date() }]);
     setLastQuery(userText);
-
-    // ── STEP 1: Show client AI instantly — zero wait ──
     setLoading(true);
-    const { reply: clientReply, books: clientBooks } = generateClientResponse(userText, newExchange, allBooks);
-    const clientId = `cai_${Date.now()}`;
-    setChatMessages(prev => [...prev, { id: clientId, role: 'assistant', content: clientReply, timestamp: new Date(), isTemp: backendAlive !== false }]);
-    if (clientBooks.length > 0) {
-      setAllBooks(clientBooks); setHasMoreBooks(true); setCurrentBookPage(1);
-    }
-    setLoading(false);
 
-    // ── STEP 2: Try Groq in background — SSE keepalive handles Render 30s timeout ──
-    if (backendAlive !== false) {
-      setBackendWaking(true);
-      try {
-        const controller = new AbortController();
-        const tid = setTimeout(() => controller.abort(), 55000); // 55s — Groq responds in ~5-35s
-
-        // Use fetch with SSE reading (backend sends keepalives every 8s to prevent Render timeout)
-        const res = await fetch(`${API_URL}/api/books/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ message: userText, sessionId }),
-          signal: controller.signal
-        });
-        clearTimeout(tid);
-
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-        // Read SSE stream — find the last "data: {...}" line which contains the real response
-        const text = await res.text();
-        const dataLines = text.split('\n').filter(l => l.startsWith('data: '));
-        if (dataLines.length === 0) throw new Error('No data in SSE response');
-        const payload = JSON.parse(dataLines[dataLines.length - 1].replace('data: ', ''));
-
-        const { reply, hasRecommendations, recommendations, exchangeCount: sc } = payload;
-        setChatMessages(prev => prev.map(m =>
-          m.id === clientId ? { ...m, content: reply, isTemp: false, isGroq: true } : m
-        ));
-        if (sc) setExchangeCount(sc);
-        // Only replace books if Groq actually sent recommendations — don't erase client books with empty
-        if (hasRecommendations && recommendations?.length > 0) {
-          setAllBooks(recommendations); setHasMoreBooks(true); setCurrentBookPage(1);
-        } else if (allBooks.length === 0 && sc >= 2) {
-          // Groq gave no books on exchange 2+ — force client fallback books so user sees something
-          const { books: forcedBooks } = generateClientResponse(userText, sc, allBooks);
-          if (forcedBooks.length > 0) { setAllBooks(forcedBooks); setHasMoreBooks(true); }
+    let usedBackend = false;
+    try {
+      const controller = new AbortController();
+      const tid = setTimeout(() => controller.abort(), 35000);
+      const res = await fetch(`${API_URL}/api/books/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userText, sessionId }),
+        signal: controller.signal
+      });
+      clearTimeout(tid);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      if (data.success && data.reply) {
+        setChatMessages(prev => [...prev, { role: 'assistant', content: data.reply, timestamp: new Date() }]);
+        if (data.exchangeCount) setExchangeCount(data.exchangeCount);
+        if (data.hasRecommendations && data.recommendations?.length > 0) {
+          setAllBooks(data.recommendations); setHasMoreBooks(true); setCurrentBookPage(1);
         }
         setBackendAlive(true);
-      } catch {
-        // Client response already shown — nothing more to do
-        setBackendAlive(false);
-      } finally {
-        setBackendWaking(false);
+        usedBackend = true;
       }
+    } catch { setBackendAlive(false); }
+
+    // Client fallback — only when backend completely fails
+    if (!usedBackend) {
+      const { reply, books } = generateClientResponse(userText, allBooks);
+      setChatMessages(prev => [...prev, { role: 'assistant', content: reply, timestamp: new Date() }]);
+      if (books.length > 0) { setAllBooks(books); setHasMoreBooks(false); setCurrentBookPage(1); }
     }
+
+    setLoading(false);
   };
 
   // ── Load next page of books (infinite scroll) ──
@@ -1521,7 +1489,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         }
       }
       // Client fallback
-      const { books } = generateClientResponse(lastQuery, 3, allBooks);
+      const { books } = generateClientResponse(lastQuery, allBooks);
       if (books.length > 0) { setAllBooks(prev => [...prev, ...books]); }
       setHasMoreBooks(false);
     } catch { setHasMoreBooks(false); }
@@ -1857,14 +1825,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               </div>
             )}
             <div className={`max-w-[78%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-              <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-[#C8622A] text-white rounded-br-sm' : `bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border ${msg.isTemp ? 'border-orange-200' : 'border-gray-100'}`}`}>
+              <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-[#C8622A] text-white rounded-br-sm' : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'}`}>
                 {msg.content}
-                {msg.isTemp && (
-                  <div className="flex items-center gap-1 mt-1.5">
-                    <div className="w-1 h-1 bg-orange-300 rounded-full animate-pulse" />
-                    <span className="text-[10px] text-orange-400">Quick suggestion • upgrading...</span>
-                  </div>
-                )}
               </div>
               <span className="text-[10px] text-gray-400 mt-1 px-1">{formatTime(msg.timestamp)}</span>
             </div>
@@ -1886,14 +1848,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           </div>
         )}
 
-        {backendWaking && !loading && (
-          <div className="flex justify-center my-1">
-            <div className="flex items-center gap-2 bg-orange-50 border border-orange-200 rounded-full px-3 py-1.5">
-              <div className="w-1.5 h-1.5 bg-orange-400 rounded-full animate-pulse" />
-              <span className="text-[11px] text-orange-600 font-medium">Upgrading to Groq AI...</span>
-            </div>
-          </div>
-        )}
+
 
         {/* Book recommendations — infinite scroll list */}
         {allBooks.length > 0 && (
@@ -1929,7 +1884,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
       </div>
 
       {/* Quick suggestions (only if no books yet) */}
-      {allBooks.length === 0 && (
+      {allBooks.length === 0 && chatMessages.length <= 1 && (
         <div className="px-5 mt-4">
           <p className="text-xs text-[#8B7968] mb-2">Try asking:</p>
           <div className="flex flex-wrap gap-2">
