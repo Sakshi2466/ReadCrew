@@ -75,49 +75,43 @@ const sessions = new Map();
 
 function getSession(id) {
   if (!sessions.has(id)) {
-    sessions.set(id, {
-      messages: [],
-      exchangeCount: 0,
-      recommendedBooks: [],
-      created: Date.now()
-    });
+    sessions.set(id, { messages: [], exchangeCount: 0, recommendedBooks: [], created: Date.now() });
   }
   return sessions.get(id);
 }
 
 setInterval(() => {
   const cutoff = Date.now() - 2 * 60 * 60 * 1000;
-  for (const [id, s] of sessions) {
-    if (s.created < cutoff) sessions.delete(id);
-  }
+  for (const [id, s] of sessions) { if (s.created < cutoff) sessions.delete(id); }
 }, 60 * 60 * 1000);
 
-// ─── CONVERSATIONAL AI PROMPT ──────────────────────────────────────────────────
-const BOOK_COMPANION_PROMPT = `You are "Page Turner" — a warm, enthusiastic AI book companion who loves talking about books.
+// ─── SYSTEM PROMPT — BOOKS FIRST, ALWAYS ─────────────────────────────────────
+const BOOK_COMPANION_PROMPT = `You are "Page Turner" — a warm, knowledgeable AI book companion. Your #1 job is to give great book recommendations as fast as possible.
 
-YOUR PERSONALITY:
-- Conversational and friendly like a best friend
-- Use emojis naturally but not excessively 📚✨
-- Ask follow-up questions to understand readers
-- Share opinions on books authentically
-- Remember conversation context
+═══════════════════════════════════════
+ THE GOLDEN RULE: ALWAYS GIVE BOOKS FIRST
+═══════════════════════════════════════
 
-YOUR CAPABILITIES:
-1. **Recommendations** - Suggest books based on mood, genre, themes
-2. **Book Discussions** - Talk about plots, themes, characters
-3. **Quotes** - Share memorable lines from books
-4. **Character Analysis** - Discuss why characters are compelling
-5. **Similar Books** - Find books with similar vibes
+ANY mood, emotion, genre, vibe, or keyword = give 5 book recommendations IMMEDIATELY.
 
-CONVERSATION STYLE:
-- Exchange 1-2: Chat naturally, ask ONE clarifying question if needed
-- Exchange 3+: Can recommend books OR continue discussing
-- When discussing a book: Share plot, themes, your take on it
-- When asked for quotes: Share 2-3 lines with context
-- When asked about characters: Analyze deeply
+• "I am feeling sad" → give 5 emotional/literary books NOW
+• "I want something fun" → give 5 light/funny books NOW  
+• "romance" → give 5 romance books NOW
+• "sci-fi" → give 5 sci-fi books NOW
+• "I can't sleep" → give 5 page-turners NOW
+• "stressed" → give 5 calming/escapist books NOW
+• "happy" → give 5 joyful/celebratory books NOW
+• ANY emotion + ANY genre + ANY mood = books NOW
 
-RECOMMENDATION FORMAT (when giving recommendations):
-Use this EXACT format:
+ONLY skip giving books if the message is purely: "hi", "hello", "hey", or "what can you do?" — for these, give a warm 1-sentence welcome and ask what they want.
+
+For EVERYTHING else: books first, question second (if at all).
+
+═══════════════════════════════════════
+ FORMAT — USE THIS EXACTLY
+═══════════════════════════════════════
+
+[Short warm intro — 1 sentence about why these books fit their request]
 
 <!--REC_START-->
 [
@@ -125,67 +119,82 @@ Use this EXACT format:
     "title": "Book Title",
     "author": "Author Name",
     "genre": "Genre",
-    "description": "2-3 sentences",
-    "reason": "Why this matches their request",
+    "description": "2-3 engaging sentences about the book. What makes it special.",
+    "reason": "Exactly why this fits what they said",
     "rating": 4.6
   }
 ]
 <!--REC_END-->
 
-RULES:
-- Don't force recommendations - chat naturally
-- If discussing a specific book, go deep before suggesting similar ones
-- Remember books mentioned to avoid repetition
-- If asked "more", give DIFFERENT books
-- Keep responses warm and conversational
+[1 brief optional follow-up question or comment — max 1 sentence]
 
-EXAMPLES:
+═══════════════════════════════════════
+ FOLLOW-UP RULES
+═══════════════════════════════════════
 
-User: "Tell me about The Alchemist"
-You: "The Alchemist! 📚 It's this beautiful story about Santiago, a shepherd who has a recurring dream about treasure near the pyramids. So he sells everything and goes on this incredible journey.
+• "more" or "different" → Give 5 completely NEW books, no repeats, no questions
+• "more like [title]" → Give books similar to that specific one
+• User mentions a book title → Acknowledge it briefly (1 sentence), then give similar books
+• Exchange 2+ → ALWAYS include 5 books. You may ask 1 question AFTER the book list.
+• NEVER ask more than 1 question per message
+• NEVER ask for clarification before giving books — you always have enough info
 
-But here's the magic — it's not really about finding treasure. It's about following your 'Personal Legend' (your life's purpose) and trusting that the universe helps those who truly want something.
+═══════════════════════════════════════
+ PERSONALITY
+═══════════════════════════════════════
+• Warm and enthusiastic without being over-the-top
+• Use 1-2 emojis max per message
+• Sound like a knowledgeable friend, not a librarian
+• Your recommendations feel personal and specific, not generic
 
-Paulo Coelho writes it simply but poetically. One of my favorites: 'When you want something, all the universe conspires in helping you to achieve it.'
+═══════════════════════════════════════
+ EXAMPLE — THIS IS HOW IT SHOULD WORK
+═══════════════════════════════════════
 
-It's short (about 200 pages) but profound. People either love it for its wisdom or find it too simple. Have you read it?"
+User: "i am feeling sad"
 
-User: "I want something sad but beautiful"
-You: "I love that mood 🥺 Sad books can be so cathartic!
+Response:
+Sad moods deserve books that make you feel beautifully understood 🥺
 
-Quick question: Are you thinking contemporary realistic fiction that hits close to home? Or more poetic, bittersweet stories?
+<!--REC_START-->
+[
+  {"title":"A Little Life","author":"Hanya Yanagihara","genre":"Literary Fiction","description":"Four friends navigate life, trauma, and love over decades. Devastating, beautiful, and one of the most emotionally intense novels ever written.","reason":"Perfectly captures that deep, aching sadness — you'll feel profoundly seen","rating":4.6},
+  {"title":"The Fault in Our Stars","author":"John Green","genre":"YA Fiction","description":"Two teenagers with cancer fall in love. Simple premise, devastating execution with wit and heart.","reason":"Cathartic sad — you'll cry but feel somehow better after","rating":4.7},
+  {"title":"The Midnight Library","author":"Matt Haig","genre":"Fiction","description":"Between life and death exists a library of every life you could have lived. A beautiful meditation on regret and second chances.","reason":"Starts sad but blooms into something hopeful — perfect for this mood","rating":4.5},
+  {"title":"Me Before You","author":"Jojo Moyes","genre":"Romance","description":"A young woman becomes caretaker to a paralyzed man. Their bond changes everything.","reason":"Beautifully bittersweet — exactly the kind of sad that feels meaningful","rating":4.6},
+  {"title":"The Book Thief","author":"Markus Zusak","genre":"Historical Fiction","description":"A girl in Nazi Germany steals books to survive. Narrated by Death. Hauntingly, gloriously written.","reason":"Devastatingly sad and one of the most beautifully written books ever made","rating":4.8}
+]
+<!--REC_END-->
 
-Also — do you want 'sad but hopeful ending' or 'beautifully devastating'?"
+Would you prefer something more hopeful, or lean further into the beautiful devastation?`;
 
-Be genuine, warm, and conversational!`;
-
-// ─── MAIN CHAT ENDPOINT (REGULAR JSON, NO SSE) ────────────────────────────────
+// ─── CHAT ENDPOINT ────────────────────────────────────────────────────────────
 router.post('/chat', async (req, res) => {
   const { message, sessionId = 'default' } = req.body;
-  if (!message) {
-    return res.status(400).json({ success: false, message: 'Message required' });
-  }
+  if (!message) return res.status(400).json({ success: false, message: 'Message required' });
 
   const session = getSession(sessionId);
   const userMsg = message.trim();
-  
-  const historyForLLM = [...session.messages.slice(-12), { role: 'user', content: userMsg }];
+
+  const historyForLLM = [...session.messages.slice(-10), { role: 'user', content: userMsg }];
   session.messages.push({ role: 'user', content: userMsg });
   session.exchangeCount++;
 
   let contextPrompt = BOOK_COMPANION_PROMPT;
   if (session.recommendedBooks.length > 0) {
-    contextPrompt += `\n\nBOOKS ALREADY RECOMMENDED:\n${session.recommendedBooks.map(b => `- ${b.title} by ${b.author}`).join('\n')}\n\nDon't recommend these again.`;
+    contextPrompt += `\n\n⛔ ALREADY RECOMMENDED — DO NOT SUGGEST THESE AGAIN:\n${session.recommendedBooks.map(b => `- "${b.title}" by ${b.author}`).join('\n')}`;
+  }
+  if (session.exchangeCount >= 2) {
+    contextPrompt += `\n\n⚠️ MANDATORY: This is exchange ${session.exchangeCount}. You MUST include 5 book recommendations in your response.`;
   }
 
   try {
-    const rawReply = await callLLM(contextPrompt, historyForLLM, { temperature: 0.85, maxTokens: 2000 });
+    const rawReply = await callLLM(contextPrompt, historyForLLM, { temperature: 0.82, maxTokens: 2200 });
 
     let reply = rawReply;
     let recommendations = [];
     let hasRecommendations = false;
 
-    // Extract recommendations
     const recMatch = reply.match(/<!--REC_START-->([\s\S]*?)<!--REC_END-->/);
     if (recMatch) {
       try {
@@ -204,10 +213,11 @@ router.post('/chat', async (req, res) => {
         console.error('Rec JSON parse error:', e.message);
       }
       reply = reply.replace(/<!--REC_START-->[\s\S]*?<!--REC_END-->/, '').trim();
+      reply = reply.replace(/\n{3,}/g, '\n\n').trim();
     }
 
     session.messages.push({ role: 'assistant', content: reply });
-    
+
     return res.json({
       success: true,
       reply,
@@ -219,42 +229,22 @@ router.post('/chat', async (req, res) => {
 
   } catch (err) {
     console.error('Chat error:', err.message);
-    
-    const fallbackReply = "I'm having a bit of trouble connecting 😅 But I'm here! What kind of books are you in the mood for?";
+    const fallbackReply = "Having a moment of trouble connecting 😅 Try again — I'm here! What kind of books are you in the mood for?";
     session.messages.push({ role: 'assistant', content: fallbackReply });
-    
-    return res.json({
-      success: true,
-      reply: fallbackReply,
-      hasRecommendations: false,
-      recommendations: [],
-      sessionId,
-      exchangeCount: session.exchangeCount
-    });
+    return res.json({ success: true, reply: fallbackReply, hasRecommendations: false, recommendations: [], sessionId, exchangeCount: session.exchangeCount });
   }
 });
 
-// ─── CHARACTER SEARCH ──────────────────────────────────────────────────────────
+// ─── CHARACTER SEARCH ─────────────────────────────────────────────────────────
 router.post('/character-search', async (req, res) => {
   const { character, fromBook } = req.body;
-  if (!character) {
-    return res.status(400).json({ success: false, message: 'Character name required' });
-  }
+  if (!character) return res.status(400).json({ success: false, message: 'Character name required' });
 
-  const systemPrompt = `You are a character analysis expert. Return ONLY valid JSON.
-
+  const systemPrompt = `You are a book expert. Return ONLY valid JSON.
 {
-  "characterAnalysis": "3-4 sentences analyzing why readers love this character",
+  "characterAnalysis": "3-4 sentences about why readers love this character and what makes them compelling",
   "recommendations": [
-    {
-      "title": "Book Title",
-      "author": "Author Name",
-      "genre": "Genre",
-      "description": "2 sentences",
-      "reason": "Why this has a similar character",
-      "rating": 4.5,
-      "similarCharacter": "Character name in this book"
-    }
+    {"title":"","author":"","genre":"","description":"2 sentences","reason":"Why this has a similar character","rating":4.5,"similarCharacter":"Character name in this book"}
   ]
 }`;
 
@@ -268,55 +258,40 @@ router.post('/character-search', async (req, res) => {
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('No JSON found');
     const result = JSON.parse(match[0]);
-    
     res.json({ success: true, character, fromBook: fromBook || null, ...result, source: 'ai' });
   } catch (err) {
     console.error('Character search error:', err.message);
     res.json({
-      success: true,
-      character,
-      fromBook: fromBook || null,
-      characterAnalysis: `Readers who love "${character}" enjoy complex, layered characters with emotional depth and compelling journeys.`,
+      success: true, character, fromBook: fromBook || null,
+      characterAnalysis: `Readers who love "${character}" are drawn to complex, layered characters with emotional depth and compelling growth arcs.`,
       recommendations: [
-        { title: 'The Name of the Wind', author: 'Patrick Rothfuss', genre: 'Fantasy', description: 'Kvothe tells his story of magic and tragedy.', reason: 'Features a brilliantly complex protagonist', rating: 4.7, similarCharacter: 'Kvothe' },
-        { title: 'The Secret History', author: 'Donna Tartt', genre: 'Mystery', description: 'Classics students entangled in murder.', reason: 'Morally complex characters', rating: 4.6, similarCharacter: 'Richard Papen' },
-        { title: 'Circe', author: 'Madeline Miller', genre: 'Fantasy', description: 'The witch-goddess finds her voice.', reason: 'Powerful character finding strength', rating: 4.7, similarCharacter: 'Circe' }
+        { title: 'The Name of the Wind', author: 'Patrick Rothfuss', genre: 'Fantasy', description: 'Kvothe tells his legendary story of magic and tragedy.', reason: 'A brilliantly complex, gifted protagonist', rating: 4.7, similarCharacter: 'Kvothe' },
+        { title: 'The Secret History', author: 'Donna Tartt', genre: 'Mystery', description: 'Classics students spiral into moral darkness.', reason: 'Morally complex characters you cannot stop reading', rating: 4.6, similarCharacter: 'Richard Papen' },
+        { title: 'Circe', author: 'Madeline Miller', genre: 'Fantasy', description: 'A witch-goddess discovers her power.', reason: 'Powerful character transformation and self-discovery', rating: 4.7, similarCharacter: 'Circe' },
+        { title: 'Pachinko', author: 'Min Jin Lee', genre: 'Historical Fiction', description: 'Four generations of a Korean family fight to survive.', reason: 'Deeply human characters with extraordinary resilience', rating: 4.7, similarCharacter: 'Sunja' },
+        { title: 'A Little Life', author: 'Hanya Yanagihara', genre: 'Literary Fiction', description: 'Four friends shaped by trauma over decades.', reason: 'Characters written with unmatched psychological depth', rating: 4.6, similarCharacter: 'Jude St. Francis' }
       ],
       source: 'fallback'
     });
   }
 });
 
-// ─── BOOK DETAILS (for Crews page) ────────────────────────────────────────────
+// ─── BOOK DETAILS ─────────────────────────────────────────────────────────────
 router.post('/book-details', async (req, res) => {
   const { bookName, author } = req.body;
-  if (!bookName) {
-    return res.status(400).json({ success: false, message: 'Book name required' });
-  }
+  if (!bookName) return res.status(400).json({ success: false, message: 'Book name required' });
 
   const systemPrompt = `You are a book expert. Return ONLY valid JSON.
-
 {
-  "summary": "2-3 engaging paragraphs about the book - plot, themes, why it matters. NO spoilers.",
+  "summary": "2-3 engaging paragraphs about the book — plot, themes, why it matters. No spoilers.",
   "themes": ["theme1", "theme2", "theme3"],
-  "quotes": [
-    {"quote": "actual quote", "context": "when it appears"}
-  ],
-  "similarBooks": [
-    {
-      "title": "Book Title",
-      "author": "Author Name",
-      "genre": "Genre",
-      "description": "2 sentences",
-      "reason": "Why it's similar",
-      "rating": 4.5
-    }
-  ]
+  "quotes": [{"quote": "actual memorable quote", "context": "brief context"}],
+  "similarBooks": [{"title":"","author":"","genre":"","description":"2 sentences","reason":"Why similar","rating":4.5}]
 }`;
 
   const userPrompt = author
-    ? `Give complete details about "${bookName}" by ${author}. Include summary, themes, 3 famous quotes, and 5 similar books. Return ONLY JSON.`
-    : `Give complete details about "${bookName}". Include summary, themes, 3 famous quotes, and 5 similar books. Return ONLY JSON.`;
+    ? `Details for "${bookName}" by ${author}: summary, 3 themes, 2 famous quotes, 4 similar books. ONLY JSON.`
+    : `Details for "${bookName}": summary, 3 themes, 2 famous quotes, 4 similar books. ONLY JSON.`;
 
   try {
     const text = await callLLM(systemPrompt, [{ role: 'user', content: userPrompt }], { temperature: 0.7, maxTokens: 2500 });
@@ -324,38 +299,33 @@ router.post('/book-details', async (req, res) => {
     const match = cleaned.match(/\{[\s\S]*\}/);
     if (!match) throw new Error('No JSON found');
     const result = JSON.parse(match[0]);
-    
     res.json({ success: true, bookName, author: author || null, ...result, source: 'ai' });
   } catch (err) {
     console.error('Book details error:', err.message);
     res.json({
-      success: true,
-      bookName,
-      author: author || null,
-      summary: `"${bookName}"${author ? ` by ${author}` : ''} is a compelling read that has captivated readers worldwide. The book explores universal themes of human experience through rich storytelling and memorable characters.\n\nReaders are drawn to this book for its emotional depth and thought-provoking narrative. It offers insights into the human condition while entertaining with its engaging plot.`,
-      themes: ['Human Nature', 'Resilience', 'Transformation'],
-      quotes: [
-        { quote: 'A meaningful quote from the book', context: 'This appears during a pivotal moment' }
-      ],
-      similarBooks: [
-        { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', description: 'A journey of self-discovery.', reason: 'Similar themes of personal growth', rating: 4.7 }
-      ],
+      success: true, bookName, author: author || null,
+      summary: `"${bookName}"${author ? ` by ${author}` : ''} is a celebrated book loved by readers worldwide. It explores universal themes through compelling storytelling and memorable characters.`,
+      themes: ['Human Connection', 'Resilience', 'Identity'],
+      quotes: [{ quote: 'A meaningful line from this book', context: 'A pivotal moment in the story' }],
+      similarBooks: [{ title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', description: 'A shepherd follows his dreams across continents.', reason: 'Similar themes of purpose and self-discovery', rating: 4.7 }],
       source: 'fallback'
     });
   }
 });
 
-// ─── TRENDING BOOKS ────────────────────────────────────────────────────────────
+// ─── TRENDING (health check / wake endpoint) ──────────────────────────────────
 router.get('/trending', async (req, res) => {
-  const page = parseInt(req.query.page) || 1;
-  const mockBooks = [
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8, readers: 25000 },
-    { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, readers: 22000 },
-    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6, readers: 19000 },
-    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6, readers: 28000 },
-    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', rating: 4.7, readers: 27000 }
-  ];
-  res.json({ success: true, books: mockBooks, page, hasMore: false });
+  res.json({
+    success: true,
+    books: [
+      { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8, readers: 25000 },
+      { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, readers: 22000 },
+      { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6, readers: 19000 },
+      { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6, readers: 28000 },
+      { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', rating: 4.7, readers: 27000 }
+    ],
+    page: 1, hasMore: false
+  });
 });
 
 module.exports = router;
