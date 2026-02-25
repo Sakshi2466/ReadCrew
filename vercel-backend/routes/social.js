@@ -71,7 +71,7 @@ const toggleInArray = (arr = [], val) => {
 // ── Posts ──────────────────────────────────────────────────────────────────────
 let posts = [
   {
-    id: 'demo1', userName: 'Priya Sharma', userEmail: 'priya@readcrew.app',
+    id: 'demo1', userName: 'Sakshi', userEmail: 'sakshi@readcrew.app',
     userPhoto: null, userInitials: 'PS',
     content: "Just finished 'Atomic Habits' and my mind is blown 🤯 The 1% improvement concept is life-changing. If you haven't read it yet, what are you waiting for?",
     bookName: 'Atomic Habits', author: 'James Clear', image: null,
@@ -79,7 +79,7 @@ let posts = [
     createdAt: new Date(Date.now() - 2  * 3600000).toISOString(), isPublic: true,
   },
   {
-    id: 'demo2', userName: 'Rahul Mehta', userEmail: 'rahul@readcrew.app',
+    id: 'demo2', userName: 'Sakshi', userEmail: 'sakshi@readcrew.app',
     userPhoto: null, userInitials: 'RM',
     content: "The ending of 'Project Hail Mary' had me in tears. Andy Weir is a genius. Rocky is the best fictional character ever created 🛸",
     bookName: 'Project Hail Mary', author: 'Andy Weir', image: null,
@@ -87,7 +87,7 @@ let posts = [
     createdAt: new Date(Date.now() - 5  * 3600000).toISOString(), isPublic: true,
   },
   {
-    id: 'demo3', userName: 'Aisha Khan', userEmail: 'aisha@readcrew.app',
+    id: 'demo3', userName: 'Sakshi', userEmail: 'sakshi@readcrew.app',
     userPhoto: null, userInitials: 'AK',
     content: "3 AM and I can't stop reading 'The Silent Patient'. The twist… I did NOT see that coming 😱",
     bookName: 'The Silent Patient', author: 'Alex Michaelides', image: null,
@@ -95,7 +95,7 @@ let posts = [
     createdAt: new Date(Date.now() - 12 * 3600000).toISOString(), isPublic: true,
   },
   {
-    id: 'demo4', userName: 'Vikram Nair', userEmail: 'vikram@readcrew.app',
+    id: 'demo4', userName: 'Sakshi', userEmail: 'sakshi@readcrew.app',
     userPhoto: null, userInitials: 'VN',
     content: "Reading 'Sapiens' for the second time. It hits different when you're older. Harari makes you question everything 🌍",
     bookName: 'Sapiens', author: 'Yuval Noah Harari', image: null,
@@ -103,7 +103,7 @@ let posts = [
     createdAt: new Date(Date.now() - 18 * 3600000).toISOString(), isPublic: true,
   },
   {
-    id: 'demo5', userName: 'Sneha Patel', userEmail: 'sneha@readcrew.app',
+    id: 'demo5', userName: 'Sakshi', userEmail: 'sakshi@readcrew.app',
     userPhoto: null, userInitials: 'SP',
     content: "Beach Read by Emily Henry is the perfect summer novel 🌊☀️ The slow-burn romance is CHEF'S KISS. Highly recommend!",
     bookName: 'Beach Read', author: 'Emily Henry', image: null,
@@ -111,7 +111,7 @@ let posts = [
     createdAt: new Date(Date.now() - 24 * 3600000).toISOString(), isPublic: true,
   },
   {
-    id: 'demo6', userName: 'Arjun Sharma', userEmail: 'arjun@readcrew.app',
+    id: 'demo6', userName: 'Sakshi', userEmail: 'sakshi@readcrew.app',
     userPhoto: null, userInitials: 'AS',
     content: "Fourth Wing crew where you at? 🐉 Just joined the dragon riders academy and I'm absolutely obsessed. Xaden Riorson can fight me any day 😍",
     bookName: 'Fourth Wing', author: 'Rebecca Yarros', image: null,
