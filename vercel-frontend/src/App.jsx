@@ -8,7 +8,8 @@ import {
   Calendar, Award, MessageSquare, Globe, ChevronDown, Filter, Play, Pause,
   Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink,
   Link2, Instagram, Facebook, Twitter, AtSign, Flag, Pin, Smile,
-  CheckCheck, BookMarked, PlusCircle, MapPin, Navigation, Map, Repeat
+  CheckCheck, BookMarked, PlusCircle, MapPin, Navigation, Map, Repeat,
+  UserCheck, UserMinus
 } from 'lucide-react';
 
 // ─── ONLY import what actually exists in your api.js ─────────────────────────
@@ -227,16 +228,16 @@ const NotificationsPage = ({ user, onClose }) => {
     setNotifications(updated);
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
   };
-  const icons = { like: <Heart className="w-4 h-4 text-red-500" />, comment: <MessageCircle className="w-4 h-4 text-blue-500" />, message: <MessageSquare className="w-4 h-4 text-green-500" />, invite: <UserPlus className="w-4 h-4 text-purple-500" /> };
-  const bgColors = { like: 'bg-red-100', comment: 'bg-blue-100', message: 'bg-green-100', invite: 'bg-purple-100' };
+  const icons = { like: <Heart className="w-4 h-4 text-red-500" />, comment: <MessageCircle className="w-4 h-4 text-blue-500" />, message: <MessageSquare className="w-4 h-4 text-green-500" />, invite: <UserPlus className="w-4 h-4 text-purple-500" />, follow: <UserCheck className="w-4 h-4 text-orange-500" /> };
+  const bgColors = { like: 'bg-red-100', comment: 'bg-blue-100', message: 'bg-green-100', invite: 'bg-purple-100', follow: 'bg-orange-100' };
   return (
-    <div className="fixed inset-0 bg-white z-50 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+    <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
         <h2 className="font-semibold text-gray-900">Notifications</h2>
         <button onClick={markAllAsRead} className="text-sm text-orange-500 font-medium">Mark all read</button>
       </div>
-      <div className="overflow-y-auto h-[calc(100vh-60px)] pb-20">
+      <div className="flex-1 overflow-y-auto pb-20">
         {notifications.length === 0 ? (
           <div className="text-center py-12"><Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No notifications yet</p></div>
         ) : (
@@ -271,23 +272,25 @@ const ShareModal = ({ post, onClose }) => {
     copyLink: () => { navigator.clipboard.writeText(shareUrl); alert('Link copied!'); }
   };
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="bg-white rounded-2xl w-full p-5 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2">
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center">
           <h3 className="font-semibold">Share Post</h3>
-          <button onClick={onClose}><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
         </div>
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          {[['whatsapp','#25D366','W'],['facebook','#1877F2','F'],['twitter','#1DA1F2','T']].map(([key, color, letter]) => (
-            <button key={key} onClick={handlers[key]} className="flex flex-col items-center gap-2">
-              <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg" style={{backgroundColor: color}}>{letter}</div>
-              <span className="text-xs text-gray-600 capitalize">{key}</span>
-            </button>
-          ))}
+        <div className="p-5">
+          <div className="grid grid-cols-4 gap-4 mb-4">
+            {[['whatsapp','#25D366','W'],['facebook','#1877F2','F'],['twitter','#1DA1F2','T']].map(([key, color, letter]) => (
+              <button key={key} onClick={handlers[key]} className="flex flex-col items-center gap-2">
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg" style={{backgroundColor: color}}>{letter}</div>
+                <span className="text-xs text-gray-600 capitalize">{key}</span>
+              </button>
+            ))}
+          </div>
+          <button onClick={handlers.copyLink} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50">
+            <Link2 className="w-5 h-5 text-orange-500" /><span className="font-medium">Copy Link</span>
+          </button>
         </div>
-        <button onClick={handlers.copyLink} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50">
-          <Link2 className="w-5 h-5 text-orange-500" /><span className="font-medium">Copy Link</span>
-        </button>
       </div>
     </div>
   );
@@ -303,56 +306,69 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="bg-white rounded-2xl w-full p-5 max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2">
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center">
           <h3 className="font-semibold">Reshare Post</h3>
-          <button onClick={onClose}><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
         </div>
-        <div className="mb-4">
-          <p className="text-sm text-gray-600 mb-3">Add a comment (optional):</p>
-          <textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none"
-            placeholder="What are your thoughts?"
-            rows={3}
-          />
+        <div className="p-5">
+          <div className="mb-4">
+            <p className="text-sm text-gray-600 mb-3">Add a comment (optional):</p>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none"
+              placeholder="What are your thoughts?"
+              rows={3}
+            />
+          </div>
+          <div className="bg-gray-50 rounded-xl p-3 mb-4">
+            <p className="text-xs text-gray-500 mb-1">Original post by <span className="font-semibold">{post.userName}</span>:</p>
+            <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
+          </div>
+          <button
+            onClick={handleReshare}
+            className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-medium flex items-center justify-center gap-2"
+          >
+            <Repeat className="w-4 h-4" />
+            Reshare
+          </button>
         </div>
-        <div className="bg-gray-50 rounded-xl p-3 mb-4">
-          <p className="text-xs text-gray-500 mb-1">Original post by {post.userName}:</p>
-          <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
-        </div>
-        <button
-          onClick={handleReshare}
-          className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-medium flex items-center justify-center gap-2"
-        >
-          <Repeat className="w-4 h-4" />
-          Reshare
-        </button>
       </div>
     </div>
   );
 };
 
 // ─── POST OPTIONS MODAL ──────────────────────────────────────────────────
-const PostOptionsModal = ({ post, user, onClose, onReshare, onSave, isSaved, onDelete, isOwner }) => {
+const PostOptionsModal = ({ post, user, onClose, onReshare, onSave, isSaved, onDelete, isOwner, onFollow, isFollowing }) => {
   const options = [
     { id: 'reshare', icon: Repeat, label: 'Reshare', color: 'text-blue-600', action: () => onReshare(post) },
     { id: 'save', icon: Bookmark, label: isSaved ? 'Unsave' : 'Save', color: isSaved ? 'text-orange-500' : 'text-gray-700', action: () => onSave(post) },
   ];
+
+  // Add follow/unfollow option if it's not the user's own post
+  if (!isOwner) {
+    options.push({ 
+      id: 'follow', 
+      icon: isFollowing ? UserMinus : UserPlus, 
+      label: isFollowing ? 'Unfollow' : 'Follow', 
+      color: isFollowing ? 'text-red-500' : 'text-green-600', 
+      action: () => onFollow(post.userEmail, post.userName) 
+    });
+  }
 
   if (isOwner) {
     options.push({ id: 'delete', icon: Trash2, label: 'Delete', color: 'text-red-500', action: () => onDelete(post) });
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
       <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
         <div className="p-4 border-b border-gray-100">
           <h3 className="font-semibold text-center">Post Options</h3>
         </div>
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
           {options.map(option => (
             <button
               key={option.id}
@@ -372,8 +388,8 @@ const PostOptionsModal = ({ post, user, onClose, onReshare, onSave, isSaved, onD
   );
 };
 
-// ─── INLINE POST CARD with embedded comments (matches screenshot) ──────────
-const InlinePostCard = ({ post, user, profileSrc, updateNotificationCount, onShare, onReshareClick, onSaveToggle, isSaved, onDelete }) => {
+// ─── INLINE POST CARD with embedded comments ────────────────────────────
+const InlinePostCard = ({ post, user, profileSrc, updateNotificationCount, onShare, onReshareClick, onSaveToggle, isSaved, onDelete, onFollow, isFollowing }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [likedComments, setLikedComments] = useState(new Set());
@@ -557,6 +573,8 @@ const InlinePostCard = ({ post, user, profileSrc, updateNotificationCount, onSha
           isSaved={isSaved}
           onDelete={onDelete}
           isOwner={isPostAuthor}
+          onFollow={onFollow}
+          isFollowing={isFollowing}
         />
       )}
 
@@ -595,17 +613,32 @@ const InlinePostCard = ({ post, user, profileSrc, updateNotificationCount, onSha
           {post.image && (
             <img src={post.image} alt="" className="w-full rounded-xl mb-3 max-h-56 object-cover" />
           )}
+          
+          {/* Show reshare indicator */}
+          {post.isReshare && post.originalPost && (
+            <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
+              <Repeat className="w-3 h-3" />
+              <span>Reshared from <span className="font-semibold">{post.originalPost.userName}</span></span>
+            </div>
+          )}
+          
           <p className="text-gray-800 text-base leading-relaxed" style={{ fontFamily: 'Georgia, serif' }}>
             {post.story || post.content}
           </p>
-          {post.isReshare && post.originalPost && (
-            <div className="mt-3 bg-gray-50 rounded-xl p-3 border border-gray-200">
-              <p className="text-xs text-gray-500 mb-1">Reshared from {post.originalPost.userName}</p>
-              <p className="text-sm text-gray-600 line-clamp-2">{post.originalPost.content}</p>
+          
+          {/* Show reshare comment if exists */}
+          {post.reshareComment && (
+            <div className="mt-3 bg-orange-50 rounded-lg p-3 border border-orange-100">
+              <p className="text-sm text-orange-800 italic">"{post.reshareComment}"</p>
             </div>
           )}
-          {post.reshareComment && (
-            <p className="text-sm text-orange-600 mt-2 italic">"{post.reshareComment}"</p>
+          
+          {/* Show original post content for reshare */}
+          {post.isReshare && post.originalPost && (
+            <div className="mt-3 bg-gray-50 rounded-xl p-3 border border-gray-200">
+              <p className="text-xs text-gray-500 mb-1">Original post:</p>
+              <p className="text-sm text-gray-600">{post.originalPost.content}</p>
+            </div>
           )}
         </div>
 
@@ -730,12 +763,11 @@ const LoginPage = ({ onLogin }) => {
   const [loading, setLoading]   = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg]   = useState('');
-  const [devOtpDisplay, setDevOtpDisplay] = useState(''); // shown in UI, not alert()
+  const [devOtpDisplay, setDevOtpDisplay] = useState('');
   const [readingGoal, setReadingGoal] = useState({ yearly: 20, monthly: 5 });
 
   const validateEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
-  // ── Save user locally + return the object ──────────────────────────────
   const saveLocalUser = (userData) => {
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     const idx = users.findIndex(u => u.email === userData.email);
@@ -743,6 +775,15 @@ const LoginPage = ({ onLogin }) => {
     else users.push(userData);
     localStorage.setItem('users', JSON.stringify(users));
     localStorage.setItem('currentUser', JSON.stringify(userData));
+    
+    // Initialize follow data
+    if (!localStorage.getItem(`user_${userData.email}_followers`)) {
+      localStorage.setItem(`user_${userData.email}_followers`, JSON.stringify([]));
+    }
+    if (!localStorage.getItem(`user_${userData.email}_following`)) {
+      localStorage.setItem(`user_${userData.email}_following`, JSON.stringify([]));
+    }
+    
     ['stats','joinedCrews','notifications','likedPosts','likedReviews'].forEach(key => {
       if (!localStorage.getItem(`user_${userData.email}_${key}`)) {
         localStorage.setItem(`user_${userData.email}_${key}`, JSON.stringify(userData[key] || (key === 'stats' ? userData.stats : [])));
@@ -751,7 +792,6 @@ const LoginPage = ({ onLogin }) => {
     return userData;
   };
 
-  // ── SEND OTP (signup) ──────────────────────────────────────────────────
   const handleSendOTP = async () => {
     setErrorMsg('');
     if (!name.trim() || name.trim().length < 2) { setErrorMsg('Please enter your full name (at least 2 characters)'); return; }
@@ -767,22 +807,19 @@ const LoginPage = ({ onLogin }) => {
         setErrorMsg(result.message || 'Could not send OTP. Please try again.');
       }
     } catch {
-      // Brevo unreachable — show dev OTP inside the UI (not alert)
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       localStorage.setItem('devOTP', otp);
       setShowOTP(true);
-      setDevOtpDisplay(otp); // displayed inside OTP screen
+      setDevOtpDisplay(otp);
       setInfoMsg('Email service is temporarily unavailable — use the code below to continue:');
     } finally { setLoading(false); }
   };
 
-  // ── VERIFY OTP → register on backend → login ──────────────────────────
   const handleVerifyOTP = async () => {
     setErrorMsg('');
     if (otpInput.length !== 6) { setErrorMsg('Please enter the 6-digit code'); return; }
     setLoading(true);
     try {
-      // 1. Verify OTP with backend
       const result = await otpAPI.verifyOTP({ email, otp: otpInput });
       const devOTP = localStorage.getItem('devOTP');
       const otpOk  = result.success || (devOTP && otpInput === devOTP);
@@ -795,7 +832,6 @@ const LoginPage = ({ onLogin }) => {
 
       if (devOTP) localStorage.removeItem('devOTP');
 
-      // 2. Register user on backend (creates MongoDB record)
       let serverUser = null;
       try {
         const reg = await fetch(`${API_URL}/api/auth/register`, {
@@ -808,7 +844,6 @@ const LoginPage = ({ onLogin }) => {
         if (regData.success) serverUser = regData.user;
       } catch { /* offline — use local fallback */ }
 
-      // 3. Build final user object (prefer server data, fallback to local)
       const userData = saveLocalUser({
         id:          serverUser?.id || Date.now().toString(),
         name:        serverUser?.name || name,
@@ -819,6 +854,7 @@ const LoginPage = ({ onLogin }) => {
         createdAt:   new Date().toISOString(),
         stats:       serverUser?.stats || { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
         joinedCrews: [], likedPosts: [], likedReviews: [], booksRead: [],
+        followers: [], following: []
       });
 
       setShowOTP(false);
@@ -828,14 +864,12 @@ const LoginPage = ({ onLogin }) => {
     } finally { setLoading(false); }
   };
 
-  // ── LOGIN (existing user) ─────────────────────────────────────────────
   const handleLogin = async () => {
     setErrorMsg('');
     if (!validateEmail(email)) { setErrorMsg('Please enter a valid email address'); return; }
     if (!password.trim()) { setErrorMsg('Please enter your password'); return; }
     setLoading(true);
 
-    // 1. Try backend login first (works across all devices/browsers)
     try {
       const res = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
@@ -862,7 +896,6 @@ const LoginPage = ({ onLogin }) => {
       }
     } catch { /* backend unreachable — try localStorage */ }
 
-    // 2. Fallback: localStorage (offline / backend down)
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (found && (found.password === password || !found.password)) {
@@ -876,7 +909,6 @@ const LoginPage = ({ onLogin }) => {
     setLoading(false);
   };
 
-  // ── OTP SCREEN ─────────────────────────────────────────────────────────
   if (showOTP) return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-7 border border-gray-200">
@@ -889,7 +921,6 @@ const LoginPage = ({ onLogin }) => {
           <p className="text-xs text-gray-400 mt-1">Also check your spam/junk folder</p>
         </div>
 
-        {/* Dev OTP display — shown in UI instead of alert() */}
         {devOtpDisplay && (
           <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-4 text-center">
             <p className="text-xs text-amber-700 font-medium mb-2">📧 Email service unavailable — use this code:</p>
@@ -928,7 +959,6 @@ const LoginPage = ({ onLogin }) => {
     </div>
   );
 
-  // ── MAIN LOGIN / SIGNUP FORM ───────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -1015,7 +1045,7 @@ const LoginPage = ({ onLogin }) => {
 };
 
 // ─── HOME PAGE ──────────────────────────────────────────────────────────────
-const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats, updateNotificationCount, profileSrc, savedPosts, onSavePost, onResharePost, onDeletePost }) => {
+const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats, updateNotificationCount, profileSrc, savedPosts, onSavePost, onResharePost, onDeletePost, onFollow, following }) => {
   const [trendingBooks, setTrendingBooks] = useState([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [trendingPage, setTrendingPage] = useState(1);
@@ -1089,14 +1119,12 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
   };
 
   const loadTrendingBooks = async (page = 1, append = false) => {
-    // Show local data immediately — no loading spinner needed
     const local = getDayBatch();
     if (page === 1) {
       setTrendingBooks(local);
       setHasMoreTrending(true);
       setLoadingTrending(false);
     }
-    // Try backend in background
     try {
       const controller = new AbortController();
       setTimeout(() => controller.abort(), 6000);
@@ -1117,7 +1145,6 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       if (res.ok) {
         const data = await res.json();
         if (data.success && data.posts?.length > 0) {
-          // Merge with local posts (local posts first so user sees their own immediately)
           const localPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
           const allIds = new Set(data.posts.map(p => p.id));
           const merged = [...localPosts.filter(p => !allIds.has(p.id)), ...data.posts];
@@ -1146,10 +1173,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
   const handleBookClick = async (book) => {
     setSelectedBook(book); setShowBookDetails(true); setLoadingBookDetails(true);
-    // Check local DB first (instant)
     const localDetails = BOOK_DETAILS_DB[book.title];
     if (localDetails) { setBookDetails(localDetails); setLoadingBookDetails(false); return; }
-    // Try backend API
     try {
       const res = await axios.post(`${API_URL}/api/books/book-details`, { bookName: book.title, author: book.author }, { timeout: 7000 });
       if (res.data.success && res.data.details?.description) setBookDetails(res.data.details);
@@ -1169,6 +1194,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
     onResharePost(post, comment);
     setShowReshare(null);
   };
+
+  const userCrews = crews.filter(c => user?.joinedCrews?.includes(c.id));
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
@@ -1218,6 +1245,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
       )}
 
       <div className="px-4 py-4 space-y-5">
+        {/* Welcome Card */}
         <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
           <div className="flex items-center justify-between">
             <div>
@@ -1242,6 +1270,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           {!hasReadingGoal && <button onClick={() => setPage('profile')} className="mt-3 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2 text-sm font-medium">Set Reading Goals →</button>}
         </div>
 
+        {/* Stats Grid */}
         <div className="grid grid-cols-4 gap-2">
           {[
             { label: 'Books', value: userStats.booksRead, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100', page: 'profile' },
@@ -1257,12 +1286,69 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
           ))}
         </div>
 
+        {/* Trending Books - At the top as requested */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-orange-500" />Trending Books</h2>
+            <button onClick={() => setPage('explore')} className="text-sm text-orange-500 font-semibold">Explore All</button>
+          </div>
+          {loadingTrending ? <div className="flex justify-center py-8"><LoadingSpinner /></div> : (
+            <div>
+              <div className="flex gap-4 overflow-x-auto pb-2">
+                {trendingBooks.map((book, i) => (
+                  <div key={i} className="shrink-0 w-28 cursor-pointer hover:scale-105 transition-transform" onClick={() => handleBookClick(book)}>
+                    <DynamicBookCover title={book.title} author={book.author} size="md" className="mb-2" />
+                    <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">{book.title}</p>
+                    <p className="text-xs text-gray-500 truncate">{book.author}</p>
+                    <div className="flex items-center gap-1 mt-1">
+                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                      <span className="text-xs font-medium">{book.rating}</span>
+                      <span className="text-xs text-gray-400">({(book.readers/1000).toFixed(1)}K)</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Your Crews */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />Your Crews</h2>
+            <button onClick={() => setPage('crews')} className="text-sm text-orange-500 font-semibold">View All</button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {userCrews.slice(0,2).map(crew => (
+              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer" onClick={() => setPage('crews')}>
+                <div className="h-16 flex items-center justify-center p-2 bg-gray-50"><DynamicBookCover title={crew.name} author={crew.author} size="xs" /></div>
+                <div className="p-3">
+                  <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{crew.name}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{crew.genre}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-1 text-xs text-gray-500"><Users className="w-3 h-3" />{crew.members||1}</div>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-lg text-xs">Joined</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {userCrews.length === 0 && (
+              <div className="col-span-2 bg-white rounded-xl p-6 text-center border border-gray-200">
+                <p className="text-gray-500 text-sm">No crews joined yet</p>
+                <button onClick={() => setPage('crews')} className="mt-2 text-orange-500 text-sm font-medium">Browse Crews →</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Create Post Button */}
         <button onClick={() => setPage('post')} className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md">
           {profileSrc ? <img src={profileSrc} alt="p" className="w-9 h-9 rounded-full object-cover" /> : <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">{user?.name?.slice(0,2).toUpperCase()}</div>}
           <span className="text-gray-400 text-sm flex-1 text-left">Share your reading journey...</span>
           <span className="text-xs text-orange-500 font-medium bg-orange-50 px-3 py-1 rounded-full">Post</span>
         </button>
 
+        {/* Community Feed */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-orange-500" />Community Feed</h2>
@@ -1287,66 +1373,10 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                 onSaveToggle={onSavePost}
                 isSaved={savedPosts?.includes(post.id)}
                 onDelete={onDeletePost}
+                onFollow={onFollow}
+                isFollowing={following?.includes(post.userEmail)}
               />
             ))}
-          </div>
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-orange-500" />Trending Books</h2>
-            <button onClick={() => setPage('explore')} className="text-sm text-orange-500 font-semibold">Explore All</button>
-          </div>
-          {loadingTrending ? <div className="flex justify-center py-8"><LoadingSpinner /></div> : (
-            <div>
-              <div className="flex gap-4 overflow-x-auto pb-2">
-                {trendingBooks.map((book, i) => (
-                  <div key={i} className="shrink-0 w-28 cursor-pointer hover:scale-105 transition-transform" onClick={() => handleBookClick(book)}>
-                    <DynamicBookCover title={book.title} author={book.author} size="md" className="mb-2" />
-                    <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">{book.title}</p>
-                    <p className="text-xs text-gray-500 truncate">{book.author}</p>
-                    <div className="flex items-center gap-1 mt-1">
-                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      <span className="text-xs font-medium">{book.rating}</span>
-                      <span className="text-xs text-gray-400">({(book.readers/1000).toFixed(1)}K)</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-              {hasMoreTrending && (
-                <button onClick={() => loadTrendingBooks(trendingPage+1, true)} disabled={loadingMore} className="w-full mt-2 py-2 border border-orange-200 text-orange-500 rounded-xl text-sm font-medium flex items-center justify-center gap-2">
-                  {loadingMore ? <><LoadingSpinner size="sm" />Loading...</> : 'Load More Books'}
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />Your Crews</h2>
-            <button onClick={() => setPage('crews')} className="text-sm text-orange-500 font-semibold">View All</button>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {(crews||[]).filter(c => user?.joinedCrews?.includes(c.id)).slice(0,2).map(crew => (
-              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer" onClick={() => setPage('crews')}>
-                <div className="h-16 flex items-center justify-center p-2 bg-gray-50"><DynamicBookCover title={crew.name} author={crew.author} size="xs" /></div>
-                <div className="p-3">
-                  <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{crew.name}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{crew.genre}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-1 text-xs text-gray-500"><Users className="w-3 h-3" />{crew.members||1}</div>
-                    <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-lg text-xs">Joined</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {(!user?.joinedCrews || user.joinedCrews.length === 0) && (
-              <div className="col-span-2 bg-white rounded-xl p-6 text-center border border-gray-200">
-                <p className="text-gray-500 text-sm">No crews joined yet</p>
-                <button onClick={() => setPage('crews')} className="mt-2 text-orange-500 text-sm font-medium">Browse Crews →</button>
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -1480,15 +1510,13 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [hasMoreBooks, setHasMoreBooks] = useState(false);
   const [currentBookPage, setCurrentBookPage] = useState(1);
   const [lastQuery, setLastQuery] = useState('');
-  // sessionId persists for the whole explore session → backend tracks conversation context
   const [sessionId] = useState(() => `session_${Date.now()}_${Math.random().toString(36).slice(2)}`);
   const [exchangeCount, setExchangeCount] = useState(0);
-  const [mode, setMode] = useState('chat'); // 'chat' | 'character' | 'nearby'
+  const [mode, setMode] = useState('chat');
   const [charName, setCharName] = useState('');
   const [charBook, setCharBook] = useState('');
   const [charLoading, setCharLoading] = useState(false);
   const [charResult, setCharResult] = useState(null);
-  // ── Nearby (libraries + events) state ──
   const [nearbyLocation, setNearbyLocation] = useState(null);
   const [nearbyCity, setNearbyCity] = useState('');
   const [nearbyLocError, setNearbyLocError] = useState('');
@@ -1502,16 +1530,11 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [hasSearchedLibs, setHasSearchedLibs] = useState(false);
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
-  // Sentinel element at the bottom of the book list — triggers infinite scroll
   const sentinelRef = useRef(null);
-  const loadingMoreRef = useRef(false); // prevent double-calls
+  const loadingMoreRef = useRef(false);
 
-  const [backendAlive, setBackendAlive] = useState(null); // null=untested, true/false
+  const [backendAlive, setBackendAlive] = useState(null);
 
-  // Ping backend on mount to wake Render from sleep (free tier cold-starts)
-  const [backendWaking, setBackendWaking] = useState(false);
-
-  // ── Wake up Render backend on mount ──
   useEffect(() => {
     const ping = async () => {
       try {
@@ -1522,10 +1545,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     ping();
   }, []);
 
-  // Auto-scroll chat to bottom
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
-  // IntersectionObserver — auto-load more books on scroll
   useEffect(() => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver(
@@ -1536,7 +1557,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     return () => observer.disconnect();
   }, [hasMoreBooks, currentBookPage, lastQuery]);
 
-  // ── Send chat message — calls Groq directly, clean client fallback ──
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
     const userText = input.trim();
@@ -1571,7 +1591,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
       }
     } catch { setBackendAlive(false); }
 
-    // Client fallback — only when backend completely fails
     if (!usedBackend) {
       const { reply, books } = generateClientResponse(userText, allBooks);
       setChatMessages(prev => [...prev, { role: 'assistant', content: reply, timestamp: new Date() }]);
@@ -1581,7 +1600,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     setLoading(false);
   };
 
-  // ── Load next page of books (infinite scroll) ──
   const loadMoreBooks = async () => {
     if (loadingMoreRef.current || !hasMoreBooks || !lastQuery) return;
     loadingMoreRef.current = true;
@@ -1597,7 +1615,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           return;
         }
       }
-      // Client fallback
       const { books } = generateClientResponse(lastQuery, allBooks);
       if (books.length > 0) { setAllBooks(prev => [...prev, ...books]); }
       setHasMoreBooks(false);
@@ -1629,7 +1646,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  // ─── Nearby helpers ───────────────────────────────────────────────────────
   const getDistKm = (lat1, lng1, lat2, lng2) => {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -1704,14 +1720,12 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     if (mode === 'nearby' && nearbyTab === 'events' && nearbyLocation && nearbyEvents.length === 0) fetchNearbyEvents();
   }, [nearbyTab, mode]);
 
-  // Character search view
   if (mode === 'character') return (
     <div className="min-h-screen bg-[#FAF6F1] pb-24 overflow-y-auto">
       <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center gap-3 z-10">
         <button onClick={() => setMode('chat')} className="p-1 hover:bg-gray-100 rounded-xl"><ChevronLeft className="w-5 h-5" /></button>
         <span className="font-semibold">Find Books by Character</span>
       </div>
-      {/* Shared tab bar */}
       <div className="flex gap-2 px-4 py-3 border-b border-gray-100 overflow-x-auto">
         {[['chat','✨','AI Chat'],['character','🎭','By Character'],['nearby','📍','Nearby']].map(([id,emoji,label]) => (
           <button key={id} onClick={() => setMode(id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${mode===id ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'}`}>{emoji} {label}</button>
@@ -1738,10 +1752,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     </div>
   );
 
-  // ── Nearby view ────────────────────────────────────────────────────────────
   if (mode === 'nearby') return (
     <div className="min-h-screen pb-24 overflow-y-auto" style={{ background: 'linear-gradient(160deg, #FFF8F2 0%, #F0EBFF 100%)' }}>
-      {/* Header */}
       <div className="sticky top-0 z-40 border-b border-orange-100 px-4 py-3 flex items-center gap-3" style={{ background: 'rgba(255,248,242,0.96)', backdropFilter:'blur(12px)' }}>
         <button onClick={() => setMode('chat')} className="p-1.5 hover:bg-orange-100 rounded-xl"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
         <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center shadow"><MapPin className="w-3.5 h-3.5 text-white" /></div>
@@ -1751,17 +1763,14 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         </div>
       </div>
 
-      {/* Tab bar */}
       <div className="flex gap-2 px-4 py-3 border-b border-orange-100 bg-white/70 overflow-x-auto">
         {[['chat','✨','AI Chat'],['character','🎭','By Character'],['nearby','📍','Nearby']].map(([id,emoji,label]) => (
           <button key={id} onClick={() => setMode(id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${mode===id ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'}`}>{emoji} {label}</button>
         ))}
       </div>
 
-      {/* Landing — no location yet */}
       {!nearbyLocation && (
         <div className="px-4 pt-6">
-          {/* Hero card */}
           <div className="bg-white rounded-3xl p-6 shadow-lg border border-orange-100 text-center mb-5">
             <div className="w-20 h-20 bg-gradient-to-br from-orange-400 to-purple-500 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
               <MapPin className="w-10 h-10 text-white" />
@@ -1771,7 +1780,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               Discover <strong>public libraries</strong> near you and <strong>book events</strong> happening in your city — all for free, powered by open data and AI.
             </p>
 
-            {/* Feature cards */}
             <div className="grid grid-cols-3 gap-2 mb-5">
               {[['🏛️','Libraries','OpenStreetMap — free, no key needed'],['📅','Events','Meetup & Eventbrite links for your city'],['🤖','AI Picks','Groq AI suggests local events']].map(([e,t,d]) => (
                 <div key={t} className="bg-gradient-to-b from-orange-50 to-purple-50 rounded-xl p-2.5 text-center border border-orange-100">
@@ -1782,7 +1790,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               ))}
             </div>
 
-            {/* How it works */}
             <div className="bg-gray-50 rounded-2xl p-4 mb-5 text-left space-y-2">
               <p className="text-xs font-bold text-gray-700 mb-2">How it works:</p>
               {[['1','Share your location','One tap — stays on your device, never stored'],['2','Find libraries','Real libraries from OpenStreetMap with distance & hours'],['3','Discover events','Book clubs, author talks, festivals near you']].map(([n,t,d]) => (
@@ -1804,10 +1811,8 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         </div>
       )}
 
-      {/* Content after location granted */}
       {nearbyLocation && (
         <>
-          {/* Radius + Search */}
           <div className="px-4 pt-4 pb-2 flex items-center gap-3">
             <div className="flex-1 flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-gray-200 shadow-sm">
               <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0" />
@@ -1819,7 +1824,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             <button onClick={() => fetchLibraries(nearbyLocation.lat, nearbyLocation.lng, radiusKm)} className="px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-semibold shadow-sm">Search</button>
           </div>
 
-          {/* Sub-tabs: Libraries vs Events */}
           <div className="px-4 py-2 flex gap-2">
             {[['libraries','🏛️','Libraries'],['events','📅','Events']].map(([id,emoji,label]) => (
               <button key={id} onClick={() => setNearbyTab(id)}
@@ -1829,7 +1833,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             ))}
           </div>
 
-          {/* Libraries tab */}
           {nearbyTab === 'libraries' && (
             <div className="px-4 py-3 space-y-3">
               {libLoading && <div className="text-center py-10"><LoadingSpinner size="lg" /><p className="text-gray-500 text-sm mt-3">Searching OpenStreetMap...</p><p className="text-xs text-gray-400 mt-1">Free & open — no API key!</p></div>}
@@ -1865,7 +1868,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             </div>
           )}
 
-          {/* Events tab */}
           {nearbyTab === 'events' && (
             <div className="px-4 py-3 space-y-3">
               {eventsLoading && <div className="text-center py-10"><LoadingSpinner size="lg" /><p className="text-gray-500 text-sm mt-3">🤖 Finding book events in {nearbyCity}...</p><p className="text-xs text-gray-400 mt-1">Powered by Groq AI</p></div>}
@@ -1909,13 +1911,11 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1] pb-24 overflow-y-auto">
-      {/* Header */}
       <div className="px-5 pt-8 pb-4">
         <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{fontFamily:'Georgia,serif'}}>What to read next?</h1>
         <p className="text-sm text-[#8B7968]">Chat with your AI book guide</p>
       </div>
 
-      {/* Mode tabs */}
       <div className="flex gap-2 px-5 mb-4 overflow-x-auto">
         {[['chat','✨','AI Chat'],['character','🎭','By Character'],['nearby','📍','Nearby']].map(([id,emoji,label]) => (
           <button key={id} onClick={() => setMode(id)} className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${mode===id ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 shadow-sm'}`}>
@@ -1924,7 +1924,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         ))}
       </div>
 
-      {/* Chat Messages */}
       <div className="mx-4 space-y-3">
         {chatMessages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
@@ -1957,7 +1956,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           </div>
         )}
 
-        {/* Book recommendations — infinite scroll list */}
         {allBooks.length > 0 && (
           <div className="space-y-3 pt-2">
             <div className="flex items-center gap-2 px-1">
@@ -1969,7 +1967,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               <BookCard key={`${i}-${book.title}`} book={book} onCreateCrew={() => { onCreateCrew(book); setPage('crews'); }} />
             ))}
 
-            {/* Sentinel: IntersectionObserver watches this to auto-load next page */}
             <div ref={sentinelRef} className="py-2">
               {loadingMoreBooks && (
                 <div className="flex items-center justify-center gap-2 py-3">
@@ -1990,7 +1987,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         <div ref={chatEndRef} />
       </div>
 
-      {/* Quick suggestions (only if no books yet) */}
       {allBooks.length === 0 && chatMessages.length <= 1 && (
         <div className="px-5 mt-4">
           <p className="text-xs text-[#8B7968] mb-2">Try asking:</p>
@@ -2004,7 +2000,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         </div>
       )}
 
-      {/* Input bar - sticky at bottom */}
       <div className="sticky bottom-20 mx-4 mt-4 bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 px-3 py-2.5">
         <div className="flex items-center gap-2">
           <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
@@ -2072,8 +2067,8 @@ const PostPage = ({ user, onPost, setPage }) => {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white z-[55] overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between">
+    <div className="fixed inset-0 flex flex-col bg-white z-[55] overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <button onClick={() => setPage('home')} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-600" /></button>
         <h2 className="font-semibold text-gray-900">Create Post</h2>
         <button onClick={handleSubmit} disabled={!content.trim()} className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-medium disabled:opacity-50">Share</button>
@@ -2123,7 +2118,6 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
         if (res.ok) {
           const data = await res.json();
           if (data.success && data.reviews?.length > 0) {
-            // Merge with local reviews
             const local = JSON.parse(localStorage.getItem('reviews') || '[]');
             const ids = new Set(data.reviews.map(r => r.id));
             const merged = [...local.filter(r => !ids.has(r.id)), ...data.reviews];
@@ -2163,14 +2157,12 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
   const handleCreateReview = async () => {
     if (!newReview.bookName || !newReview.author || !newReview.review) { alert('Please fill all fields'); return; }
     const reviewData = { id: Date.now().toString(), ...newReview, userName: user.name, userEmail: user.email, createdAt: new Date().toISOString(), likes: 0 };
-    // Save locally immediately
     const saved = JSON.parse(localStorage.getItem('reviews') || '[]');
     saved.unshift(reviewData);
     localStorage.setItem('reviews', JSON.stringify(saved));
     setReviews([reviewData, ...reviews]);
     setShowCreateForm(false);
     setNewReview({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
-    // Sync to global backend
     try {
       await fetch(`${API_URL}/api/social/reviews`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -2182,7 +2174,6 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
   };
 
-  // Filter reviews based on search query
   const filteredReviews = reviews.filter(review => 
     review.bookName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     review.author.toLowerCase().includes(searchQuery.toLowerCase())
@@ -2196,7 +2187,6 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount }) => {
         <button onClick={() => setShowCreateForm(!showCreateForm)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium">{showCreateForm ? 'Cancel' : 'Write Review'}</button>
       </div>
       <div className="px-4 py-4">
-        {/* Search Bar */}
         <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -2302,7 +2292,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  // Check if a crew already exists for a specific book + author
   const crewExists = (bookName, author) => {
     return crews.some(crew => 
       crew.name.toLowerCase() === bookName.toLowerCase() && 
@@ -2336,7 +2325,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
   useEffect(() => {
     if (selectedCrew) {
-      // Load messages: try global backend first, then localStorage fallback
       const loadMessages = async () => {
         try {
           const res = await fetch(`${API_URL}/api/social/crews/${selectedCrew.id}/messages`, { signal: AbortSignal.timeout(5000) });
@@ -2399,7 +2387,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const createCrew = async () => {
     if (!newCrewData.name || !newCrewData.author) { alert('Please fill book name and author'); return; }
     
-    // Check if crew already exists for this book + author
     if (crewExists(newCrewData.name, newCrewData.author)) {
       alert('A crew for this book by this author already exists! Each book can have only one crew.');
       return;
@@ -2412,7 +2399,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     joinCrew(newCrew);
     setShowCreateCrewForm(false);
     setNewCrewData({ name: '', author: '', genre: '' });
-    // Sync to backend
     try {
       await fetch(`${API_URL}/api/social/crews`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...newCrew, createdBy: user.email, createdByName: user.name }), signal: AbortSignal.timeout(6000) });
     } catch { /* offline */ }
@@ -2426,7 +2412,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existing));
     setMessages(prev => [...prev, { ...msg, timestamp: new Date(msg.timestamp) }]);
     setNewMessage('');
-    // Sync to backend
     try {
       await fetch(`${API_URL}/api/social/crews/${selectedCrew.id}/message`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(msg), signal: AbortSignal.timeout(5000) });
     } catch { /* offline */ }
@@ -2456,7 +2441,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] text-center">{showJoinMsg}</div>
   ) : null;
 
-  // CHAT VIEW
   if (view === 'chat' && selectedCrew) {
     const hasJoined = isJoined(selectedCrew.id);
     const groupsByDate = messages.reduce((acc, msg) => {
@@ -2537,13 +2521,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     );
   }
 
-  // DETAIL VIEW
   if (view === 'detail' && selectedCrew) {
     const hasJoined = isJoined(selectedCrew.id);
     return (
       <div className="h-screen flex flex-col bg-white overflow-hidden" style={{ maxWidth: '448px', margin: '0 auto' }}>
         <Toast />
-        <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center gap-3 z-10">
+        <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center gap-3 z-10 flex-shrink-0">
           <button onClick={() => { setView('list'); onViewChange?.('list'); }} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5" /></button>
           <span className="font-semibold flex-1">Crew Info</span>
         </div>
@@ -2624,7 +2607,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     );
   }
 
-  // LIST VIEW
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
       <Toast />
@@ -2639,7 +2621,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         {showCreateForm && (
           <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-4">
             <h3 className="font-semibold mb-3">Create New Crew</h3>
-            {/* Book cover preview while typing */}
             {newCrewData.name && (
               <div className="flex justify-center mb-4">
                 <DynamicBookCover title={newCrewData.name} author={newCrewData.author} size="lg" />
@@ -2712,14 +2693,150 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   );
 };
 
+// ─── USER PROFILE MODAL ─────────────────────────────────────────────────
+const UserProfileModal = ({ userEmail, userName, currentUser, onClose, onFollow, isFollowing, onViewProfile }) => {
+  const [userData, setUserData] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
+  const [userReviews, setUserReviews] = useState([]);
+
+  useEffect(() => {
+    // Load user data
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const found = users.find(u => u.email === userEmail);
+    if (found) {
+      setUserData(found);
+    }
+
+    // Load user posts
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const posts = allPosts.filter(p => p.userEmail === userEmail);
+    setUserPosts(posts.slice(0, 3));
+
+    // Load user reviews
+    const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+    const reviews = allReviews.filter(r => r.userEmail === userEmail);
+    setUserReviews(reviews.slice(0, 3));
+  }, [userEmail]);
+
+  const followers = JSON.parse(localStorage.getItem(`user_${userEmail}_followers`) || '[]');
+  const following = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+      <div className="bg-white rounded-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+          <h3 className="font-bold">User Profile</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+        </div>
+        
+        <div className="p-5">
+          {/* Profile Header */}
+          <div className="flex items-center gap-4 mb-6">
+            <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center text-white text-xl font-bold">
+              {userName?.slice(0, 2).toUpperCase()}
+            </div>
+            <div className="flex-1">
+              <h2 className="text-xl font-bold text-gray-900">{userName}</h2>
+              <p className="text-sm text-gray-500">@{userName?.toLowerCase().replace(/\s/g, '')}</p>
+              
+              {/* Follow/Following counts */}
+              <div className="flex gap-4 mt-2">
+                <div className="text-center">
+                  <p className="font-bold text-gray-900">{followers.length}</p>
+                  <p className="text-xs text-gray-500">Followers</p>
+                </div>
+                <div className="text-center">
+                  <p className="font-bold text-gray-900">{following.length}</p>
+                  <p className="text-xs text-gray-500">Following</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Follow/Unfollow Button */}
+          {userEmail !== currentUser.email && (
+            <button
+              onClick={() => {
+                onFollow(userEmail, userName);
+                onClose();
+              }}
+              className={`w-full py-3 rounded-xl font-semibold mb-6 flex items-center justify-center gap-2 ${
+                isFollowing 
+                  ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
+                  : 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+              }`}
+            >
+              {isFollowing ? (
+                <>
+                  <UserMinus className="w-4 h-4" />
+                  Unfollow
+                </>
+              ) : (
+                <>
+                  <UserPlus className="w-4 h-4" />
+                  Follow
+                </>
+              )}
+            </button>
+          )}
+
+          {/* Recent Posts */}
+          {userPosts.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-gray-900 mb-3">Recent Posts</h3>
+              <div className="space-y-3">
+                {userPosts.map(post => (
+                  <div key={post.id} className="bg-gray-50 rounded-xl p-3">
+                    <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
+                    <p className="text-xs text-gray-400 mt-1">{new Date(post.createdAt).toLocaleDateString()}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Recent Reviews */}
+          {userReviews.length > 0 && (
+            <div className="mb-6">
+              <h3 className="font-semibold text-gray-900 mb-3">Recent Reviews</h3>
+              <div className="space-y-3">
+                {userReviews.map(review => (
+                  <div key={review.id} className="bg-gray-50 rounded-xl p-3">
+                    <p className="font-medium text-sm text-gray-900">{review.bookName}</p>
+                    <p className="text-xs text-gray-600 line-clamp-2">{review.review}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <StarRating rating={review.rating} size="xs" />
+                      <span className="text-xs text-gray-400">{new Date(review.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* View Full Profile Button */}
+          <button
+            onClick={() => {
+              onClose();
+              onViewProfile(userEmail);
+            }}
+            className="w-full py-3 border border-orange-200 text-orange-600 rounded-xl font-medium"
+          >
+            View Full Profile
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── PROFILE PAGE ────────────────────────────────────────────────────────
-const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc, setProfileSrc, savedPosts }) => {
+const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc, setProfileSrc, savedPosts, following, followers, onFollow }) => {
   const [activeTab, setActiveTab] = useState('Posts');
   const [userStats, setUserStats] = useState(user?.stats || { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
   const [readingGoal, setReadingGoal] = useState(user?.readingGoal || { yearly: 0, monthly: 0 });
   const [showEditGoal, setShowEditGoal] = useState(false);
   const [editGoal, setEditGoal] = useState(readingGoal);
-  // For "Books Read" tab
   const [myBooks, setMyBooks] = useState([]);
   const [showAddBook, setShowAddBook] = useState(false);
   const [newBook, setNewBook] = useState({ title: '', author: '', rating: 5, notes: '' });
@@ -2730,7 +2847,6 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
 
   const myPosts = posts.filter(p => p.userEmail === user?.email);
   const myReviews = JSON.parse(localStorage.getItem('reviews') || '[]').filter(r => r.userEmail === user?.email);
-  // Get saved posts
   const savedPostsList = posts.filter(p => savedPosts?.includes(p.id));
 
   useEffect(() => {
@@ -2782,7 +2898,6 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
     const updated = [book, ...myBooks];
     setMyBooks(updated);
     localStorage.setItem(`user_${user.email}_booksRead`, JSON.stringify(updated));
-    // Update stats
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     stats.booksRead = updated.length;
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
@@ -2841,7 +2956,20 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
                 <h2 className="text-xl font-bold text-gray-900">{user?.name}</h2>
                 <p className="text-sm text-gray-500">@{user?.name?.toLowerCase().replace(/\s/g,'')}</p>
                 <p className="text-sm text-gray-600 mt-1 italic">"{user?.bio || 'Reading is my superpower'}"</p>
-                <button onClick={() => setEditingProfile(true)} className="mt-2 px-4 py-1.5 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-1.5">
+                
+                {/* Follow/Following counts */}
+                <div className="flex gap-4 mt-2">
+                  <div className="text-center">
+                    <p className="font-bold text-gray-900">{followers?.length || 0}</p>
+                    <p className="text-xs text-gray-500">Followers</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="font-bold text-gray-900">{following?.length || 0}</p>
+                    <p className="text-xs text-gray-500">Following</p>
+                  </div>
+                </div>
+                
+                <button onClick={() => setEditingProfile(true)} className="mt-3 px-4 py-1.5 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-1.5">
                   <Edit className="w-3.5 h-3.5" />Edit Profile
                 </button>
               </>
@@ -3056,6 +3184,10 @@ export default function App() {
   const [unreadMessages, setUnreadMessages] = useState(0);
   const [profileSrc, setProfileSrc] = useState(null);
   const [savedPosts, setSavedPosts] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [followers, setFollowers] = useState([]);
+  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
+  const [showUserProfile, setShowUserProfile] = useState(false);
 
   useEffect(() => {
     if (currentPage === 'post') setShowBottomNav(false);
@@ -3074,12 +3206,19 @@ export default function App() {
         const savedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
         if (savedCrews.length > 0) setCrews(savedCrews);
         const userPosts = JSON.parse(localStorage.getItem(`user_${u.email}_posts`) || '[]');
-        // Also load all posts
         const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
         setPosts(allPosts.length > 0 ? allPosts : userPosts);
+        
         // Load saved posts
         const saved = JSON.parse(localStorage.getItem(`user_${u.email}_savedPosts`) || '[]');
         setSavedPosts(saved);
+        
+        // Load follow data
+        const userFollowing = JSON.parse(localStorage.getItem(`user_${u.email}_following`) || '[]');
+        const userFollowers = JSON.parse(localStorage.getItem(`user_${u.email}_followers`) || '[]');
+        setFollowing(userFollowing);
+        setFollowers(userFollowers);
+        
         updateNotificationCount(u.email);
       } catch (err) { console.error(err); }
     }
@@ -3104,14 +3243,12 @@ export default function App() {
   };
 
   const handlePost = async (postData) => {
-    // Save to localStorage immediately for instant feedback
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     const updated = [postData, ...allPosts];
     localStorage.setItem('allPosts', JSON.stringify(updated));
     const userPosts = JSON.parse(localStorage.getItem(`user_${currentUser.email}_posts`) || '[]');
     localStorage.setItem(`user_${currentUser.email}_posts`, JSON.stringify([postData, ...userPosts]));
     setPosts(updated);
-    // Sync to global backend (fire-and-forget)
     try {
       await fetch(`${API_URL}/api/social/posts`, {
         method: 'POST',
@@ -3161,11 +3298,9 @@ export default function App() {
   const handleSavePost = (post) => {
     let updatedSaved;
     if (savedPosts.includes(post.id)) {
-      // Unsave
       updatedSaved = savedPosts.filter(id => id !== post.id);
       setNotification({ message: '📌 Post removed from saved', type: 'info' });
     } else {
-      // Save
       updatedSaved = [...savedPosts, post.id];
       setNotification({ message: '📌 Post saved to your profile', type: 'success' });
     }
@@ -3177,12 +3312,10 @@ export default function App() {
   const handleDeletePost = (post) => {
     if (!window.confirm('Delete this post?')) return;
     
-    // Remove from all posts
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     const updatedAll = allPosts.filter(p => p.id !== post.id);
     localStorage.setItem('allPosts', JSON.stringify(updatedAll));
     
-    // Remove from user posts
     const userPosts = JSON.parse(localStorage.getItem(`user_${currentUser.email}_posts`) || '[]');
     const updatedUser = userPosts.filter(p => p.id !== post.id);
     localStorage.setItem(`user_${currentUser.email}_posts`, JSON.stringify(updatedUser));
@@ -3210,6 +3343,57 @@ export default function App() {
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
   };
 
+  const handleFollow = (userEmail, userName) => {
+    if (userEmail === currentUser.email) return;
+
+    // Update current user's following list
+    const userFollowing = [...following];
+    const isFollowing = userFollowing.includes(userEmail);
+    
+    let updatedFollowing;
+    if (isFollowing) {
+      updatedFollowing = userFollowing.filter(email => email !== userEmail);
+      setNotification({ message: `Unfollowed ${userName}`, type: 'info' });
+    } else {
+      updatedFollowing = [...userFollowing, userEmail];
+      setNotification({ message: `You are now following ${userName}!`, type: 'success' });
+      
+      // Send notification to the user being followed
+      const notif = { 
+        id: Date.now(), 
+        type: 'follow', 
+        fromUser: currentUser.name, 
+        message: `${currentUser.name} started following you`, 
+        timestamp: new Date().toISOString(), 
+        read: false 
+      };
+      const notifs = JSON.parse(localStorage.getItem(`user_${userEmail}_notifications`) || '[]');
+      notifs.unshift(notif);
+      localStorage.setItem(`user_${userEmail}_notifications`, JSON.stringify(notifs));
+    }
+    
+    setFollowing(updatedFollowing);
+    localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(updatedFollowing));
+    
+    // Update the followed user's followers list
+    const followedUserFollowers = JSON.parse(localStorage.getItem(`user_${userEmail}_followers`) || '[]');
+    let updatedFollowers;
+    if (isFollowing) {
+      updatedFollowers = followedUserFollowers.filter(email => email !== currentUser.email);
+    } else {
+      updatedFollowers = [...followedUserFollowers, currentUser.email];
+    }
+    localStorage.setItem(`user_${userEmail}_followers`, JSON.stringify(updatedFollowers));
+    
+    setTimeout(() => setNotification(null), 2000);
+  };
+
+  const handleViewUserProfile = (userEmail) => {
+    // Navigate to user's profile (for now, just show modal)
+    // In a full implementation, you'd navigate to a different user's profile page
+    setCurrentPage('profile'); // For now, just go to own profile
+  };
+
   if (!isLoggedIn) return (
     <div className="min-h-screen bg-gray-100 flex justify-center">
       <div className="w-full max-w-md bg-white min-h-screen"><LoginPage onLogin={handleLogin} /></div>
@@ -3224,12 +3408,12 @@ export default function App() {
         </div>
       )}
       <div className="w-full max-w-md relative bg-white min-h-screen overflow-hidden shadow-xl">
-        {currentPage === 'home' && <HomePage user={currentUser} posts={posts} setPosts={setPosts} crews={crews} setPage={setCurrentPage} donations={[]} reviews={[]} onUpdateStats={handleUpdateUser} updateNotificationCount={() => updateNotificationCount()} profileSrc={profileSrc} savedPosts={savedPosts} onSavePost={handleSavePost} onResharePost={handleReshare} onDeletePost={handleDeletePost} />}
+        {currentPage === 'home' && <HomePage user={currentUser} posts={posts} setPosts={setPosts} crews={crews} setPage={setCurrentPage} donations={[]} reviews={[]} onUpdateStats={handleUpdateUser} updateNotificationCount={() => updateNotificationCount()} profileSrc={profileSrc} savedPosts={savedPosts} onSavePost={handleSavePost} onResharePost={handleReshare} onDeletePost={handleDeletePost} onFollow={handleFollow} following={following} />}
         {currentPage === 'explore' && <ExplorePage user={currentUser} setPage={setCurrentPage} onCreateCrew={handleCreateCrew} />}
         {currentPage === 'post' && <PostPage user={currentUser} onPost={handlePost} setPage={setCurrentPage} />}
         {currentPage === 'crews' && <CrewsPage user={currentUser} crews={crews} setPage={setCurrentPage} updateNotificationCount={() => updateNotificationCount()} onViewChange={(v) => { setCrewChatActive(v === 'chat'); setShowBottomNav(v !== 'chat'); }} />}
         {currentPage === 'reviews' && <ReviewsPage user={currentUser} setPage={setCurrentPage} updateNotificationCount={() => updateNotificationCount()} />}
-        {currentPage === 'profile' && <ProfilePage user={currentUser} posts={posts} setPage={setCurrentPage} onLogout={() => { setIsLoggedIn(false); setCurrentUser(null); setProfileSrc(null); localStorage.removeItem('currentUser'); setCurrentPage('home'); }} onUpdateUser={handleUpdateUser} profileSrc={profileSrc} setProfileSrc={setProfileSrc} savedPosts={savedPosts} />}
+        {currentPage === 'profile' && <ProfilePage user={currentUser} posts={posts} setPage={setCurrentPage} onLogout={() => { setIsLoggedIn(false); setCurrentUser(null); setProfileSrc(null); localStorage.removeItem('currentUser'); setCurrentPage('home'); }} onUpdateUser={handleUpdateUser} profileSrc={profileSrc} setProfileSrc={setProfileSrc} savedPosts={savedPosts} following={following} followers={followers} onFollow={handleFollow} />}
         {currentPage === 'notifications' && <NotificationsPage user={currentUser} onClose={() => { setCurrentPage('home'); updateNotificationCount(); }} />}
         <BottomNav active={currentPage} setPage={setCurrentPage} unreadCount={unreadMessages} show={showBottomNav && !crewChatActive} />
       </div>
