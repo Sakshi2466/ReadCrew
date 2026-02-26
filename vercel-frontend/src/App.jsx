@@ -230,14 +230,15 @@ const NotificationsPage = ({ user, onClose }) => {
   };
   const icons = { like: <Heart className="w-4 h-4 text-red-500" />, comment: <MessageCircle className="w-4 h-4 text-blue-500" />, message: <MessageSquare className="w-4 h-4 text-green-500" />, invite: <UserPlus className="w-4 h-4 text-purple-500" />, follow: <UserCheck className="w-4 h-4 text-orange-500" /> };
   const bgColors = { like: 'bg-red-100', comment: 'bg-blue-100', message: 'bg-green-100', invite: 'bg-purple-100', follow: 'bg-orange-100' };
+  
   return (
-    <div className="fixed inset-0 bg-white z-50 flex flex-col" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+    <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
         <h2 className="font-semibold text-gray-900">Notifications</h2>
         <button onClick={markAllAsRead} className="text-sm text-orange-500 font-medium">Mark all read</button>
       </div>
-      <div className="flex-1 overflow-y-auto pb-20">
+      <div className="flex-1 overflow-y-auto pb-4">
         {notifications.length === 0 ? (
           <div className="text-center py-12"><Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No notifications yet</p></div>
         ) : (
@@ -271,9 +272,10 @@ const ShareModal = ({ post, onClose }) => {
     twitter: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank'),
     copyLink: () => { navigator.clipboard.writeText(shareUrl); alert('Link copied!'); }
   };
+  
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center">
           <h3 className="font-semibold">Share Post</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
@@ -306,8 +308,8 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center">
           <h3 className="font-semibold">Reshare Post</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
@@ -363,8 +365,8 @@ const PostOptionsModal = ({ post, user, onClose, onReshare, onSave, isSaved, onD
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto overflow-hidden">
         <div className="p-4 border-b border-gray-100">
           <h3 className="font-semibold text-center">Post Options</h3>
         </div>
@@ -1204,8 +1206,8 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
         notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read).length} />
 
       {showBookDetails && selectedBook && (
-        <div className="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-          <div className="bg-white rounded-2xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 z-[65] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+          <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
             <div className="sticky top-0 bg-white border-b p-4 flex justify-between">
               <h3 className="font-bold">Book Details</h3>
               <button onClick={() => setShowBookDetails(false)}><X className="w-5 h-5" /></button>
@@ -1215,7 +1217,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
                 <div className="space-y-4">
                   <div className="flex gap-4">
                     <DynamicBookCover title={selectedBook.title} author={selectedBook.author} size="lg" />
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <h2 className="text-lg font-bold text-gray-900">{selectedBook.title}</h2>
                       <p className="text-gray-500 text-sm">by {selectedBook.author}</p>
                       {bookDetails.genre && <span className="inline-block mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs">{bookDetails.genre}</span>}
@@ -1343,7 +1345,7 @@ const HomePage = ({ user, posts, setPosts, crews, setPage, donations, reviews, o
 
         {/* Create Post Button */}
         <button onClick={() => setPage('post')} className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md">
-          {profileSrc ? <img src={profileSrc} alt="p" className="w-9 h-9 rounded-full object-cover" /> : <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">{user?.name?.slice(0,2).toUpperCase()}</div>}
+          {profileSrc ? <img src={profileSrc} alt="p" className="w-9 h-9 rounded-full object-cover flex-shrink-0" /> : <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{user?.name?.slice(0,2).toUpperCase()}</div>}
           <span className="text-gray-400 text-sm flex-1 text-left">Share your reading journey...</span>
           <span className="text-xs text-orange-500 font-medium bg-orange-50 px-3 py-1 rounded-full">Post</span>
         </button>
@@ -2067,7 +2069,7 @@ const PostPage = ({ user, onPost, setPage }) => {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white z-[55] overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+    <div className="fixed inset-0 flex flex-col bg-white z-[55] overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <button onClick={() => setPage('home')} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-600" /></button>
         <h2 className="font-semibold text-gray-900">Create Post</h2>
@@ -2451,7 +2453,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     }, {});
 
     return (
-      <div className="fixed inset-0 flex flex-col z-[60] bg-[#e5ddd5] overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
+      <div className="fixed inset-0 flex flex-col z-[60] bg-[#e5ddd5] overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
         <Toast />
         <div className="flex-shrink-0 bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
@@ -2565,8 +2567,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   </button>
                   {messages.slice(-3).reverse().map(msg => (
                     <div key={msg.id} className="flex items-start gap-3 py-2">
-                      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">{msg.userInitials}</div>
-                      <div><span className="font-semibold text-sm">{msg.userName}</span><p className="text-sm text-gray-600 truncate">{msg.type === 'image' ? '📷 Image' : msg.content}</p></div>
+                      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{msg.userInitials}</div>
+                      <div className="flex-1 min-w-0"><span className="font-semibold text-sm">{msg.userName}</span><p className="text-sm text-gray-600 truncate">{msg.type === 'image' ? '📷 Image' : msg.content}</p></div>
                     </div>
                   ))}
                 </div>
@@ -2578,10 +2580,10 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   <div key={member.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold">{member.initials}</div>
+                        <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">{member.initials}</div>
                         {member.online && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />}
                       </div>
-                      <div><p className="font-semibold">{member.name}</p><p className="text-xs text-gray-500">{member.isCreator ? '👑 Creator' : member.online ? 'Online' : 'Offline'}</p></div>
+                      <div className="flex-1 min-w-0"><p className="font-semibold">{member.name}</p><p className="text-xs text-gray-500">{member.isCreator ? '👑 Creator' : member.online ? 'Online' : 'Offline'}</p></div>
                     </div>
                   </div>
                 ))}
@@ -2722,8 +2724,8 @@ const UserProfileModal = ({ userEmail, userName, currentUser, onClose, onFollow,
   const following = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)' }}>
-      <div className="bg-white rounded-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
           <h3 className="font-bold">User Profile</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
@@ -2732,11 +2734,11 @@ const UserProfileModal = ({ userEmail, userName, currentUser, onClose, onFollow,
         <div className="p-5">
           {/* Profile Header */}
           <div className="flex items-center gap-4 mb-6">
-            <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center text-white text-xl font-bold">
+            <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
               {userName?.slice(0, 2).toUpperCase()}
             </div>
-            <div className="flex-1">
-              <h2 className="text-xl font-bold text-gray-900">{userName}</h2>
+            <div className="flex-1 min-w-0">
+              <h2 className="text-xl font-bold text-gray-900 truncate">{userName}</h2>
               <p className="text-sm text-gray-500">@{userName?.toLowerCase().replace(/\s/g, '')}</p>
               
               {/* Follow/Following counts */}
@@ -2933,7 +2935,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
       <div className="px-4 py-5">
         {/* Profile Header */}
         <div className="flex items-start gap-4 mb-5">
-          <div className="relative">
+          <div className="relative flex-shrink-0">
             {profileSrc ? <img src={profileSrc} alt={user?.name} className="w-20 h-20 rounded-full object-cover border-2 border-orange-200" />
               : <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">{user?.name?.slice(0,2).toUpperCase()}</div>}
             <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow">
@@ -2941,7 +2943,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
           </div>
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {editingProfile ? (
               <div className="space-y-2">
                 <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Your name" />
@@ -2953,7 +2955,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
               </div>
             ) : (
               <>
-                <h2 className="text-xl font-bold text-gray-900">{user?.name}</h2>
+                <h2 className="text-xl font-bold text-gray-900 truncate">{user?.name}</h2>
                 <p className="text-sm text-gray-500">@{user?.name?.toLowerCase().replace(/\s/g,'')}</p>
                 <p className="text-sm text-gray-600 mt-1 italic">"{user?.bio || 'Reading is my superpower'}"</p>
                 
