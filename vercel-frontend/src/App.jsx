@@ -15,7 +15,9 @@ import {
 
 // API imports
 import axios from 'axios';
+import { io } from 'socket.io-client';
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
+const socket = io(API_URL, { transports: ['websocket', 'polling'] });
 
 // ========================================
 // NOTIFICATION TOAST COMPONENT
@@ -660,18 +662,18 @@ const InlinePostCard = ({
     return `${Math.floor(days / 7)}w ago`;
   };
 
-  const handleLikePost = () => {
+  const handleLikePost = async () => {
     if (isLiked) return;
     setIsLiked(true);
     setLikeCount(p => p + 1);
-    const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
-    likedPosts.push(post.id);
-    localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
     
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const updatedPosts = allPosts.map(p => p.id === post.id ? { ...p, likes: (p.likes || 0) + 1 } : p);
-    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-    
+    // ✅ Save to SERVER (visible to all users)
+    await axios.post(`${API_URL}/api/posts/${post._id || post.id}/like`, {
+      userEmail: user.email,
+      userName: user.name
+    }).catch(() => {});
+
+    // Keep local notification for now
     if (post.userEmail !== user.email) {
       const notif = { 
         id: Date.now(), 
@@ -681,7 +683,7 @@ const InlinePostCard = ({
         message: `${user.name} liked your post`, 
         timestamp: new Date().toISOString(), 
         read: false,
-        postId: post.id
+        postId: post._id || post.id 
       };
       const notifs = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
@@ -695,7 +697,7 @@ const InlinePostCard = ({
     onViewUserProfile(post.userEmail, post.userName);
   };
 
-  const handlePostComment = () => {
+  const handlePostComment = async () => {
     if (!newComment.trim()) return;
     
     const mentionRegex = /@(\w+)/g;
@@ -705,26 +707,41 @@ const InlinePostCard = ({
       mentions.push(match[1]);
     }
     
-    const comment = {
-      id: Date.now(), 
-      postId: post.id, 
-      userId: user.id, 
+    const commentData = {
+      userId: user.id,
       userName: user.name,
-      userEmail: user.email, 
-      userInitials: user.name.slice(0, 2).toUpperCase(),
-      content: newComment.trim(), 
-      timestamp: new Date().toISOString(),
-      parentId: replyTo?.id || null, 
-      likes: 0,
+      userEmail: user.email,
+      content: newComment.trim(),
       mentions: mentions
     };
     
-    const updated = [...comments, comment];
-    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updated));
-    setComments(updated);
     setNewComment('');
     setReplyTo(null);
-    
+
+    // ✅ Save comment to SERVER
+    try {
+      const res = await axios.post(`${API_URL}/api/posts/${post._id || post.id}/comments`, commentData);
+      if (res.data.success) {
+        const saved = res.data.comment;
+        const updated = [...comments, { ...saved, userInitials: user.name.slice(0,2).toUpperCase() }];
+        localStorage.setItem(`post_${post._id || post.id}_comments`, JSON.stringify(updated));
+        setComments(updated);
+      }
+    } catch {
+      // fallback: save locally
+      const comment = { 
+        id: Date.now(), 
+        ...commentData, 
+        userInitials: user.name.slice(0,2).toUpperCase(), 
+        timestamp: new Date().toISOString(), 
+        likes: 0 
+      };
+      const updated = [...comments, comment];
+      localStorage.setItem(`post_${post._id || post.id}_comments`, JSON.stringify(updated));
+      setComments(updated);
+    }
+
+    // Notification for mentions
     mentions.forEach(mentionedUsername => {
       const users = JSON.parse(localStorage.getItem('users') || '[]');
       const mentionedUser = users.find(u => 
@@ -741,7 +758,7 @@ const InlinePostCard = ({
           message: `${user.name} mentioned you in a comment: "${newComment.substring(0, 40)}"`, 
           timestamp: new Date().toISOString(), 
           read: false,
-          postId: post.id
+          postId: post._id || post.id
         };
         const notifs = JSON.parse(localStorage.getItem(`user_${mentionedUser.email}_notifications`) || '[]');
         notifs.unshift(notif);
@@ -759,7 +776,7 @@ const InlinePostCard = ({
         message: `${user.name} commented: "${newComment.substring(0, 40)}"`, 
         timestamp: new Date().toISOString(), 
         read: false,
-        postId: post.id
+        postId: post._id || post.id 
       };
       const notifs = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
@@ -2037,13 +2054,33 @@ const HomePage = ({
   useEffect(() => {
     loadTrendingBooks();
     loadFeedPosts();
+    
+    // ✅ Real-time: new posts from other users appear instantly
+    socket.on('new_post', (post) => {
+      if (!blockedUsers.includes(post.userEmail)) {
+        setFeedPosts(prev => [post, ...prev]);
+      }
+    });
+    socket.on('post_deleted', ({ postId }) => {
+      setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId));
+    });
+    socket.on('post_liked', ({ postId, likes }) => {
+      setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p));
+    });
+
     const savedStats = localStorage.getItem(`user_${user.email}_stats`);
     if (savedStats) setUserStats(JSON.parse(savedStats));
     if (user?.readingGoal?.yearly > 0) {
       const s = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
       setReadingProgress(Math.min((s.booksRead || 0) / user.readingGoal.yearly * 100, 100));
     }
-  }, [user?.email]);
+
+    return () => {
+      socket.off('new_post');
+      socket.off('post_deleted');
+      socket.off('post_liked');
+    };
+  }, [user?.email, blockedUsers]);
 
   // Trending books database
   const TRENDING_DB = [
@@ -2060,6 +2097,15 @@ const HomePage = ({
   };
 
   const loadFeedPosts = async () => {
+    // ✅ Load from SERVER — visible to ALL users
+    try {
+      const res = await axios.get(`${API_URL}/api/posts`);
+      if (res.data.success) {
+        setFeedPosts(res.data.posts.filter(p => !blockedUsers.includes(p.userEmail)));
+        return;
+      }
+    } catch {}
+    // fallback to localStorage
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     setFeedPosts(allPosts.slice(0, 15));
   };
@@ -2711,10 +2757,9 @@ const PostPage = ({ user, onPost, setPage }) => {
   const [isPublic, setIsPublic] = useState(true);
   const fileRef = useRef();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!content.trim()) return;
     const postData = {
-      id: Date.now(), 
       content, 
       bookName, 
       author, 
@@ -2722,14 +2767,22 @@ const PostPage = ({ user, onPost, setPage }) => {
       isPublic, 
       type: 'post',
       userName: user.name, 
-      userEmail: user.email, 
-      createdAt: new Date().toISOString(),
-      likes: 0, 
-      comments: 0, 
-      shares: 0,
-      reshareCount: 0
+      userEmail: user.email,
     };
-    onPost(postData);
+
+    // ✅ Send to SERVER first
+    try {
+      await axios.post(`${API_URL}/api/posts`, postData);
+    } catch {
+      // fallback to local if server fails
+      onPost({ 
+        ...postData, 
+        id: Date.now(), 
+        createdAt: new Date().toISOString(), 
+        likes: 0, 
+        reshareCount: 0 
+      });
+    }
     setPage('home');
   };
 
@@ -2779,9 +2832,17 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('reviews') || '[]');
-    setReviews(saved);
-    setLoading(false);
+    // ✅ Load from SERVER — all users' reviews visible
+    axios.get(`${API_URL}/api/reviews`)
+      .then(res => {
+        if (res.data.success) setReviews(res.data.reviews || res.data.data || []);
+      })
+      .catch(() => {
+        const saved = JSON.parse(localStorage.getItem('reviews') || '[]');
+        setReviews(saved);
+      })
+      .finally(() => setLoading(false));
+
     const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedReviews`) || '[]');
     setLikedReviews(liked);
   }, [user.email]);
@@ -2806,15 +2867,28 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
 
   const handleCreateReview = async () => {
     if (!newReview.bookName || !newReview.author || !newReview.review) { alert('Please fill all fields'); return; }
-    const reviewData = { id: Date.now().toString(), ...newReview, userName: user.name, userEmail: user.email, createdAt: new Date().toISOString(), likes: 0 };
-    const saved = JSON.parse(localStorage.getItem('reviews') || '[]');
-    saved.unshift(reviewData);
-    localStorage.setItem('reviews', JSON.stringify(saved));
-    setReviews([reviewData, ...reviews]);
+    const reviewData = { ...newReview, userName: user.name, userEmail: user.email };
+
+    // ✅ Save to SERVER
+    try {
+      const res = await axios.post(`${API_URL}/api/reviews`, reviewData);
+      if (res.data.success || res.data.review) {
+        const saved = res.data.review || { ...reviewData, _id: Date.now().toString(), createdAt: new Date().toISOString(), likes: 0 };
+        setReviews(prev => [saved, ...prev]);
+      }
+    } catch {
+      // fallback to localStorage
+      const saved = JSON.parse(localStorage.getItem('reviews') || '[]');
+      const r = { id: Date.now().toString(), ...reviewData, createdAt: new Date().toISOString(), likes: 0 };
+      saved.unshift(r); 
+      localStorage.setItem('reviews', JSON.stringify(saved));
+      setReviews(prev => [r, ...prev]);
+    }
+
     setShowCreateForm(false);
     setNewReview({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
-    stats.reviewsGiven = (stats.reviewsGiven||0) + 1;
+    stats.reviewsGiven = (stats.reviewsGiven || 0) + 1;
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
   };
 
@@ -2962,9 +3036,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       setMessages(msgs.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
       const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
       
-      // ========================================
-      // PATCH 2 of 7 — REAL ONLINE STATUS (replaces Math.random)
-      // ========================================
       // Get online users from presence system
       const crewOnlineKeys = [];
       for (let i = 0; i < localStorage.length; i++) {
@@ -2980,7 +3051,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         name: u.name, 
         email: u.email, 
         initials: u.name?.slice(0,2), 
-        online: onlineUserIds.has(u.id)  // Real online status from presence
+        online: onlineUserIds.has(u.id)
       }));
 
       if (!members.find(m => m.email === selectedCrew.createdBy)) members.push({ id: selectedCrew.createdBy, name: selectedCrew.createdByName||'Creator', email: selectedCrew.createdBy, initials: (selectedCrew.createdByName||'CR').slice(0,2), online: onlineUserIds.has(selectedCrew.createdBy), isCreator: true });
@@ -2992,7 +3063,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
   const isJoined = (crewId) => joinedCrews.includes(crewId);
 
-  const joinCrew = (crew) => {
+  const joinCrew = async (crew) => {
+    // ✅ Tell server this user joined
+    axios.post(`${API_URL}/api/crews/${crew.id}/join`, { 
+      userEmail: user.email, 
+      action: 'join' 
+    }).catch(() => {});
+    
     const updated = [...joinedCrews, crew.id];
     setJoinedCrews(updated);
     localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updated));
@@ -3041,22 +3118,31 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const sendMessage = async () => {
     if (!newMessage.trim() || !selectedCrew || !isJoined(selectedCrew.id)) return;
     
-    const msg = { 
-      id: `msg_${Date.now()}`, 
+    const msg = {
       userId: user.id, 
       userName: user.name, 
       userEmail: user.email,
-      userInitials: user.name?.slice(0,2).toUpperCase(), 
+      userInitials: user.name?.slice(0,2).toUpperCase(),
       content: newMessage.trim(), 
-      timestamp: new Date().toISOString(), 
-      type: 'text' 
+      type: 'text'
     };
-    
-    const existing = JSON.parse(localStorage.getItem(`crew_${selectedCrew.id}_messages`) || '[]');
-    existing.push(msg);
-    localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existing));
-    setMessages(prev => [...prev, { ...msg, timestamp: new Date(msg.timestamp) }]);
-    
+    setNewMessage('');
+
+    // ✅ Send to SERVER — all crew members see it
+    try {
+      const res = await axios.post(`${API_URL}/api/crews/${selectedCrew.id}/messages`, msg);
+      if (res.data.success) {
+        setMessages(prev => [...prev, { ...res.data.message, timestamp: new Date(res.data.message.timestamp) }]);
+      }
+    } catch {
+      // fallback to localStorage
+      const localMsg = { id: `msg_${Date.now()}`, ...msg, timestamp: new Date().toISOString() };
+      const existing = JSON.parse(localStorage.getItem(`crew_${selectedCrew.id}_messages`) || '[]');
+      existing.push(localMsg);
+      localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existing));
+      setMessages(prev => [...prev, { ...localMsg, timestamp: new Date() }]);
+    }
+
     // Send notifications to all other crew members
     const otherMembers = crewMembers.filter(member => member.email !== user.email);
     otherMembers.forEach(member => {
@@ -3079,8 +3165,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     // Trigger storage event for other tabs
     window.dispatchEvent(new StorageEvent('storage', { key: `user_${user.email}_notifications` }));
     updateNotificationCount?.();
-    
-    setNewMessage('');
   };
 
   const sendImage = (e) => {
@@ -3148,11 +3232,25 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   if (view === 'chat' && selectedCrew) {
     const hasJoined = isJoined(selectedCrew.id);
     
-    // ========================================
-    // PATCH 3 of 7 — WIRE PRESENCE + TYPING + READ RECEIPTS HOOKS
-    // ========================================
     const { onlineUsers, onlineCount } = useCrewPresence(selectedCrew.id, user.id, user.name);
     const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(selectedCrew.id, user.id, user.name);
+    
+    // ✅ Join socket room for real-time messages
+    useEffect(() => {
+      if (!selectedCrew) return;
+      
+      socket.emit('join_crew_room', selectedCrew.id);
+      socket.on('new_crew_message', (data) => {
+        if (String(data.crewId) === String(selectedCrew.id)) {
+          setMessages(prev => [...prev, { ...data.message, timestamp: new Date(data.message.timestamp) }]);
+        }
+      });
+      
+      return () => {
+        socket.emit('leave_crew_room', selectedCrew.id);
+        socket.off('new_crew_message');
+      };
+    }, [selectedCrew]);
     
     // Mark messages as read when chat is open
     React.useEffect(() => { markCrewMessagesRead(selectedCrew.id, user.id); }, [messages.length]);
@@ -3172,10 +3270,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
             <button onClick={() => { setView('detail'); }} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
             <DynamicBookCover title={selectedCrew.name} author={selectedCrew.author} size="xs" />
             
-            {/* ========================================
-                PATCH 4 of 7 — ONLINE COUNT IN HEADER
-                Shows real online count with green dot
-            ======================================== */}
             <div>
               <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
               <div className="flex items-center gap-2">
@@ -3218,10 +3312,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                             {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
                             {msg.type === 'image' ? <img src={msg.content} alt="Shared" className="max-w-full rounded-xl max-h-60" /> : <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>}
                             
-                            {/* ========================================
-                                PATCH 5 of 7 — 3-STATE READ RECEIPTS
-                                ✓ = sent, ✓✓ grey = delivered, ✓✓ blue = read
-                            ======================================== */}
                             <p className="text-[10px] text-gray-400 text-right mt-0.5">
                               {formatTime(msg.timestamp)}
                               {isOwn && (() => {
@@ -3251,10 +3341,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
         {hasJoined && (
           <div className="flex-shrink-0 bg-gray-50 border-t px-3 py-2.5" style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
-            {/* ========================================
-                PATCH 6 of 7 — TYPING INDICATOR
-                Shows who is typing above the input
-            ======================================== */}
             {typingUsers.length > 0 && (
               <div className="flex items-center gap-2 px-2 pb-1.5">
                 <div className="flex gap-0.5">
@@ -3279,16 +3365,16 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                 value={newMessage}
                 onChange={e => { 
                   setNewMessage(e.target.value); 
-                  broadcastTyping();  // Broadcast typing when user types
+                  broadcastTyping();
                 }}
                 onKeyDown={e => {
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
-                    stopTyping();  // Stop typing when sending
+                    stopTyping();
                     sendMessage();
                   }
                 }}
-                onBlur={stopTyping}  // Stop typing when input loses focus
+                onBlur={stopTyping}
                 className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
                 placeholder="Type a message..."
               />
