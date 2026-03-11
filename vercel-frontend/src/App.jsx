@@ -1,4 +1,4 @@
-// App.jsx - Complete ReadCrew App with All Features Fixed
+// App.jsx - Complete ReadCrew App with All Features Fixed + System Design Patches
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
@@ -223,6 +223,140 @@ const LoadingSpinner = ({ size = 'md', color = 'orange' }) => {
   const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
   const colors = { orange: 'border-orange-500', blue: 'border-blue-500', purple: 'border-purple-500' };
   return <div className={`${sizes[size]} border-4 border-t-transparent ${colors[color]} rounded-full animate-spin`}></div>;
+};
+
+// ========================================
+// PATCH 1 of 7 — PRESENCE + TYPING + READ RECEIPTS
+// Add these hooks right after LoadingSpinner
+// ========================================
+
+// ─── PRESENCE SYSTEM HOOK ─────────────────────────────────────────────────
+const useCrewPresence = (crewId, userId, userName) => {
+  const [onlineUsers, setOnlineUsers] = React.useState([]);
+  const heartbeatRef = React.useRef(null);
+  const PRESENCE_TTL = 30000; // 30 seconds
+  const HEARTBEAT_INTERVAL = 15000; // 15 seconds
+
+  const markPresent = React.useCallback(() => {
+    if (!crewId || !userId) return;
+    localStorage.setItem(
+      `crew_${crewId}_presence_${userId}`,
+      JSON.stringify({ userId, userName, ts: Date.now() })
+    );
+  }, [crewId, userId, userName]);
+
+  const markAbsent = React.useCallback(() => {
+    if (!crewId || !userId) return;
+    localStorage.removeItem(`crew_${crewId}_presence_${userId}`);
+  }, [crewId, userId]);
+
+  const getOnlineUsers = React.useCallback(() => {
+    if (!crewId) return [];
+    const now = Date.now();
+    const online = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith(`crew_${crewId}_presence_`)) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key));
+          if (data && (now - data.ts) < PRESENCE_TTL) {
+            online.push(data);
+          } else {
+            localStorage.removeItem(key);
+          }
+        } catch {}
+      }
+    }
+    return online;
+  }, [crewId]);
+
+  React.useEffect(() => {
+    if (!crewId || !userId) return;
+    markPresent();
+    setOnlineUsers(getOnlineUsers());
+    heartbeatRef.current = setInterval(() => {
+      markPresent();
+      setOnlineUsers(getOnlineUsers());
+    }, HEARTBEAT_INTERVAL);
+    return () => {
+      clearInterval(heartbeatRef.current);
+      markAbsent();
+    };
+  }, [crewId, userId]);
+
+  return { onlineUsers, onlineCount: onlineUsers.length };
+};
+
+// ─── TYPING INDICATOR HOOK ────────────────────────────────────────────────
+const useTypingIndicator = (crewId, userId, userName) => {
+  const [typingUsers, setTypingUsers] = React.useState([]);
+  const typingTimeoutRef = React.useRef(null);
+  const TYPING_TTL = 3000; // 3 seconds
+
+  const broadcastTyping = React.useCallback(() => {
+    if (!crewId || !userId) return;
+    localStorage.setItem(
+      `crew_${crewId}_typing_${userId}`,
+      JSON.stringify({ userId, userName, ts: Date.now() })
+    );
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      localStorage.removeItem(`crew_${crewId}_typing_${userId}`);
+    }, TYPING_TTL);
+  }, [crewId, userId, userName]);
+
+  const stopTyping = React.useCallback(() => {
+    if (!crewId || !userId) return;
+    clearTimeout(typingTimeoutRef.current);
+    localStorage.removeItem(`crew_${crewId}_typing_${userId}`);
+  }, [crewId, userId]);
+
+  React.useEffect(() => {
+    if (!crewId) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const typing = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith(`crew_${crewId}_typing_`) && !key.includes(`_${userId}`)) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            if (data && (now - data.ts) < TYPING_TTL) {
+              typing.push(data.userName);
+            } else {
+              localStorage.removeItem(key);
+            }
+          } catch {}
+        }
+      }
+      setTypingUsers(typing);
+    }, 1500);
+    return () => {
+      clearInterval(interval);
+      stopTyping();
+    };
+  }, [crewId, userId]);
+
+  return { typingUsers, broadcastTyping, stopTyping };
+};
+
+// ─── READ RECEIPT HELPERS ─────────────────────────────────────────────────
+const markCrewMessagesRead = (crewId, userId) => {
+  if (!crewId || !userId) return;
+  localStorage.setItem(`crew_${crewId}_lastRead_${userId}`, Date.now().toString());
+};
+
+const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
+  const msgTime = new Date(msgTimestamp).getTime();
+  // Check if any other user has read up to this message
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith(`crew_${crewId}_lastRead_`)) {
+      const lastRead = parseInt(localStorage.getItem(key) || '0');
+      if (lastRead >= msgTime) return 'read';
+    }
+  }
+  return onlineCount > 1 ? 'delivered' : 'sent';
 };
 
 // ─── BOTTOM NAV ──────────────────────────────────────────────────────────
@@ -1758,6 +1892,15 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           ))}
         </div>
 
+        {/* ========================================
+            PATCH 7 of 7 — PRIVACY NOTICE
+            Added: Posts, Reviews, Books & Crews are public · Saved posts are private
+        ======================================== */}
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3 px-1">
+          <Globe className="w-3 h-3" />
+          <span>Posts, Reviews, Books &amp; Crews are public · Saved posts are private</span>
+        </div>
+
         <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
           {tabs.map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-shrink-0 text-sm pb-2.5 px-3 font-medium border-b-2 transition ${activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'}`}>{tab}</button>
@@ -2818,8 +2961,29 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       const msgs = JSON.parse(localStorage.getItem(`crew_${selectedCrew.id}_messages`) || '[]');
       setMessages(msgs.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
       const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      const members = allUsers.filter(u => u.joinedCrews?.includes(selectedCrew.id) || u.joinedCrews?.includes(String(selectedCrew.id))).map(u => ({ id: u.id, name: u.name, email: u.email, initials: u.name?.slice(0,2), online: Math.random() > 0.5 }));
-      if (!members.find(m => m.email === selectedCrew.createdBy)) members.push({ id: selectedCrew.createdBy, name: selectedCrew.createdByName||'Creator', email: selectedCrew.createdBy, initials: (selectedCrew.createdByName||'CR').slice(0,2), online: true, isCreator: true });
+      
+      // ========================================
+      // PATCH 2 of 7 — REAL ONLINE STATUS (replaces Math.random)
+      // ========================================
+      // Get online users from presence system
+      const crewOnlineKeys = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(`crew_${selectedCrew.id}_presence_`)) crewOnlineKeys.push(k);
+      }
+      const onlineUserIds = new Set(crewOnlineKeys.map(k => {
+        try { return JSON.parse(localStorage.getItem(k))?.userId; } catch { return null; }
+      }).filter(Boolean));
+      
+      const members = allUsers.filter(u => u.joinedCrews?.includes(selectedCrew.id) || u.joinedCrews?.includes(String(selectedCrew.id))).map(u => ({ 
+        id: u.id, 
+        name: u.name, 
+        email: u.email, 
+        initials: u.name?.slice(0,2), 
+        online: onlineUserIds.has(u.id)  // Real online status from presence
+      }));
+
+      if (!members.find(m => m.email === selectedCrew.createdBy)) members.push({ id: selectedCrew.createdBy, name: selectedCrew.createdByName||'Creator', email: selectedCrew.createdBy, initials: (selectedCrew.createdByName||'CR').slice(0,2), online: onlineUserIds.has(selectedCrew.createdBy), isCreator: true });
       setCrewMembers(members);
     }
   }, [selectedCrew]);
@@ -2983,6 +3147,16 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
   if (view === 'chat' && selectedCrew) {
     const hasJoined = isJoined(selectedCrew.id);
+    
+    // ========================================
+    // PATCH 3 of 7 — WIRE PRESENCE + TYPING + READ RECEIPTS HOOKS
+    // ========================================
+    const { onlineUsers, onlineCount } = useCrewPresence(selectedCrew.id, user.id, user.name);
+    const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(selectedCrew.id, user.id, user.name);
+    
+    // Mark messages as read when chat is open
+    React.useEffect(() => { markCrewMessagesRead(selectedCrew.id, user.id); }, [messages.length]);
+    
     const groupsByDate = messages.reduce((acc, msg) => {
       const date = new Date(msg.timestamp).toDateString();
       if (!acc[date]) acc[date] = [];
@@ -2997,9 +3171,22 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
           <div className="flex items-center gap-3">
             <button onClick={() => { setView('detail'); }} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
             <DynamicBookCover title={selectedCrew.name} author={selectedCrew.author} size="xs" />
+            
+            {/* ========================================
+                PATCH 4 of 7 — ONLINE COUNT IN HEADER
+                Shows real online count with green dot
+            ======================================== */}
             <div>
               <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
-              <p className="text-xs text-gray-500">{crewMembers.length} members</p>
+              <div className="flex items-center gap-2">
+                <p className="text-xs text-gray-500">{crewMembers.length} members</p>
+                {onlineCount > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                    <span className="w-1.5 h-1.5 bg-green-500 rounded-full inline-block animate-pulse" />
+                    {onlineCount} online
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <button className="p-2 hover:bg-gray-100 rounded-full"><MoreHorizontal className="w-5 h-5 text-gray-600" /></button>
@@ -3030,7 +3217,20 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                           <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#dcf8c6] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
                             {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
                             {msg.type === 'image' ? <img src={msg.content} alt="Shared" className="max-w-full rounded-xl max-h-60" /> : <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>}
-                            <p className="text-[10px] text-gray-400 text-right mt-0.5">{formatTime(msg.timestamp)}{isOwn && <span className="ml-1 text-blue-400">✓✓</span>}</p>
+                            
+                            {/* ========================================
+                                PATCH 5 of 7 — 3-STATE READ RECEIPTS
+                                ✓ = sent, ✓✓ grey = delivered, ✓✓ blue = read
+                            ======================================== */}
+                            <p className="text-[10px] text-gray-400 text-right mt-0.5">
+                              {formatTime(msg.timestamp)}
+                              {isOwn && (() => {
+                                const status = getReadStatus(msg.timestamp, selectedCrew.id, onlineCount);
+                                if (status === 'read') return <span className="ml-1 text-blue-400">✓✓</span>;
+                                if (status === 'delivered') return <span className="ml-1 text-gray-400">✓✓</span>;
+                                return <span className="ml-1 text-gray-300">✓</span>;
+                              })()}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -3051,11 +3251,48 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
         {hasJoined && (
           <div className="flex-shrink-0 bg-gray-50 border-t px-3 py-2.5" style={{ paddingBottom: 'max(10px, env(safe-area-inset-bottom))' }}>
+            {/* ========================================
+                PATCH 6 of 7 — TYPING INDICATOR
+                Shows who is typing above the input
+            ======================================== */}
+            {typingUsers.length > 0 && (
+              <div className="flex items-center gap-2 px-2 pb-1.5">
+                <div className="flex gap-0.5">
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}} />
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}} />
+                  <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}} />
+                </div>
+                <p className="text-xs text-gray-500 italic">
+                  {typingUsers.length === 1
+                    ? `${typingUsers[0]} is typing...`
+                    : typingUsers.length === 2
+                    ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+                    : `${typingUsers.length} people are typing...`}
+                </p>
+              </div>
+            )}
             <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow border border-gray-100">
               <button onClick={() => fileInputRef.current?.click()} className="w-8 h-8 flex items-center justify-center flex-shrink-0"><Plus className="w-5 h-5 text-orange-500" /></button>
               <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={sendImage} />
-              <input type="text" value={newMessage} onChange={e => setNewMessage(e.target.value)} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }} className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent" placeholder="Type a message..." />
-              <button onClick={sendMessage} disabled={!newMessage.trim()} className={`w-8 h-8 flex items-center justify-center rounded-full transition ${newMessage.trim() ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+              <input
+                type="text"
+                value={newMessage}
+                onChange={e => { 
+                  setNewMessage(e.target.value); 
+                  broadcastTyping();  // Broadcast typing when user types
+                }}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    stopTyping();  // Stop typing when sending
+                    sendMessage();
+                  }
+                }}
+                onBlur={stopTyping}  // Stop typing when input loses focus
+                className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
+                placeholder="Type a message..."
+              />
+              <button onClick={() => { stopTyping(); sendMessage(); }} disabled={!newMessage.trim()} className={`w-8 h-8 flex items-center justify-center rounded-full transition ${newMessage.trim() ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
                 <Send className="w-4 h-4" />
               </button>
             </div>
