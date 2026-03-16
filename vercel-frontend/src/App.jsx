@@ -10,7 +10,34 @@ import {
   Volume2, Mic, Paperclip, Mail, Phone, Leaf, ExternalLink,
   Link2, Instagram, Facebook, Twitter, AtSign, Flag, Pin, Smile,
   CheckCheck, BookMarked, PlusCircle, MapPin, Navigation, Map, Repeat,
-  UserCheck, UserMinus, Hash, AtSign as AtIcon
+  UserCheck, UserMinus, Hash, AtSign as AtIcon, Wifi, WifiOff,
+  List, Grid, ThumbsUp as ThumbsUpIcon, ThumbsDown as ThumbsDownIcon,
+  AlertCircle, CheckCircle, Info, HelpCircle, Coffee, Music,
+  Film, Camera as CameraIcon, Video, Image as ImageIcon2,
+  Download, Upload as UploadIcon, RefreshCw, RotateCcw,
+  Maximize2, Minimize2, VolumeX, Volume1, Volume2 as Volume2Icon,
+  SkipBack, SkipForward, Circle, Square, Triangle,
+  Sun, Moon, Cloud, CloudRain, CloudSnow, CloudLightning,
+  Wind, Droplets, Thermometer, Sunrise, Sunset,
+  Compass, Anchor, Ship, Plane, Train, Car, Bike,
+  Bus, Truck, Rocket, Satellite, Globe as GlobeIcon,
+  Map as MapIcon, MapPin as MapPinIcon, Navigation as NavigationIcon,
+  Compass as CompassIcon, Briefcase, Building, Home as HomeIcon,
+  Hospital, School, Store, Restaurant, Cafe, Hotel,
+  Church, Mosque, Temple, Park, Museum, Library,
+  Stadium, Theatre, Cinema, Music as MusicIcon, Radio,
+  Headphones, Speaker, Mic as MicIcon, Podcast,
+  Tv, Monitor, Laptop, Tablet, Smartphone, Watch,
+  Clock as ClockIcon, AlarmClock, Timer, Stopwatch,
+  Hourglass, Calendar as CalendarIcon, CalendarDays,
+  CalendarRange, CalendarCheck, CalendarX, CalendarPlus,
+  CalendarMinus, CalendarHeart, CalendarSearch,
+  BookOpen as BookOpenIcon, BookMarked as BookMarkedIcon,
+  BookCopy, BookCheck, BookX, BookHeart, BookUser,
+  BookA, BookB, BookC, BookD, BookE, BookF, BookG,
+  BookH, BookI, BookJ, BookK, BookL, BookM, BookN,
+  BookO, BookP, BookQ, BookR, BookS, BookT, BookU,
+  BookV, BookW, BookX as BookXIcon, BookY, BookZ
 } from 'lucide-react';
 
 // API imports
@@ -18,6 +45,53 @@ import axios from 'axios';
 import { io } from 'socket.io-client';
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 const socket = io(API_URL, { transports: ['websocket', 'polling'] });
+
+// ========================================
+// UTILITY FUNCTIONS
+// ========================================
+
+const formatTimeAgo = (timestamp) => {
+  if (!timestamp) return '';
+  const diff = Date.now() - new Date(timestamp).getTime();
+  const mins = Math.floor(diff / 60000);
+  const hrs = Math.floor(diff / 3600000);
+  const days = Math.floor(diff / 86400000);
+  const weeks = Math.floor(days / 7);
+  const months = Math.floor(days / 30);
+  const years = Math.floor(days / 365);
+
+  if (mins < 1) return 'Just now';
+  if (mins < 60) return `${mins}m ago`;
+  if (hrs < 24) return `${hrs}h ago`;
+  if (days < 7) return `${days}d ago`;
+  if (weeks < 4) return `${weeks}w ago`;
+  if (months < 12) return `${months}mo ago`;
+  return `${years}y ago`;
+};
+
+const isValidEmail = (email) => {
+  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return re.test(email);
+};
+
+const sanitizeText = (text) => {
+  if (!text) return '';
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+};
+
+const extractMentions = (text) => {
+  const mentions = text.match(/@(\w+)/g) || [];
+  return mentions.map(m => m.substring(1));
+};
+
+const generateId = () => {
+  return `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+};
 
 // ========================================
 // NOTIFICATION TOAST COMPONENT
@@ -35,7 +109,13 @@ const NotificationToast = ({ notification, onClose }) => {
     reshare: <Repeat className="w-5 h-5 text-indigo-500" />,
     follow: <UserCheck className="w-5 h-5 text-green-500" />,
     invite: <UserPlus className="w-5 h-5 text-purple-500" />,
-    message: <MessageSquare className="w-5 h-5 text-emerald-500" />
+    message: <MessageSquare className="w-5 h-5 text-emerald-500" />,
+    join: <Users className="w-5 h-5 text-blue-500" />,
+    leave: <UserMinus className="w-5 h-5 text-red-500" />,
+    review: <Star className="w-5 h-5 text-yellow-500" />,
+    warning: <AlertCircle className="w-5 h-5 text-orange-500" />,
+    success: <CheckCircle className="w-5 h-5 text-green-500" />,
+    info: <Info className="w-5 h-5 text-blue-500" />
   };
 
   const bgColors = {
@@ -45,11 +125,17 @@ const NotificationToast = ({ notification, onClose }) => {
     reshare: 'bg-indigo-50 border-indigo-200',
     follow: 'bg-green-50 border-green-200',
     invite: 'bg-purple-50 border-purple-200',
-    message: 'bg-emerald-50 border-emerald-200'
+    message: 'bg-emerald-50 border-emerald-200',
+    join: 'bg-blue-50 border-blue-200',
+    leave: 'bg-red-50 border-red-200',
+    review: 'bg-yellow-50 border-yellow-200',
+    warning: 'bg-orange-50 border-orange-200',
+    success: 'bg-green-50 border-green-200',
+    info: 'bg-blue-50 border-blue-200'
   };
 
   return (
-    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-[90%] max-w-sm" style={{ animation: 'slideDown 0.3s ease-out' }}>
+    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-slideDown">
       <div className={`rounded-2xl shadow-2xl border-2 overflow-hidden ${bgColors[notification.type] || 'bg-white border-gray-200'}`}>
         <div className="p-4 flex items-start gap-3">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
@@ -59,6 +145,12 @@ const NotificationToast = ({ notification, onClose }) => {
             notification.type === 'reshare' ? 'bg-indigo-100' :
             notification.type === 'follow' ? 'bg-green-100' :
             notification.type === 'message' ? 'bg-emerald-100' :
+            notification.type === 'join' ? 'bg-blue-100' :
+            notification.type === 'leave' ? 'bg-red-100' :
+            notification.type === 'review' ? 'bg-yellow-100' :
+            notification.type === 'warning' ? 'bg-orange-100' :
+            notification.type === 'success' ? 'bg-green-100' :
+            notification.type === 'info' ? 'bg-blue-100' :
             'bg-purple-100'
           }`}>
             {icons[notification.type] || <Bell className="w-5 h-5 text-gray-500" />}
@@ -197,49 +289,79 @@ const DynamicBookCover = ({ title, author, className = 'w-32 h-40', onClick, siz
 };
 
 // ─── AVATAR ────────────────────────────────────────────────────────────────
-const Avatar = ({ initials, size = 'md', color = '#C8622A', src, online }) => {
+const Avatar = ({ initials, size = 'md', color = '#C8622A', src, online, onClick }) => {
   const sizes = { xs: 'w-7 h-7 text-xs', sm: 'w-9 h-9 text-sm', md: 'w-11 h-11 text-base', lg: 'w-16 h-16 text-xl', xl: 'w-20 h-20 text-2xl' };
+  
+  const getGradient = () => {
+    const gradients = [
+      'from-orange-500 to-red-500',
+      'from-blue-500 to-purple-500',
+      'from-green-500 to-teal-500',
+      'from-purple-500 to-pink-500',
+      'from-yellow-500 to-orange-500',
+      'from-indigo-500 to-blue-500'
+    ];
+    const hash = (initials || '').split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return gradients[hash % gradients.length];
+  };
+
   return (
-    <div className="relative shrink-0">
-      {src ? <img src={src} alt={initials} className={`${sizes[size]} rounded-full object-cover`} />
-        : <div className={`${sizes[size]} rounded-full flex items-center justify-center font-semibold text-white`} style={{ backgroundColor: color }}>{initials?.slice(0, 2).toUpperCase()}</div>}
+    <div className="relative shrink-0 cursor-pointer" onClick={onClick}>
+      {src ? (
+        <img src={src} alt={initials} className={`${sizes[size]} rounded-full object-cover border-2 border-orange-200 hover:border-orange-400 transition`} />
+      ) : (
+        <div className={`${sizes[size]} rounded-full bg-gradient-to-br ${getGradient()} flex items-center justify-center font-semibold text-white shadow-md`}>
+          {initials?.slice(0, 2).toUpperCase()}
+        </div>
+      )}
       {online && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full"></span>}
     </div>
   );
 };
 
 // ─── STAR RATING ──────────────────────────────────────────────────────────
-const StarRating = ({ rating = 0, onChange, size = 'sm' }) => {
+const StarRating = ({ rating = 0, onChange, size = 'sm', readonly = false }) => {
   const sz = size === 'sm' ? 'w-4 h-4' : size === 'xs' ? 'w-3 h-3' : 'w-6 h-6';
   return (
     <div className="flex gap-0.5">
       {[1,2,3,4,5].map(i => (
-        <Star key={i} className={`${sz} ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} ${onChange ? 'cursor-pointer hover:scale-110 transition' : ''}`} onClick={() => onChange?.(i)} />
+        <Star 
+          key={i} 
+          className={`${sz} ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} 
+            ${onChange && !readonly ? 'cursor-pointer hover:scale-110 transition' : ''}`} 
+          onClick={() => onChange?.(i)} 
+        />
       ))}
     </div>
   );
 };
 
 // ─── LOADING SPINNER ──────────────────────────────────────────────────────
-const LoadingSpinner = ({ size = 'md', color = 'orange' }) => {
-  const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12' };
-  const colors = { orange: 'border-orange-500', blue: 'border-blue-500', purple: 'border-purple-500' };
+const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) => {
+  const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12', xl: 'w-16 h-16' };
+  const colors = { orange: 'border-orange-500', blue: 'border-blue-500', purple: 'border-purple-500', green: 'border-green-500' };
+  
+  if (fullScreen) {
+    return (
+      <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+        <div className={`${sizes[size]} border-4 border-t-transparent ${colors[color]} rounded-full animate-spin`} />
+      </div>
+    );
+  }
+  
   return <div className={`${sizes[size]} border-4 border-t-transparent ${colors[color]} rounded-full animate-spin`}></div>;
 };
 
 // ========================================
-// PATCH 1 of 7 — PRESENCE + TYPING + READ RECEIPTS
-// Add these hooks right after LoadingSpinner
+// PRESENCE SYSTEM HOOK
 // ========================================
-
-// ─── PRESENCE SYSTEM HOOK ─────────────────────────────────────────────────
 const useCrewPresence = (crewId, userId, userName) => {
-  const [onlineUsers, setOnlineUsers] = React.useState([]);
-  const heartbeatRef = React.useRef(null);
+  const [onlineUsers, setOnlineUsers] = useState([]);
+  const heartbeatRef = useRef(null);
   const PRESENCE_TTL = 30000; // 30 seconds
   const HEARTBEAT_INTERVAL = 15000; // 15 seconds
 
-  const markPresent = React.useCallback(() => {
+  const markPresent = useCallback(() => {
     if (!crewId || !userId) return;
     localStorage.setItem(
       `crew_${crewId}_presence_${userId}`,
@@ -247,12 +369,12 @@ const useCrewPresence = (crewId, userId, userName) => {
     );
   }, [crewId, userId, userName]);
 
-  const markAbsent = React.useCallback(() => {
+  const markAbsent = useCallback(() => {
     if (!crewId || !userId) return;
     localStorage.removeItem(`crew_${crewId}_presence_${userId}`);
   }, [crewId, userId]);
 
-  const getOnlineUsers = React.useCallback(() => {
+  const getOnlineUsers = useCallback(() => {
     if (!crewId) return [];
     const now = Date.now();
     const online = [];
@@ -272,7 +394,7 @@ const useCrewPresence = (crewId, userId, userName) => {
     return online;
   }, [crewId]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!crewId || !userId) return;
     markPresent();
     setOnlineUsers(getOnlineUsers());
@@ -289,13 +411,15 @@ const useCrewPresence = (crewId, userId, userName) => {
   return { onlineUsers, onlineCount: onlineUsers.length };
 };
 
-// ─── TYPING INDICATOR HOOK ────────────────────────────────────────────────
+// ========================================
+// TYPING INDICATOR HOOK
+// ========================================
 const useTypingIndicator = (crewId, userId, userName) => {
-  const [typingUsers, setTypingUsers] = React.useState([]);
-  const typingTimeoutRef = React.useRef(null);
+  const [typingUsers, setTypingUsers] = useState([]);
+  const typingTimeoutRef = useRef(null);
   const TYPING_TTL = 3000; // 3 seconds
 
-  const broadcastTyping = React.useCallback(() => {
+  const broadcastTyping = useCallback(() => {
     if (!crewId || !userId) return;
     localStorage.setItem(
       `crew_${crewId}_typing_${userId}`,
@@ -307,13 +431,13 @@ const useTypingIndicator = (crewId, userId, userName) => {
     }, TYPING_TTL);
   }, [crewId, userId, userName]);
 
-  const stopTyping = React.useCallback(() => {
+  const stopTyping = useCallback(() => {
     if (!crewId || !userId) return;
     clearTimeout(typingTimeoutRef.current);
     localStorage.removeItem(`crew_${crewId}_typing_${userId}`);
   }, [crewId, userId]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (!crewId) return;
     const interval = setInterval(() => {
       const now = Date.now();
@@ -342,7 +466,9 @@ const useTypingIndicator = (crewId, userId, userName) => {
   return { typingUsers, broadcastTyping, stopTyping };
 };
 
-// ─── READ RECEIPT HELPERS ─────────────────────────────────────────────────
+// ========================================
+// READ RECEIPT HELPERS
+// ========================================
 const markCrewMessagesRead = (crewId, userId) => {
   if (!crewId || !userId) return;
   localStorage.setItem(`crew_${crewId}_lastRead_${userId}`, Date.now().toString());
@@ -350,7 +476,6 @@ const markCrewMessagesRead = (crewId, userId) => {
 
 const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
   const msgTime = new Date(msgTimestamp).getTime();
-  // Check if any other user has read up to this message
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
     if (key && key.startsWith(`crew_${crewId}_lastRead_`)) {
@@ -361,31 +486,471 @@ const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
   return onlineCount > 1 ? 'delivered' : 'sent';
 };
 
-// ─── BOTTOM NAV ──────────────────────────────────────────────────────────
+// ========================================
+// BOOK DETAILS MODAL
+// ========================================
+const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
+  const [details, setDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchBookDetails();
+  }, [book]);
+
+  const fetchBookDetails = async () => {
+    try {
+      const query = `${book.title} ${book.author || ''}`;
+      const res = await fetch(
+        `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(query)}&maxResults=1`
+      );
+      
+      if (res.ok) {
+        const data = await res.json();
+        if (data.items?.[0]) {
+          const item = data.items[0].volumeInfo;
+          setDetails({
+            title: item.title,
+            subtitle: item.subtitle,
+            author: item.authors?.join(', ') || book.author,
+            description: item.description || 'No description available',
+            pages: item.pageCount,
+            publishedDate: item.publishedDate,
+            publisher: item.publisher,
+            categories: item.categories,
+            rating: item.averageRating,
+            ratingsCount: item.ratingsCount,
+            previewLink: item.previewLink,
+            infoLink: item.infoLink,
+            language: item.language
+          });
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch book details:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+          <h3 className="font-bold text-lg">Book Details</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <LoadingSpinner size="lg" />
+          </div>
+        ) : details ? (
+          <div className="p-4 space-y-4">
+            <div className="flex gap-4">
+              <DynamicBookCover title={book.title} author={book.author} size="lg" />
+              <div className="flex-1">
+                <h2 className="text-xl font-bold text-gray-900">{details.title}</h2>
+                {details.subtitle && (
+                  <p className="text-sm text-gray-600 mt-1">{details.subtitle}</p>
+                )}
+                <p className="text-gray-500 text-sm">by {details.author}</p>
+                {details.categories && details.categories.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {details.categories.slice(0, 3).map((cat, i) => (
+                      <span key={i} className="text-xs px-2 py-1 bg-orange-100 text-orange-600 rounded-full">
+                        {cat}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                {details.rating && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <StarRating rating={Math.round(details.rating)} size="xs" readonly />
+                    <span className="text-xs text-gray-600">
+                      {details.rating.toFixed(1)} ({details.ratingsCount || 0} ratings)
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {details.description && (
+              <div className="bg-gray-50 rounded-xl p-4">
+                <h4 className="font-semibold mb-2">Description</h4>
+                <p className="text-sm text-gray-700 leading-relaxed">
+                  {details.description.replace(/<[^>]*>/g, '').substring(0, 500)}...
+                </p>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-3">
+              {details.pages && (
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <p className="text-gray-500 text-xs">Pages</p>
+                  <p className="font-semibold">{details.pages}</p>
+                </div>
+              )}
+              {details.publishedDate && (
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <p className="text-gray-500 text-xs">Published</p>
+                  <p className="font-semibold">{new Date(details.publishedDate).getFullYear()}</p>
+                </div>
+              )}
+              {details.publisher && (
+                <div className="bg-gray-50 rounded-lg p-3 text-center col-span-2">
+                  <p className="text-gray-500 text-xs">Publisher</p>
+                  <p className="font-semibold">{details.publisher}</p>
+                </div>
+              )}
+              {details.language && (
+                <div className="bg-gray-50 rounded-lg p-3 text-center">
+                  <p className="text-gray-500 text-xs">Language</p>
+                  <p className="font-semibold uppercase">{details.language}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={() => {
+                  onCreateCrew(book);
+                  onClose();
+                }}
+                className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
+              >
+                <Users className="w-4 h-4" />
+                Create Crew
+              </button>
+              {details.previewLink && (
+                <a
+                  href={details.previewLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-3 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition"
+                >
+                  <ExternalLink className="w-5 h-5" />
+                </a>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No details available</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ========================================
+// USER PROFILE MODAL (Quick View)
+// ========================================
+const UserProfileModal = ({ userEmail, userName, currentUser, onClose, onFollow, isFollowing, onViewFullProfile, onBlock, isBlocked }) => {
+  const [userData, setUserData] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
+  const [userReviews, setUserReviews] = useState([]);
+  const [followers, setFollowers] = useState([]);
+  const [following, setFollowing] = useState([]);
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  const [stats, setStats] = useState({ posts: 0, reviews: 0, followers: 0, following: 0 });
+
+  useEffect(() => {
+    loadUserData();
+  }, [userEmail]);
+
+  const loadUserData = () => {
+    const users = JSON.parse(localStorage.getItem('users') || '[]');
+    const found = users.find(u => u.email === userEmail);
+    if (found) {
+      setUserData(found);
+    }
+
+    const userFollowers = JSON.parse(localStorage.getItem(`user_${userEmail}_followers`) || '[]');
+    const userFollowing = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
+    
+    const followersWithDetails = userFollowers.map(email => {
+      const followerUser = users.find(u => u.email === email);
+      return {
+        email,
+        name: followerUser?.name || email.split('@')[0],
+        initials: followerUser?.name?.slice(0, 2).toUpperCase() || email.slice(0, 2).toUpperCase()
+      };
+    });
+    
+    const followingWithDetails = userFollowing.map(email => {
+      const followingUser = users.find(u => u.email === email);
+      return {
+        email,
+        name: followingUser?.name || email.split('@')[0],
+        initials: followingUser?.name?.slice(0, 2).toUpperCase() || email.slice(0, 2).toUpperCase()
+      };
+    });
+    
+    setFollowers(followersWithDetails);
+    setFollowing(followingWithDetails);
+    setStats({
+      followers: followersWithDetails.length,
+      following: followingWithDetails.length
+    });
+
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const posts = allPosts
+      .filter(p => p.userEmail === userEmail)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    setUserPosts(posts.slice(0, 5));
+    setStats(prev => ({ ...prev, posts: posts.length }));
+
+    const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+    const reviews = allReviews
+      .filter(r => r.userEmail === userEmail)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    setUserReviews(reviews.slice(0, 3));
+    setStats(prev => ({ ...prev, reviews: reviews.length }));
+  };
+
+  const formatTimeAgo = (ts) => {
+    const diff = Date.now() - new Date(ts);
+    const mins = Math.floor(diff / 60000), hrs = Math.floor(diff / 3600000), days = Math.floor(diff / 86400000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (hrs < 24) return `${hrs}h ago`;
+    if (days < 7) return `${days}d ago`;
+    return new Date(ts).toLocaleDateString();
+  };
+
+  const UserListModal = ({ title, users, onClose, onUserClick }) => (
+    <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+          <h3 className="font-bold">{title}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-4">
+          {users.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">No users to show</p>
+          ) : (
+            <div className="space-y-3">
+              {users.map(user => (
+                <button
+                  key={user.email}
+                  onClick={() => {
+                    onClose();
+                    onUserClick(user.email, user.name);
+                  }}
+                  className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition"
+                >
+                  <Avatar initials={user.initials} size="sm" />
+                  <div className="flex-1 text-left">
+                    <p className="font-semibold text-gray-900">{user.name}</p>
+                    <p className="text-xs text-gray-500">@{user.email.split('@')[0]}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {showFollowers && (
+        <UserListModal
+          title="Followers"
+          users={followers}
+          onClose={() => setShowFollowers(false)}
+          onUserClick={onViewFullProfile}
+        />
+      )}
+      {showFollowing && (
+        <UserListModal
+          title="Following"
+          users={following}
+          onClose={() => setShowFollowing(false)}
+          onUserClick={onViewFullProfile}
+        />
+      )}
+
+      <div className="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+        <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
+            <h3 className="font-bold">User Profile</h3>
+            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+          </div>
+          
+          <div className="p-5">
+            <div className="flex items-center gap-4 mb-6">
+              <Avatar initials={userName} size="lg" />
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-bold text-gray-900 truncate">{userName}</h2>
+                <p className="text-sm text-gray-500">@{userName?.toLowerCase().replace(/\s/g, '')}</p>
+                {userData?.bio && (
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-2">{userData.bio}</p>
+                )}
+                
+                <div className="flex gap-4 mt-2">
+                  <button 
+                    onClick={() => setShowFollowers(true)}
+                    className="text-center hover:opacity-75 transition"
+                  >
+                    <p className="font-bold text-gray-900">{stats.followers}</p>
+                    <p className="text-xs text-gray-500">Followers</p>
+                  </button>
+                  <button 
+                    onClick={() => setShowFollowing(true)}
+                    className="text-center hover:opacity-75 transition"
+                  >
+                    <p className="font-bold text-gray-900">{stats.following}</p>
+                    <p className="text-xs text-gray-500">Following</p>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 mb-6">
+              <div className="text-center p-2 bg-gray-50 rounded-lg">
+                <p className="text-lg font-bold text-gray-900">{stats.posts}</p>
+                <p className="text-xs text-gray-500">Posts</p>
+              </div>
+              <div className="text-center p-2 bg-gray-50 rounded-lg">
+                <p className="text-lg font-bold text-gray-900">{stats.reviews}</p>
+                <p className="text-xs text-gray-500">Reviews</p>
+              </div>
+              <div className="text-center p-2 bg-gray-50 rounded-lg">
+                <p className="text-lg font-bold text-gray-900">{stats.followers}</p>
+                <p className="text-xs text-gray-500">Followers</p>
+              </div>
+            </div>
+
+            {userEmail !== currentUser.email && (
+              <div className="flex gap-2 mb-6">
+                <button
+                  onClick={() => onFollow(userEmail, userName)}
+                  className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 ${
+                    isFollowing 
+                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
+                      : 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
+                  }`}
+                >
+                  {isFollowing ? (
+                    <>
+                      <UserMinus className="w-4 h-4" />
+                      Unfollow
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="w-4 h-4" />
+                      Follow
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={() => onBlock(userEmail, userName)}
+                  className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 ${
+                    isBlocked 
+                      ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                      : 'bg-red-100 text-red-700 hover:bg-red-200'
+                  }`}
+                >
+                  {isBlocked ? (
+                    <>
+                      <UserCheck className="w-4 h-4" />
+                      Unblock
+                    </>
+                  ) : (
+                    <>
+                      <UserMinus className="w-4 h-4" />
+                      Block
+                    </>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {userPosts.length > 0 && (
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-900 mb-3">Recent Posts</h3>
+                <div className="space-y-3">
+                  {userPosts.map(post => (
+                    <div key={post.id} className="bg-gray-50 rounded-xl p-3">
+                      <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-xs text-gray-400">{formatTimeAgo(post.createdAt)}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                            <Heart className="w-3 h-3" /> {post.likes || 0}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-gray-500">
+                            <MessageCircle className="w-3 h-3" /> {post.comments || 0}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                onClose();
+                onViewFullProfile(userEmail, userName);
+              }}
+              className="w-full py-3 border border-orange-200 text-orange-600 rounded-xl font-medium hover:bg-orange-50 transition"
+            >
+              View Full Profile
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+};
+
+// ========================================
+// BOTTOM NAVIGATION
+// ========================================
 const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
   if (!show) return null;
+  
   const items = [
     { id: 'home', icon: BookOpen, label: 'Home' },
     { id: 'explore', icon: Sparkles, label: 'Explore' },
     { id: 'post', icon: Edit3, label: 'Post' },
     { id: 'crews', icon: Users, label: 'Crews' },
-    { id: 'reviews', icon: Star, label: 'Reviews' },
+    { id: 'profile', icon: User, label: 'Profile' },
   ];
+
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 max-w-md mx-auto shadow-lg">
       <div className="flex items-center justify-around py-2 px-2">
         {items.map(({ id, icon: Icon, label }) => (
-          <button key={id} onClick={() => setPage(id)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${active === id ? 'text-[#C8622A]' : 'text-gray-400 hover:text-gray-600'}`}>
+          <button 
+            key={id} 
+            onClick={() => setPage(id)}
+            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${
+              active === id ? 'text-[#C8622A]' : 'text-gray-400 hover:text-gray-600'
+            }`}
+          >
             {id === 'post' ? (
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center -mt-5 shadow-lg ${active === id ? 'bg-[#C8622A]' : 'bg-gray-800'}`}>
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center -mt-5 shadow-lg ${
+                active === id ? 'bg-[#C8622A]' : 'bg-gray-800'
+              }`}>
                 <Icon className="w-5 h-5 text-white" />
               </div>
             ) : (
               <Icon className="w-5 h-5" strokeWidth={active === id ? 2.5 : 1.8} />
             )}
             {id === 'crews' && unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">{unreadCount}</span>
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
+                {unreadCount}
+              </span>
             )}
             <span className={`text-[10px] font-medium ${id === 'post' ? 'mt-1' : ''}`}>{label}</span>
           </button>
@@ -395,34 +960,54 @@ const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
   );
 };
 
-// ─── TOP BAR ─────────────────────────────────────────────────────────────
+// ========================================
+// TOP BAR
+// ========================================
 const TopBar = ({ user, setPage, title, showBack = false, onBack, showProfile = true, onNotificationClick, notificationCount = 0, profileSrc }) => (
   <header className="sticky top-0 bg-white/95 backdrop-blur-sm z-40 px-4 py-3 flex items-center justify-between border-b border-gray-200">
     <div className="flex items-center gap-3">
-      {showBack && <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>}
+      {showBack && (
+        <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-lg">
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
+      )}
       <div className="flex items-center gap-2">
         <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center shadow-md">
           <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5} />
         </div>
-        <span className="font-bold text-gray-900 text-lg" style={{ fontFamily: 'Georgia, serif' }}>{title || 'ReadCrew'}</span>
+        <span className="font-bold text-gray-900 text-lg" style={{ fontFamily: 'Georgia, serif' }}>
+          {title || 'ReadCrew'}
+        </span>
       </div>
     </div>
     {showProfile && (
       <div className="flex items-center gap-3">
-        <button onClick={onNotificationClick} className="relative p-1 hover:bg-gray-100 rounded-lg transition">
+        <button 
+          onClick={onNotificationClick} 
+          className="relative p-1 hover:bg-gray-100 rounded-lg transition"
+        >
           <Bell className="w-5 h-5 text-gray-600" />
-          {notificationCount > 0 && <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">{notificationCount > 9 ? '9+' : notificationCount}</span>}
+          {notificationCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+              {notificationCount > 9 ? '9+' : notificationCount}
+            </span>
+          )}
         </button>
         <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
-          {profileSrc ? <img src={profileSrc} alt="profile" className="w-8 h-8 rounded-full object-cover border border-orange-200" />
-            : <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">{user?.name?.slice(0, 2).toUpperCase()}</div>}
+          {profileSrc ? (
+            <img src={profileSrc} alt="profile" className="w-8 h-8 rounded-full object-cover border border-orange-200" />
+          ) : (
+            <Avatar initials={user?.name} size="sm" />
+          )}
         </button>
       </div>
     )}
   </header>
 );
 
-// ─── NOTIFICATIONS PAGE ──────────────────────────────────────────────────
+// ========================================
+// NOTIFICATIONS PAGE
+// ========================================
 const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
   const [notifications, setNotifications] = useState([]);
   
@@ -446,7 +1031,9 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     invite: <UserPlus className="w-4 h-4 text-purple-500" />, 
     follow: <UserCheck className="w-4 h-4 text-orange-500" />,
     reshare: <Repeat className="w-4 h-4 text-indigo-500" />,
-    mention: <AtIcon className="w-4 h-4 text-amber-500" />
+    mention: <AtIcon className="w-4 h-4 text-amber-500" />,
+    join: <Users className="w-4 h-4 text-blue-500" />,
+    review: <Star className="w-4 h-4 text-yellow-500" />
   };
   
   const bgColors = { 
@@ -456,25 +1043,36 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     invite: 'bg-purple-100', 
     follow: 'bg-orange-100',
     reshare: 'bg-indigo-100',
-    mention: 'bg-amber-100'
+    mention: 'bg-amber-100',
+    join: 'bg-blue-100',
+    review: 'bg-yellow-100'
   };
   
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
+        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
         <h2 className="font-semibold text-gray-900">Notifications</h2>
-        <button onClick={markAllAsRead} className="text-sm text-orange-500 font-medium">Mark all read</button>
+        <button onClick={markAllAsRead} className="text-sm text-orange-500 font-medium">
+          Mark all read
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto pb-4">
         {notifications.length === 0 ? (
-          <div className="text-center py-12"><Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No notifications yet</p></div>
+          <div className="text-center py-12">
+            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+            <p className="text-gray-500">No notifications yet</p>
+          </div>
         ) : (
           <div className="divide-y divide-gray-100">
             {notifications.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map((notif) => (
               <div key={notif.id} className={`p-4 ${notif.read ? 'bg-white' : 'bg-orange-50'}`}>
                 <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${bgColors[notif.type] || 'bg-gray-100'}`}>{icons[notif.type] || <Bell className="w-4 h-4 text-gray-500" />}</div>
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${bgColors[notif.type] || 'bg-gray-100'}`}>
+                    {icons[notif.type] || <Bell className="w-4 h-4 text-gray-500" />}
+                  </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-gray-900 leading-relaxed">{notif.message}</p>
                     <p className="text-xs text-gray-500 mt-1">{new Date(notif.timestamp).toLocaleString()}</p>
@@ -490,10 +1088,13 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
   );
 };
 
-// ─── SHARE MODAL (for external sharing) ─────────────────────────────────
+// ========================================
+// SHARE MODAL
+// ========================================
 const ShareModal = ({ post, onClose }) => {
   const shareUrl = window.location.href;
   const shareText = `Check out this post by ${post.userName}: "${post.content?.substring(0, 50)}..."`;
+  
   const handlers = {
     whatsapp: () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank'),
     facebook: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank'),
@@ -506,19 +1107,31 @@ const ShareModal = ({ post, onClose }) => {
       <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center">
           <h3 className="font-semibold">Share Post</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
         </div>
         <div className="p-5">
           <div className="grid grid-cols-4 gap-4 mb-4">
-            {[['whatsapp','#25D366','W'],['facebook','#1877F2','F'],['twitter','#1DA1F2','T']].map(([key, color, letter]) => (
+            {[
+              ['whatsapp', '#25D366', 'W'],
+              ['facebook', '#1877F2', 'F'],
+              ['twitter', '#1DA1F2', 'T']
+            ].map(([key, color, letter]) => (
               <button key={key} onClick={handlers[key]} className="flex flex-col items-center gap-2">
-                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg" style={{backgroundColor: color}}>{letter}</div>
+                <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg" style={{ backgroundColor: color }}>
+                  {letter}
+                </div>
                 <span className="text-xs text-gray-600 capitalize">{key}</span>
               </button>
             ))}
           </div>
-          <button onClick={handlers.copyLink} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50">
-            <Link2 className="w-5 h-5 text-orange-500" /><span className="font-medium">Copy Link</span>
+          <button 
+            onClick={handlers.copyLink} 
+            className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50"
+          >
+            <Link2 className="w-5 h-5 text-orange-500" />
+            <span className="font-medium">Copy Link</span>
           </button>
         </div>
       </div>
@@ -526,7 +1139,9 @@ const ShareModal = ({ post, onClose }) => {
   );
 };
 
-// ─── RESHARE MODAL (internal reshare) ───────────────────────────────────
+// ========================================
+// RESHARE MODAL
+// ========================================
 const ReshareModal = ({ post, onClose, onReshare }) => {
   const [comment, setComment] = useState('');
 
@@ -540,7 +1155,9 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
       <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
         <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center">
           <h3 className="font-semibold">Reshare Post</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
         </div>
         <div className="p-5">
           <div className="mb-4">
@@ -554,7 +1171,9 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
             />
           </div>
           <div className="bg-gray-50 rounded-xl p-3 mb-4">
-            <p className="text-xs text-gray-500 mb-1">Original post by <span className="font-semibold">{post.userName}</span>:</p>
+            <p className="text-xs text-gray-500 mb-1">
+              Original post by <span className="font-semibold">{post.userName}</span>:
+            </p>
             <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
           </div>
           <button
@@ -570,7 +1189,9 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
   );
 };
 
-// ─── POST OPTIONS MODAL ──────────────────────────────────────────────────
+// ========================================
+// POST OPTIONS MODAL
+// ========================================
 const PostOptionsModal = ({ post, user, onClose, onReshare, onSave, isSaved, onDelete, isOwner, onFollow, isFollowing, onBlock, isBlocked }) => {
   const options = [
     { id: 'reshare', icon: Repeat, label: 'Reshare', color: 'text-blue-600', action: () => onReshare(post) },
@@ -625,32 +1246,49 @@ const PostOptionsModal = ({ post, user, onClose, onReshare, onSave, isSaved, onD
   );
 };
 
-// ─── INLINE POST CARD with embedded comments ────────────────────────────
+// ========================================
+// INLINE POST CARD with embedded comments
+// ========================================
 const InlinePostCard = ({ 
   post, user, profileSrc, updateNotificationCount, onShare, onReshareClick, 
   onSaveToggle, isSaved, onDelete, onFollow, isFollowing, onBlock, isBlocked,
-  onViewUserProfile 
+  onViewUserProfile, onViewBookDetails
 }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [likedComments, setLikedComments] = useState(new Set());
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes || 0);
-  const [reshareCount, setReshareCount] = useState(post.reshareCount || 0);
   const [showAllComments, setShowAllComments] = useState(false);
   const [replyTo, setReplyTo] = useState(null);
   const [showReplies, setShowReplies] = useState({});
   const [showOptions, setShowOptions] = useState(false);
+  const [loadingComments, setLoadingComments] = useState(false);
   const inputRef = useRef(null);
 
   useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
-    setComments(saved);
+    loadComments();
     const liked = JSON.parse(localStorage.getItem(`user_${user.id}_likedComments`) || '[]');
     setLikedComments(new Set(liked));
     const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
     setIsLiked(likedPosts.includes(post.id));
   }, [post.id, user.id, user.email]);
+
+  const loadComments = async () => {
+    setLoadingComments(true);
+    try {
+      const res = await axios.get(`${API_URL}/api/social/posts/${post.id}/comments`);
+      if (res.data.success) {
+        setComments(res.data.comments);
+      }
+    } catch (error) {
+      console.error('Failed to load comments:', error);
+      const saved = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
+      setComments(saved);
+    } finally {
+      setLoadingComments(false);
+    }
+  };
 
   const formatTimeAgo = (ts) => {
     const diff = Date.now() - new Date(ts);
@@ -667,13 +1305,19 @@ const InlinePostCard = ({
     setIsLiked(true);
     setLikeCount(p => p + 1);
     
-    // ✅ Save to SERVER (visible to all users)
-    await axios.post(`${API_URL}/api/posts/${post._id || post.id}/like`, {
-      userEmail: user.email,
-      userName: user.name
-    }).catch(() => {});
+    try {
+      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, {
+        userEmail: user.email,
+        userName: user.name
+      });
 
-    // Keep local notification for now
+      const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
+      likedPosts.push(post.id);
+      localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
+    } catch (error) {
+      console.error('Failed to like post:', error);
+    }
+
     if (post.userEmail !== user.email) {
       const notif = { 
         id: Date.now(), 
@@ -683,7 +1327,7 @@ const InlinePostCard = ({
         message: `${user.name} liked your post`, 
         timestamp: new Date().toISOString(), 
         read: false,
-        postId: post._id || post.id 
+        postId: post.id 
       };
       const notifs = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
@@ -708,40 +1352,39 @@ const InlinePostCard = ({
     }
     
     const commentData = {
-      userId: user.id,
       userName: user.name,
       userEmail: user.email,
       content: newComment.trim(),
-      mentions: mentions
+      mentions: mentions,
+      parentId: replyTo?.id || null
     };
     
     setNewComment('');
     setReplyTo(null);
 
-    // ✅ Save comment to SERVER
     try {
-      const res = await axios.post(`${API_URL}/api/posts/${post._id || post.id}/comments`, commentData);
+      const res = await axios.post(`${API_URL}/api/social/posts/${post.id}/comments`, commentData);
       if (res.data.success) {
-        const saved = res.data.comment;
-        const updated = [...comments, { ...saved, userInitials: user.name.slice(0,2).toUpperCase() }];
-        localStorage.setItem(`post_${post._id || post.id}_comments`, JSON.stringify(updated));
+        const updated = [...comments, res.data.comment];
         setComments(updated);
+        localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updated));
       }
-    } catch {
-      // fallback: save locally
+    } catch (error) {
+      console.error('Failed to post comment:', error);
       const comment = { 
         id: Date.now(), 
         ...commentData, 
         userInitials: user.name.slice(0,2).toUpperCase(), 
         timestamp: new Date().toISOString(), 
-        likes: 0 
+        likes: 0,
+        likedBy: []
       };
       const updated = [...comments, comment];
-      localStorage.setItem(`post_${post._id || post.id}_comments`, JSON.stringify(updated));
       setComments(updated);
+      localStorage.setItem(`post_post.id}_comments`, JSON.stringify(updated));
     }
 
-    // Notification for mentions
+    // Handle mentions
     mentions.forEach(mentionedUsername => {
       const users = JSON.parse(localStorage.getItem('users') || '[]');
       const mentionedUser = users.find(u => 
@@ -758,7 +1401,7 @@ const InlinePostCard = ({
           message: `${user.name} mentioned you in a comment: "${newComment.substring(0, 40)}"`, 
           timestamp: new Date().toISOString(), 
           read: false,
-          postId: post._id || post.id
+          postId: post.id
         };
         const notifs = JSON.parse(localStorage.getItem(`user_${mentionedUser.email}_notifications`) || '[]');
         notifs.unshift(notif);
@@ -776,7 +1419,7 @@ const InlinePostCard = ({
         message: `${user.name} commented: "${newComment.substring(0, 40)}"`, 
         timestamp: new Date().toISOString(), 
         read: false,
-        postId: post._id || post.id 
+        postId: post.id 
       };
       const notifs = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
@@ -810,7 +1453,7 @@ const InlinePostCard = ({
   const CommentRow = ({ comment, isReply = false }) => {
     const replies = comments.filter(c => c.parentId === comment.id);
     const liked = likedComments.has(comment.id);
-    const isOwn = comment.userId === user.id;
+    const isOwn = comment.userEmail === user.email;
 
     const renderContent = () => {
       if (!comment.mentions || comment.mentions.length === 0) {
@@ -852,9 +1495,11 @@ const InlinePostCard = ({
       <div className={`flex gap-3 ${isReply ? 'mt-3' : ''}`}>
         <div className="flex flex-col items-center flex-shrink-0" style={{ width: 36 }}>
           <button onClick={() => onViewUserProfile(comment.userEmail, comment.userName)}>
-            <div className="w-9 h-9 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white text-xs font-bold flex-shrink-0 shadow-sm hover:opacity-80 transition">
-              {comment.userInitials}
-            </div>
+            <Avatar 
+              initials={comment.userName} 
+              size="sm" 
+              src={comment.userPhoto}
+            />
           </button>
           {(replies.length > 0 && (showReplies[comment.id] || replies.length <= 2)) && (
             <div className="w-0.5 flex-1 bg-orange-200 mt-1 rounded-full min-h-[20px]" />
@@ -878,7 +1523,9 @@ const InlinePostCard = ({
             <button
               onClick={() => handleLikeComment(comment.id)}
               disabled={liked}
-              className={`flex items-center gap-1.5 text-xs font-medium transition-all ${liked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}
+              className={`flex items-center gap-1.5 text-xs font-medium transition-all ${
+                liked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'
+              }`}
             >
               <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-red-500' : ''}`} />
               <span>{comment.likes || 0}</span>
@@ -946,9 +1593,11 @@ const InlinePostCard = ({
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-start gap-3">
             <button onClick={handleViewProfile} className="relative flex-shrink-0">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-orange-400 to-red-500 flex items-center justify-center text-white font-bold text-sm shadow hover:opacity-80 transition">
-                {post.userName?.slice(0, 2).toUpperCase() || 'U'}
-              </div>
+              <Avatar 
+                initials={post.userName} 
+                size="md" 
+                src={post.userPhoto}
+              />
             </button>
 
             <div className="flex-1 min-w-0">
@@ -957,10 +1606,15 @@ const InlinePostCard = ({
                 <span className="text-xs text-gray-400">{formatTimeAgo(post.createdAt || Date.now())}</span>
               </button>
               {post.bookName && (
-                <div className="flex items-center gap-1.5 mt-0.5">
+                <button
+                  onClick={() => onViewBookDetails({ title: post.bookName, author: post.author })}
+                  className="flex items-center gap-1.5 mt-0.5 hover:underline"
+                >
                   <BookOpen className="w-3 h-3 text-orange-400" />
-                  <span className="text-xs text-gray-500 font-medium">{post.bookName}{post.author ? ` · ${post.author}` : ''}</span>
-                </div>
+                  <span className="text-xs text-gray-500 font-medium">
+                    {post.bookName}{post.author ? ` · ${post.author}` : ''}
+                  </span>
+                </button>
               )}
             </div>
 
@@ -1004,7 +1658,9 @@ const InlinePostCard = ({
           <button
             onClick={handleLikePost}
             disabled={isLiked}
-            className={`flex items-center gap-1.5 text-sm font-semibold transition-all ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
+            className={`flex items-center gap-1.5 text-sm font-semibold transition-all ${
+              isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'
+            }`}
           >
             <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 text-red-500' : ''}`} />
             <span>{likeCount}</span>
@@ -1020,7 +1676,9 @@ const InlinePostCard = ({
 
           <button
             onClick={() => onSaveToggle(post)}
-            className={`flex items-center gap-1.5 text-sm font-semibold transition ${isSaved ? 'text-orange-500' : 'text-gray-500 hover:text-orange-400'}`}
+            className={`flex items-center gap-1.5 text-sm font-semibold transition ${
+              isSaved ? 'text-orange-500' : 'text-gray-500 hover:text-orange-400'
+            }`}
           >
             <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-orange-500' : ''}`} />
             <span>Save</span>
@@ -1046,16 +1704,16 @@ const InlinePostCard = ({
                   </span>
                 )}
               </p>
-              <button onClick={() => setReplyTo(null)}><X className="w-3.5 h-3.5 text-gray-400" /></button>
+              <button onClick={() => setReplyTo(null)}>
+                <X className="w-3.5 h-3.5 text-gray-400" />
+              </button>
             </div>
           )}
           <div className="flex items-center gap-2.5">
             {profileSrc ? (
               <img src={profileSrc} alt="p" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-orange-400 to-red-400 flex items-center justify-center text-white text-xs font-bold flex-shrink-0">
-                {user?.name?.slice(0,2).toUpperCase()}
-              </div>
+              <Avatar initials={user?.name} size="sm" />
             )}
             <div className="flex-1 flex items-center gap-2 bg-white rounded-full border border-gray-200 px-4 py-2 focus-within:border-orange-400 focus-within:shadow-sm transition">
               <input
@@ -1071,7 +1729,9 @@ const InlinePostCard = ({
             <button
               onClick={handlePostComment}
               disabled={!newComment.trim()}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${newComment.trim() ? 'bg-orange-500 text-white shadow-sm active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+              className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                newComment.trim() ? 'bg-orange-500 text-white shadow-sm active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+              }`}
             >
               Post
             </button>
@@ -1083,9 +1743,15 @@ const InlinePostCard = ({
 
         {comments.length > 0 && (
           <div className="px-4 py-3 border-t border-gray-100 space-y-1">
-            {visibleComments.map(comment => (
-              <CommentRow key={comment.id} comment={comment} />
-            ))}
+            {loadingComments ? (
+              <div className="flex justify-center py-4">
+                <LoadingSpinner size="sm" />
+              </div>
+            ) : (
+              visibleComments.map(comment => (
+                <CommentRow key={comment.id} comment={comment} />
+              ))
+            )}
 
             {topLevel.length > 3 && (
               <button
@@ -1101,7 +1767,7 @@ const InlinePostCard = ({
           </div>
         )}
 
-        {comments.length === 0 && (
+        {comments.length === 0 && !loadingComments && (
           <div className="px-4 pb-4">
             <p className="text-xs text-gray-400 text-center">Be the first to comment 💬</p>
           </div>
@@ -1111,7 +1777,9 @@ const InlinePostCard = ({
   );
 };
 
-// ─── LOGIN PAGE ──────────────────────────────────────────────────────────
+// ========================================
+// LOGIN PAGE
+// ========================================
 const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -1125,6 +1793,10 @@ const LoginPage = ({ onLogin }) => {
   const [infoMsg, setInfoMsg] = useState('');
   const [devOtpDisplay, setDevOtpDisplay] = useState('');
   const [readingGoal, setReadingGoal] = useState({ yearly: 20, monthly: 5 });
+  const [agreeToTerms, setAgreeToTerms] = useState(false);
+  const [showResetPassword, setShowResetPassword] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
   const validateEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
@@ -1146,7 +1818,7 @@ const LoginPage = ({ onLogin }) => {
       localStorage.setItem(`user_${userData.email}_blocked`, JSON.stringify([]));
     }
     
-    ['stats','joinedCrews','notifications','likedPosts','likedReviews'].forEach(key => {
+    ['stats','joinedCrews','notifications','likedPosts','likedReviews','readingList','savedPosts'].forEach(key => {
       if (!localStorage.getItem(`user_${userData.email}_${key}`)) {
         localStorage.setItem(`user_${userData.email}_${key}`, JSON.stringify(userData[key] || (key === 'stats' ? userData.stats : [])));
       }
@@ -1156,12 +1828,27 @@ const LoginPage = ({ onLogin }) => {
 
   const handleSendOTP = async () => {
     setErrorMsg('');
-    if (!name.trim() || name.trim().length < 2) { setErrorMsg('Please enter your full name (at least 2 characters)'); return; }
-    if (!validateEmail(email)) { setErrorMsg('Please enter a valid email address'); return; }
+    if (!isLogin && (!name.trim() || name.trim().length < 2)) { 
+      setErrorMsg('Please enter your full name (at least 2 characters)'); 
+      return; 
+    }
+    if (!validateEmail(email)) { 
+      setErrorMsg('Please enter a valid email address'); 
+      return; 
+    }
+    if (!isLogin && !agreeToTerms) {
+      setErrorMsg('Please agree to the terms and conditions');
+      return;
+    }
     setLoading(true);
     try {
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
       localStorage.setItem('devOTP', otp);
+      localStorage.setItem('pendingUser', JSON.stringify({
+        email,
+        name: name || email.split('@')[0],
+        password: password || 'password123'
+      }));
       setShowOTP(true);
       setDevOtpDisplay(otp);
       setInfoMsg('Email service is temporarily unavailable — use the code below to continue:');
@@ -1176,10 +1863,14 @@ const LoginPage = ({ onLogin }) => {
 
   const handleVerifyOTP = async () => {
     setErrorMsg('');
-    if (otpInput.length !== 6) { setErrorMsg('Please enter the 6-digit code'); return; }
+    if (otpInput.length !== 6) { 
+      setErrorMsg('Please enter the 6-digit code'); 
+      return; 
+    }
     setLoading(true);
     try {
       const devOTP = localStorage.getItem('devOTP');
+      const pendingUser = JSON.parse(localStorage.getItem('pendingUser') || '{}');
       const otpOk = (devOTP && otpInput === devOTP);
 
       if (!otpOk) {
@@ -1189,18 +1880,34 @@ const LoginPage = ({ onLogin }) => {
       }
 
       if (devOTP) localStorage.removeItem('devOTP');
+      if (pendingUser) localStorage.removeItem('pendingUser');
 
       const userData = saveLocalUser({
-        id: Date.now().toString(),
-        name: name,
-        email: email,
-        password,
+        id: generateId(),
+        name: pendingUser.name || name,
+        email: pendingUser.email || email,
+        password: pendingUser.password || password,
         readingGoal,
         isVerified: true,
         createdAt: new Date().toISOString(),
         stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
-        joinedCrews: [], likedPosts: [], likedReviews: [], booksRead: [],
-        followers: [], following: [], bio: 'Reading is my superpower'
+        joinedCrews: [], 
+        likedPosts: [], 
+        likedReviews: [], 
+        booksRead: [],
+        readingList: [],
+        savedPosts: [],
+        followers: [], 
+        following: [], 
+        blockedUsers: [],
+        bio: 'Reading is my superpower',
+        location: '',
+        website: '',
+        preferences: {
+          emailNotifications: true,
+          pushNotifications: true,
+          darkMode: false
+        }
       });
 
       setShowOTP(false);
@@ -1212,8 +1919,14 @@ const LoginPage = ({ onLogin }) => {
 
   const handleLogin = async () => {
     setErrorMsg('');
-    if (!validateEmail(email)) { setErrorMsg('Please enter a valid email address'); return; }
-    if (!password.trim()) { setErrorMsg('Please enter your password'); return; }
+    if (!validateEmail(email)) { 
+      setErrorMsg('Please enter a valid email address'); 
+      return; 
+    }
+    if (!password.trim()) { 
+      setErrorMsg('Please enter your password'); 
+      return; 
+    }
     setLoading(true);
 
     const users = JSON.parse(localStorage.getItem('users') || '[]');
@@ -1227,6 +1940,18 @@ const LoginPage = ({ onLogin }) => {
 
     setErrorMsg(found ? 'Incorrect password. Please try again.' : 'No account found. Please sign up first.');
     setLoading(false);
+  };
+
+  const handleResetPassword = () => {
+    if (!validateEmail(resetEmail)) {
+      setErrorMsg('Please enter a valid email');
+      return;
+    }
+    setLoading(true);
+    setTimeout(() => {
+      setResetSent(true);
+      setLoading(false);
+    }, 1500);
   };
 
   if (showOTP) return (
@@ -1257,18 +1982,30 @@ const LoginPage = ({ onLogin }) => {
           <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">{errorMsg}</div>
         )}
 
-        <input type="text" inputMode="numeric" value={otpInput}
+        <input 
+          type="text" 
+          inputMode="numeric" 
+          value={otpInput}
           onChange={e => { setOtpInput(e.target.value.replace(/\D/g,'').slice(0,6)); setErrorMsg(''); }}
           className="w-full px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none text-center text-3xl tracking-widest mb-4 font-mono"
-          placeholder="000000" maxLength="6" autoFocus />
+          placeholder="000000" 
+          maxLength="6" 
+          autoFocus 
+        />
 
-        <button onClick={handleVerifyOTP} disabled={loading || otpInput.length !== 6}
-          className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold disabled:opacity-50 mb-3">
+        <button 
+          onClick={handleVerifyOTP} 
+          disabled={loading || otpInput.length !== 6}
+          className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold disabled:opacity-50 mb-3"
+        >
           {loading ? 'Verifying...' : 'Verify & Continue'}
         </button>
 
         <div className="flex justify-between items-center">
-          <button onClick={() => { setShowOTP(false); setErrorMsg(''); setInfoMsg(''); setDevOtpDisplay(''); }} className="text-gray-500 text-sm flex items-center gap-1">
+          <button 
+            onClick={() => { setShowOTP(false); setErrorMsg(''); setInfoMsg(''); setDevOtpDisplay(''); }} 
+            className="text-gray-500 text-sm flex items-center gap-1"
+          >
             <ArrowLeft className="w-4 h-4" /> Back
           </button>
           <button onClick={handleSendOTP} disabled={loading} className="text-orange-500 text-sm font-semibold">
@@ -1278,6 +2015,72 @@ const LoginPage = ({ onLogin }) => {
       </div>
     </div>
   );
+
+  if (showResetPassword) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-7">
+          <div className="text-center mb-6">
+            <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
+              <Lock className="w-8 h-8 text-orange-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-gray-900 mb-1">Reset Password</h2>
+            <p className="text-gray-500 text-sm">
+              {resetSent 
+                ? 'Password reset link has been sent to your email'
+                : 'Enter your email to receive a password reset link'}
+            </p>
+          </div>
+
+          {errorMsg && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">
+              {errorMsg}
+            </div>
+          )}
+
+          {!resetSent ? (
+            <>
+              <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 mb-4">
+                <Mail className="w-5 h-5 text-gray-400" />
+                <input
+                  value={resetEmail}
+                  onChange={(e) => setResetEmail(e.target.value)}
+                  className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
+                  placeholder="Email address"
+                  type="email"
+                />
+              </div>
+
+              <button
+                onClick={handleResetPassword}
+                disabled={loading}
+                className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold disabled:opacity-50 mb-3"
+              >
+                {loading ? 'Sending...' : 'Send Reset Link'}
+              </button>
+            </>
+          ) : (
+            <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4">
+              <p className="text-sm text-green-700 text-center">
+                Check your email for the password reset link.
+              </p>
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              setShowResetPassword(false);
+              setResetEmail('');
+              setResetSent(false);
+            }}
+            className="text-gray-500 text-sm flex items-center gap-1 mx-auto"
+          >
+            <ArrowLeft className="w-4 h-4" /> Back to Login
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
@@ -1304,15 +2107,41 @@ const LoginPage = ({ onLogin }) => {
               <>
                 <div className={`flex items-center gap-3 bg-gray-50 border rounded-xl px-4 py-3.5 ${!name.trim() && errorMsg ? 'border-red-300' : 'border-gray-200'}`}>
                   <User className="w-5 h-5 text-gray-400" />
-                  <input value={name} onChange={e => { setName(e.target.value); setErrorMsg(''); }}
+                  <input 
+                    value={name} 
+                    onChange={e => { setName(e.target.value); setErrorMsg(''); }}
                     className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                    placeholder="Full Name *" autoComplete="name" />
+                    placeholder="Full Name *" 
+                    autoComplete="name" 
+                  />
                 </div>
                 <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Target className="w-4 h-4 text-orange-500" />Reading Goals (Optional)</h3>
+                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm">
+                    <Target className="w-4 h-4 text-orange-500" />Reading Goals (Optional)
+                  </h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs text-gray-600 mb-1 block">Yearly books</label><input type="number" value={readingGoal.yearly} onChange={e => setReadingGoal({...readingGoal, yearly: parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="100" /></div>
-                    <div><label className="text-xs text-gray-600 mb-1 block">Monthly books</label><input type="number" value={readingGoal.monthly} onChange={e => setReadingGoal({...readingGoal, monthly: parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="20" /></div>
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Yearly books</label>
+                      <input 
+                        type="number" 
+                        value={readingGoal.yearly} 
+                        onChange={e => setReadingGoal({...readingGoal, yearly: parseInt(e.target.value)||0})} 
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" 
+                        min="0" 
+                        max="100" 
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-gray-600 mb-1 block">Monthly books</label>
+                      <input 
+                        type="number" 
+                        value={readingGoal.monthly} 
+                        onChange={e => setReadingGoal({...readingGoal, monthly: parseInt(e.target.value)||0})} 
+                        className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" 
+                        min="0" 
+                        max="20" 
+                      />
+                    </div>
                   </div>
                 </div>
               </>
@@ -1320,28 +2149,61 @@ const LoginPage = ({ onLogin }) => {
 
             <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
               <Mail className="w-5 h-5 text-gray-400" />
-              <input value={email} onChange={e => { setEmail(e.target.value); setErrorMsg(''); }}
+              <input 
+                value={email} 
+                onChange={e => { setEmail(e.target.value); setErrorMsg(''); }}
                 className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
-                placeholder="Email address *" type="email" autoComplete="email" />
+                placeholder="Email address *" 
+                type="email" 
+                autoComplete="email" 
+              />
             </div>
 
             <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
               <Lock className="w-5 h-5 text-gray-400" />
-              <input value={password} onChange={e => { setPassword(e.target.value); setErrorMsg(''); }}
+              <input 
+                value={password} 
+                onChange={e => { setPassword(e.target.value); setErrorMsg(''); }}
                 type={showPass ? 'text' : 'password'}
                 className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm"
                 placeholder={isLogin ? 'Password *' : 'Create a password *'}
-                autoComplete={isLogin ? 'current-password' : 'new-password'} />
+                autoComplete={isLogin ? 'current-password' : 'new-password'} 
+              />
               <button onClick={() => setShowPass(!showPass)} type="button">
                 {showPass ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
               </button>
             </div>
+
+            {!isLogin && (
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  id="terms"
+                  checked={agreeToTerms}
+                  onChange={(e) => setAgreeToTerms(e.target.checked)}
+                  className="rounded border-gray-300 text-orange-500 focus:ring-orange-500"
+                />
+                <label htmlFor="terms" className="text-xs text-gray-600">
+                  I agree to the <button className="text-orange-500">Terms of Service</button> and <button className="text-orange-500">Privacy Policy</button>
+                </label>
+              </div>
+            )}
           </div>
+
+          {isLogin && (
+            <button
+              onClick={() => setShowResetPassword(true)}
+              className="text-sm text-orange-500 mt-2 hover:underline"
+            >
+              Forgot password?
+            </button>
+          )}
 
           <button
             onClick={isLogin ? handleLogin : handleSendOTP}
             disabled={loading}
-            className="w-full mt-5 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold disabled:opacity-60 flex items-center justify-center gap-2">
+            className="w-full mt-5 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold disabled:opacity-60 flex items-center justify-center gap-2"
+          >
             {loading ? <><LoadingSpinner size="sm" color="orange" /><span>Please wait...</span></> : isLogin ? 'Log In' : 'Create Account →'}
           </button>
 
@@ -1353,8 +2215,10 @@ const LoginPage = ({ onLogin }) => {
 
           <p className="text-center text-sm text-gray-500 mt-4">
             {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <button onClick={() => { setIsLogin(!isLogin); setErrorMsg(''); setEmail(''); setPassword(''); setName(''); }}
-              className="text-orange-500 font-semibold">
+            <button 
+              onClick={() => { setIsLogin(!isLogin); setErrorMsg(''); setEmail(''); setPassword(''); setName(''); }}
+              className="text-orange-500 font-semibold"
+            >
               {isLogin ? 'Sign Up' : 'Log In'}
             </button>
           </p>
@@ -1457,10 +2321,15 @@ const generateClientResponse = (userText, previousBooks = []) => {
 };
 
 // ─── BOOK CARD component ─────────────────────────────────────────────────
-const BookCard = ({ book, onCreateCrew }) => (
+const BookCard = ({ book, onCreateCrew, onViewDetails }) => (
   <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
     <div className="flex gap-4">
-      <DynamicBookCover title={book.title} author={book.author} size="md" />
+      <DynamicBookCover 
+        title={book.title} 
+        author={book.author} 
+        size="md" 
+        onClick={() => onViewDetails?.(book)}
+      />
       <div className="flex-1 min-w-0">
         <h3 className="font-bold text-gray-900 text-sm leading-tight">{book.title}</h3>
         <p className="text-xs text-gray-500 mt-0.5">by {book.author}</p>
@@ -1476,281 +2345,25 @@ const BookCard = ({ book, onCreateCrew }) => (
       </div>
     </div>
     <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
-      <button onClick={onCreateCrew} className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5">
-        <Users className="w-4 h-4" />Create Crew
+      <button 
+        onClick={() => onViewDetails?.(book)} 
+        className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-semibold"
+      >
+        View Details
       </button>
-      <button onClick={() => { navigator.clipboard.writeText(`"${book.title}" by ${book.author}`); }} className="px-4 py-2.5 border border-gray-200 rounded-xl hover:bg-gray-50 transition">
-        <Share2 className="w-4 h-4 text-gray-500" />
+      <button 
+        onClick={onCreateCrew} 
+        className="flex-1 py-2.5 bg-[#C8622A] text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5"
+      >
+        <Users className="w-4 h-4" />Create Crew
       </button>
     </div>
   </div>
 );
 
-// ─── USER PROFILE MODAL (Quick View) ─────────────────────────────────────────────
-const UserProfileModal = ({ userEmail, userName, currentUser, onClose, onFollow, isFollowing, onViewFullProfile, onBlock, isBlocked }) => {
-  const [userData, setUserData] = useState(null);
-  const [userPosts, setUserPosts] = useState([]);
-  const [userReviews, setUserReviews] = useState([]);
-  const [followers, setFollowers] = useState([]);
-  const [following, setFollowing] = useState([]);
-  const [showFollowers, setShowFollowers] = useState(false);
-  const [showFollowing, setShowFollowing] = useState(false);
-
-  useEffect(() => {
-    loadUserData();
-  }, [userEmail]);
-
-  const loadUserData = () => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const found = users.find(u => u.email === userEmail);
-    if (found) {
-      setUserData(found);
-    }
-
-    const userFollowers = JSON.parse(localStorage.getItem(`user_${userEmail}_followers`) || '[]');
-    const userFollowing = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
-    
-    const followersWithDetails = userFollowers.map(email => {
-      const followerUser = users.find(u => u.email === email);
-      return {
-        email,
-        name: followerUser?.name || email.split('@')[0],
-        initials: followerUser?.name?.slice(0, 2).toUpperCase() || email.slice(0, 2).toUpperCase()
-      };
-    });
-    
-    const followingWithDetails = userFollowing.map(email => {
-      const followingUser = users.find(u => u.email === email);
-      return {
-        email,
-        name: followingUser?.name || email.split('@')[0],
-        initials: followingUser?.name?.slice(0, 2).toUpperCase() || email.slice(0, 2).toUpperCase()
-      };
-    });
-    
-    setFollowers(followersWithDetails);
-    setFollowing(followingWithDetails);
-
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const posts = allPosts
-      .filter(p => p.userEmail === userEmail)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    setUserPosts(posts.slice(0, 5));
-
-    const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
-    const reviews = allReviews
-      .filter(r => r.userEmail === userEmail)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    setUserReviews(reviews.slice(0, 3));
-  };
-
-  const formatTimeAgo = (ts) => {
-    const diff = Date.now() - new Date(ts);
-    const mins = Math.floor(diff / 60000), hrs = Math.floor(diff / 3600000), days = Math.floor(diff / 86400000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m ago`;
-    if (hrs < 24) return `${hrs}h ago`;
-    if (days < 7) return `${days}d ago`;
-    return new Date(ts).toLocaleDateString();
-  };
-
-  const UserListModal = ({ title, users, onClose, onUserClick }) => (
-    <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-          <h3 className="font-bold">{title}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-4">
-          {users.length === 0 ? (
-            <p className="text-center text-gray-500 py-4">No users to show</p>
-          ) : (
-            <div className="space-y-3">
-              {users.map(user => (
-                <button
-                  key={user.email}
-                  onClick={() => {
-                    onClose();
-                    onUserClick(user.email, user.name);
-                  }}
-                  className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition"
-                >
-                  <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
-                    {user.initials}
-                  </div>
-                  <div className="flex-1 text-left">
-                    <p className="font-semibold text-gray-900">{user.name}</p>
-                    <p className="text-xs text-gray-500">@{user.email.split('@')[0]}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-
-  return (
-    <>
-      {showFollowers && (
-        <UserListModal
-          title="Followers"
-          users={followers}
-          onClose={() => setShowFollowers(false)}
-          onUserClick={onViewFullProfile}
-        />
-      )}
-      {showFollowing && (
-        <UserListModal
-          title="Following"
-          users={following}
-          onClose={() => setShowFollowing(false)}
-          onUserClick={onViewFullProfile}
-        />
-      )}
-
-      <div className="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 overflow-y-auto" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-        <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-            <h3 className="font-bold">User Profile</h3>
-            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
-          </div>
-          
-          <div className="p-5">
-            <div className="flex items-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
-                {userName?.slice(0, 2).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-gray-900 truncate">{userName}</h2>
-                <p className="text-sm text-gray-500">@{userName?.toLowerCase().replace(/\s/g, '')}</p>
-                
-                <div className="flex gap-4 mt-2">
-                  <button 
-                    onClick={() => setShowFollowers(true)}
-                    className="text-center hover:opacity-75 transition"
-                  >
-                    <p className="font-bold text-gray-900">{followers.length}</p>
-                    <p className="text-xs text-gray-500">Followers</p>
-                  </button>
-                  <button 
-                    onClick={() => setShowFollowing(true)}
-                    className="text-center hover:opacity-75 transition"
-                  >
-                    <p className="font-bold text-gray-900">{following.length}</p>
-                    <p className="text-xs text-gray-500">Following</p>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {userEmail !== currentUser.email && (
-              <div className="flex gap-2 mb-6">
-                <button
-                  onClick={() => onFollow(userEmail, userName)}
-                  className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 ${
-                    isFollowing 
-                      ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' 
-                      : 'bg-gradient-to-r from-orange-500 to-red-500 text-white'
-                  }`}
-                >
-                  {isFollowing ? (
-                    <>
-                      <UserMinus className="w-4 h-4" />
-                      Unfollow
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="w-4 h-4" />
-                      Follow
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={() => onBlock(userEmail, userName)}
-                  className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 ${
-                    isBlocked 
-                      ? 'bg-green-100 text-green-700 hover:bg-green-200' 
-                      : 'bg-red-100 text-red-700 hover:bg-red-200'
-                  }`}
-                >
-                  {isBlocked ? (
-                    <>
-                      <UserCheck className="w-4 h-4" />
-                      Unblock
-                    </>
-                  ) : (
-                    <>
-                      <UserMinus className="w-4 h-4" />
-                      Block
-                    </>
-                  )}
-                </button>
-              </div>
-            )}
-
-            {userPosts.length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Recent Posts</h3>
-                <div className="space-y-3">
-                  {userPosts.map(post => (
-                    <div key={post.id} className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-gray-400">{formatTimeAgo(post.createdAt)}</p>
-                        <div className="flex items-center gap-2">
-                          <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <Heart className="w-3 h-3" /> {post.likes || 0}
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-gray-500">
-                            <Repeat className="w-3 h-3" /> {post.reshareCount || 0}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {userReviews.length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Recent Reviews</h3>
-                <div className="space-y-3">
-                  {userReviews.map(review => (
-                    <div key={review.id} className="bg-gray-50 rounded-xl p-3">
-                      <p className="font-medium text-sm text-gray-900">{review.bookName}</p>
-                      <p className="text-xs text-gray-600 line-clamp-2">{review.review}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <div className="flex items-center gap-2">
-                          <StarRating rating={review.rating} size="xs" />
-                        </div>
-                        <p className="text-xs text-gray-400">{formatTimeAgo(review.createdAt)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => {
-                onClose();
-                onViewFullProfile(userEmail, userName);
-              }}
-              className="w-full py-3 border border-orange-200 text-orange-600 rounded-xl font-medium hover:bg-orange-50 transition"
-            >
-              View Full Profile
-            </button>
-          </div>
-        </div>
-      </div>
-    </>
-  );
-};
-
-// ─── FULL USER PROFILE PAGE ─────────────────────────────────────────────
+// ========================================
+// FULL USER PROFILE PAGE
+// ========================================
 const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onBack, onFollow, isFollowing, onBlock, isBlocked }) => {
   const [userData, setUserData] = useState(null);
   const [userPosts, setUserPosts] = useState([]);
@@ -1813,7 +2426,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
     const reviews = allReviews.filter(r => r.userEmail === viewedUserEmail);
     setUserReviews(reviews);
 
-    const books = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_booksRead`) || '[]');
+    const books = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_readingList`) || '[]');
     setUserBooks(books);
 
     const joinedCrews = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_joinedCrews`) || '[]');
@@ -1837,9 +2450,11 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
       <div className="px-4 py-5">
         <div className="flex items-start gap-4 mb-5">
           <div className="relative flex-shrink-0">
-            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">
-              {viewedUserName?.slice(0,2).toUpperCase()}
-            </div>
+            <Avatar 
+              initials={viewedUserName} 
+              size="xl" 
+              src={userData?.profileImage}
+            />
           </div>
           <div className="flex-1 min-w-0">
             <h2 className="text-xl font-bold text-gray-900 truncate">{viewedUserName}</h2>
@@ -1909,18 +2524,23 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           ))}
         </div>
 
-        {/* ========================================
-            PATCH 7 of 7 — PRIVACY NOTICE
-            Added: Posts, Reviews, Books & Crews are public · Saved posts are private
-        ======================================== */}
+        {/* Privacy Notice */}
         <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3 px-1">
           <Globe className="w-3 h-3" />
-          <span>Posts, Reviews, Books &amp; Crews are public · Saved posts are private</span>
+          <span>Posts, Reviews, Books & Crews are public · Saved posts are private</span>
         </div>
 
         <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
           {tabs.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-shrink-0 text-sm pb-2.5 px-3 font-medium border-b-2 transition ${activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'}`}>{tab}</button>
+            <button 
+              key={tab} 
+              onClick={() => setActiveTab(tab)} 
+              className={`flex-shrink-0 text-sm pb-2.5 px-3 font-medium border-b-2 transition ${
+                activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'
+              }`}
+            >
+              {tab}
+            </button>
           ))}
         </div>
 
@@ -2028,19 +2648,20 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
   );
 };
 
-// ─── HOME PAGE ──────────────────────────────────────────────────────────────
+// ========================================
+// HOME PAGE
+// ========================================
 const HomePage = ({ 
   user, posts, setPosts, crews, setPage, donations, reviews, onUpdateStats, 
   updateNotificationCount, profileSrc, savedPosts, onSavePost, onResharePost, 
-  onDeletePost, onFollow, following, onBlock, blockedUsers, onViewUserProfile 
+  onDeletePost, onFollow, following, onBlock, blockedUsers, onViewUserProfile,
+  onViewBookDetails
 }) => {
   const [trendingBooks, setTrendingBooks] = useState([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
   const [feedPosts, setFeedPosts] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [showBookDetails, setShowBookDetails] = useState(false);
-  const [bookDetails, setBookDetails] = useState(null);
-  const [loadingBookDetails, setLoadingBookDetails] = useState(false);
   const [showShare, setShowShare] = useState(null);
   const [showReshare, setShowReshare] = useState(null);
   const [userStats, setUserStats] = useState({
@@ -2055,7 +2676,6 @@ const HomePage = ({
     loadTrendingBooks();
     loadFeedPosts();
     
-    // ✅ Real-time: new posts from other users appear instantly
     socket.on('new_post', (post) => {
       if (!blockedUsers.includes(post.userEmail)) {
         setFeedPosts(prev => [post, ...prev]);
@@ -2082,32 +2702,37 @@ const HomePage = ({
     };
   }, [user?.email, blockedUsers]);
 
-  // Trending books database
-  const TRENDING_DB = [
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8, readers: 25000, trendReason: '#1 on bestseller lists globally' },
-    { title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', rating: 4.7, readers: 18000, trendReason: 'Still topping business charts' },
-    { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, readers: 22000, trendReason: 'Beloved by readers worldwide' },
-    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6, readers: 35000, trendReason: 'Fastest-selling fantasy debut' },
-    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6, readers: 19000, trendReason: 'Reese\'s Book Club favorite' },
-  ];
-
   const loadTrendingBooks = async () => {
-    setTrendingBooks(TRENDING_DB);
-    setLoadingTrending(false);
+    try {
+      const res = await axios.get(`${API_URL}/api/books/trending?limit=10`);
+      if (res.data.success) {
+        setTrendingBooks(res.data.books);
+      }
+    } catch (error) {
+      console.error('Failed to load trending books:', error);
+      setTrendingBooks([
+        { id: 1, title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8 },
+        { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', rating: 4.7 },
+        { id: 3, title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8 },
+        { id: 4, title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6 },
+        { id: 5, title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6 },
+      ]);
+    } finally {
+      setLoadingTrending(false);
+    }
   };
 
   const loadFeedPosts = async () => {
-    // ✅ Load from SERVER — visible to ALL users
     try {
-      const res = await axios.get(`${API_URL}/api/posts`);
+      const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`);
       if (res.data.success) {
         setFeedPosts(res.data.posts.filter(p => !blockedUsers.includes(p.userEmail)));
-        return;
       }
-    } catch {}
-    // fallback to localStorage
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    setFeedPosts(allPosts.slice(0, 15));
+    } catch (error) {
+      console.error('Failed to load feed:', error);
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      setFeedPosts(allPosts.slice(0, 15));
+    }
   };
 
   const handleReshareClick = (post) => {
@@ -2124,9 +2749,37 @@ const HomePage = ({
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
-      <TopBar user={user} setPage={setPage} title="ReadCrew" profileSrc={profileSrc}
+      <TopBar 
+        user={user} 
+        setPage={setPage} 
+        title="ReadCrew" 
+        profileSrc={profileSrc}
         onNotificationClick={() => setPage('notifications')}
-        notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read).length} />
+        notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read).length} 
+      />
+
+      {selectedBook && (
+        <BookDetailsModal
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          onCreateCrew={(book) => {
+            const newCrew = {
+              id: Date.now(),
+              name: book.title,
+              author: book.author,
+              genre: book.genre || 'General',
+              members: 1,
+              chats: 0,
+              createdBy: user.email,
+              createdByName: user.name,
+              createdAt: new Date().toISOString()
+            };
+            const updatedCrews = [newCrew, ...crews];
+            localStorage.setItem('crews', JSON.stringify(updatedCrews));
+            setPage('crews');
+          }}
+        />
+      )}
 
       {showShare && <ShareModal post={showShare} onClose={() => setShowShare(null)} />}
       {showReshare && (
@@ -2160,7 +2813,11 @@ const HomePage = ({
               </div>
             </div>
           )}
-          {!hasReadingGoal && <button onClick={() => setPage('profile')} className="mt-3 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2 text-sm font-medium">Set Reading Goals →</button>}
+          {!hasReadingGoal && (
+            <button onClick={() => setPage('profile')} className="mt-3 w-full bg-white/20 hover:bg-white/30 rounded-xl py-2 text-sm font-medium">
+              Set Reading Goals →
+            </button>
+          )}
         </div>
 
         {/* Stats Grid */}
@@ -2171,8 +2828,14 @@ const HomePage = ({
             { label: 'Posts', value: userStats.postsCreated, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100', page: 'post' },
             { label: 'Crews', value: userStats.crewsJoined, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100', page: 'crews' }
           ].map(({ label, value, icon: Icon, color, bg, page }, idx) => (
-            <div key={idx} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md" onClick={() => setPage(page)}>
-              <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}><Icon className={`w-4 h-4 ${color}`} /></div>
+            <div 
+              key={idx} 
+              className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md" 
+              onClick={() => setPage(page)}
+            >
+              <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}>
+                <Icon className={`w-4 h-4 ${color}`} />
+              </div>
               <p className="text-lg font-bold text-gray-900">{value}</p>
               <p className="text-xs text-gray-500">{label}</p>
             </div>
@@ -2182,13 +2845,23 @@ const HomePage = ({
         {/* Trending Books */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-orange-500" />Trending Books</h2>
-            <button onClick={() => setPage('explore')} className="text-sm text-orange-500 font-semibold">Explore All</button>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-orange-500" />Trending Books
+            </h2>
+            <button onClick={() => setPage('explore')} className="text-sm text-orange-500 font-semibold">
+              Explore All
+            </button>
           </div>
-          {loadingTrending ? <div className="flex justify-center py-8"><LoadingSpinner /></div> : (
+          {loadingTrending ? (
+            <div className="flex justify-center py-8"><LoadingSpinner /></div>
+          ) : (
             <div className="flex gap-4 overflow-x-auto pb-2">
               {trendingBooks.map((book, i) => (
-                <div key={i} className="shrink-0 w-28 cursor-pointer hover:scale-105 transition-transform">
+                <div 
+                  key={i} 
+                  className="shrink-0 w-28 cursor-pointer hover:scale-105 transition-transform"
+                  onClick={() => setSelectedBook(book)}
+                >
                   <DynamicBookCover title={book.title} author={book.author} size="md" className="mb-2" />
                   <p className="text-sm font-semibold text-gray-900 leading-tight line-clamp-2">{book.title}</p>
                   <p className="text-xs text-gray-500 truncate">{book.author}</p>
@@ -2205,18 +2878,30 @@ const HomePage = ({
         {/* Your Crews */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />Your Crews</h2>
-            <button onClick={() => setPage('crews')} className="text-sm text-orange-500 font-semibold">View All</button>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <Users className="w-5 h-5 text-orange-500" />Your Crews
+            </h2>
+            <button onClick={() => setPage('crews')} className="text-sm text-orange-500 font-semibold">
+              View All
+            </button>
           </div>
           <div className="grid grid-cols-2 gap-3">
             {userCrews.slice(0,2).map(crew => (
-              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer" onClick={() => setPage('crews')}>
-                <div className="h-16 flex items-center justify-center p-2 bg-gray-50"><DynamicBookCover title={crew.name} author={crew.author} size="xs" /></div>
+              <div 
+                key={crew.id} 
+                className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer" 
+                onClick={() => setPage('crews')}
+              >
+                <div className="h-16 flex items-center justify-center p-2 bg-gray-50">
+                  <DynamicBookCover title={crew.name} author={crew.author} size="xs" />
+                </div>
                 <div className="p-3">
                   <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{crew.name}</h3>
                   <p className="text-xs text-gray-500 mt-0.5">{crew.genre}</p>
                   <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-1 text-xs text-gray-500"><Users className="w-3 h-3" />{crew.members||1}</div>
+                    <div className="flex items-center gap-1 text-xs text-gray-500">
+                      <Users className="w-3 h-3" />{crew.members||1}
+                    </div>
                     <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-lg text-xs">Joined</span>
                   </div>
                 </div>
@@ -2225,15 +2910,24 @@ const HomePage = ({
             {userCrews.length === 0 && (
               <div className="col-span-2 bg-white rounded-xl p-6 text-center border border-gray-200">
                 <p className="text-gray-500 text-sm">No crews joined yet</p>
-                <button onClick={() => setPage('crews')} className="mt-2 text-orange-500 text-sm font-medium">Browse Crews →</button>
+                <button onClick={() => setPage('crews')} className="mt-2 text-orange-500 text-sm font-medium">
+                  Browse Crews →
+                </button>
               </div>
             )}
           </div>
         </div>
 
         {/* Create Post Button */}
-        <button onClick={() => setPage('post')} className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md">
-          {profileSrc ? <img src={profileSrc} alt="p" className="w-9 h-9 rounded-full object-cover flex-shrink-0" /> : <div className="w-9 h-9 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{user?.name?.slice(0,2).toUpperCase()}</div>}
+        <button 
+          onClick={() => setPage('post')} 
+          className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md"
+        >
+          {profileSrc ? (
+            <img src={profileSrc} alt="p" className="w-9 h-9 rounded-full object-cover flex-shrink-0" />
+          ) : (
+            <Avatar initials={user?.name} size="sm" />
+          )}
           <span className="text-gray-400 text-sm flex-1 text-left">Share your reading journey...</span>
           <span className="text-xs text-orange-500 font-medium bg-orange-50 px-3 py-1 rounded-full">Post</span>
         </button>
@@ -2241,35 +2935,44 @@ const HomePage = ({
         {/* Community Feed */}
         <div>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-orange-500" />Community Feed</h2>
-            <button onClick={() => setPage('reviews')} className="text-sm text-orange-500 font-semibold">View All</button>
+            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-orange-500" />Community Feed
+            </h2>
+            <button onClick={() => setPage('reviews')} className="text-sm text-orange-500 font-semibold">
+              View All
+            </button>
           </div>
           <div className="space-y-4">
             {feedPosts.length === 0 ? (
               <div className="bg-white rounded-xl p-8 text-center border border-gray-200">
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No posts yet. Be the first to share!</p>
-                <button onClick={() => setPage('post')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Create Post</button>
+                <button onClick={() => setPage('post')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">
+                  Create Post
+                </button>
               </div>
-            ) : feedPosts.map((post, idx) => (
-              <InlinePostCard
-                key={post.id || idx}
-                post={post}
-                user={user}
-                profileSrc={profileSrc}
-                updateNotificationCount={updateNotificationCount}
-                onShare={(p) => setShowShare(p)}
-                onReshareClick={handleReshareClick}
-                onSaveToggle={onSavePost}
-                isSaved={savedPosts?.includes(post.id)}
-                onDelete={onDeletePost}
-                onFollow={onFollow}
-                isFollowing={following?.includes(post.userEmail)}
-                onBlock={onBlock}
-                isBlocked={blockedUsers?.includes(post.userEmail)}
-                onViewUserProfile={onViewUserProfile}
-              />
-            ))}
+            ) : (
+              feedPosts.map((post, idx) => (
+                <InlinePostCard
+                  key={post.id || idx}
+                  post={post}
+                  user={user}
+                  profileSrc={profileSrc}
+                  updateNotificationCount={updateNotificationCount}
+                  onShare={(p) => setShowShare(p)}
+                  onReshareClick={handleReshareClick}
+                  onSaveToggle={onSavePost}
+                  isSaved={savedPosts?.includes(post.id)}
+                  onDelete={onDeletePost}
+                  onFollow={onFollow}
+                  isFollowing={following?.includes(post.userEmail)}
+                  onBlock={onBlock}
+                  isBlocked={blockedUsers?.includes(post.userEmail)}
+                  onViewUserProfile={onViewUserProfile}
+                  onViewBookDetails={onViewBookDetails}
+                />
+              ))
+            )}
           </div>
         </div>
       </div>
@@ -2277,7 +2980,9 @@ const HomePage = ({
   );
 };
 
-// ─── EXPLORE PAGE ────────────────────────────────────────────────────────────
+// ========================================
+// EXPLORE PAGE
+// ========================================
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [chatMessages, setChatMessages] = useState([
     {
@@ -2300,6 +3005,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [charBook, setCharBook] = useState('');
   const [charLoading, setCharLoading] = useState(false);
   const [charResult, setCharResult] = useState(null);
+  const [selectedBook, setSelectedBook] = useState(null);
   const [nearbyLocation, setNearbyLocation] = useState(null);
   const [nearbyCity, setNearbyCity] = useState('');
   const [nearbyLocError, setNearbyLocError] = useState('');
@@ -2333,7 +3039,9 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   useEffect(() => {
     if (!sentinelRef.current) return;
     const observer = new IntersectionObserver(
-      (entries) => { if (entries[0].isIntersecting && hasMoreBooks && !loadingMoreRef.current) loadMoreBooks(); },
+      (entries) => { 
+        if (entries[0].isIntersecting && hasMoreBooks && !loadingMoreRef.current) loadMoreBooks(); 
+      },
       { threshold: 0.1, rootMargin: '120px' }
     );
     observer.observe(sentinelRef.current);
@@ -2409,7 +3117,10 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     if (!charName.trim()) return;
     setCharLoading(true); setCharResult(null);
     try {
-      const res = await axios.post(`${API_URL}/api/books/character-search`, { character: charName.trim(), fromBook: charBook.trim() || undefined });
+      const res = await axios.post(`${API_URL}/api/books/character-search`, { 
+        character: charName.trim(), 
+        fromBook: charBook.trim() || undefined 
+      });
       if (res.data.success) setCharResult(res.data);
     } catch {
       setCharResult({
@@ -2438,14 +3149,20 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   };
 
   const getNearbyLocation = () => {
-    if (!navigator.geolocation) { setNearbyLocError('Geolocation not supported by your browser'); return; }
-    setNearbyLocLoading(true); setNearbyLocError('');
+    if (!navigator.geolocation) { 
+      setNearbyLocError('Geolocation not supported by your browser'); 
+      return; 
+    }
+    setNearbyLocLoading(true); 
+    setNearbyLocError('');
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const lat = pos.coords.latitude, lng = pos.coords.longitude;
         setNearbyLocation({ lat, lng });
         try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, { headers: { 'User-Agent': 'ReadCrew-App/1.0' } });
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`, 
+            { headers: { 'User-Agent': 'ReadCrew-App/1.0' } }
+          );
           const data = await res.json();
           const c = data.address?.city || data.address?.town || data.address?.village || data.address?.county || 'your city';
           setNearbyCity(c);
@@ -2467,11 +3184,25 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     const rad = km * 1000;
     const query = `[out:json][timeout:25];(node["amenity"="library"](around:${rad},${lat},${lng});way["amenity"="library"](around:${rad},${lat},${lng}););out center;`;
     try {
-      const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query, signal: AbortSignal.timeout(20000) });
+      const res = await fetch('https://overpass-api.de/api/interpreter', { 
+        method: 'POST', 
+        body: query, 
+        signal: AbortSignal.timeout(20000) 
+      });
       const data = await res.json();
       const libs = (data.elements||[]).map(el => {
         const la = el.lat || el.center?.lat, lo = el.lon || el.center?.lon;
-        return { id: el.id, name: el.tags?.name || 'Public Library', address: [el.tags?.['addr:street'], el.tags?.['addr:housenumber'], el.tags?.['addr:city']].filter(Boolean).join(', ') || 'See map', phone: el.tags?.phone || null, website: el.tags?.website || null, opening_hours: el.tags?.opening_hours || null, lat: la, lng: lo, distKm: la && lo ? getDistKm(lat, lng, la, lo) : null };
+        return { 
+          id: el.id, 
+          name: el.tags?.name || 'Public Library', 
+          address: [el.tags?.['addr:street'], el.tags?.['addr:housenumber'], el.tags?.['addr:city']].filter(Boolean).join(', ') || 'See map', 
+          phone: el.tags?.phone || null, 
+          website: el.tags?.website || null, 
+          opening_hours: el.tags?.opening_hours || null, 
+          lat: la, 
+          lng: lo, 
+          distKm: la && lo ? getDistKm(lat, lng, la, lo) : null 
+        };
       });
       libs.sort((a, b) => (a.distKm ?? 999) - (b.distKm ?? 999));
       setLibraries(libs);
@@ -2483,15 +3214,66 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     if (!nearbyCity) return;
     setEventsLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/nearby/events`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ city: nearbyCity, lat: nearbyLocation?.lat, lng: nearbyLocation?.lng }), signal: AbortSignal.timeout(30000) });
-      if (res.ok) { const data = await res.json(); if (data.events?.length > 0) { setNearbyEvents(data.events); setEventsLoading(false); return; } }
+      const res = await fetch(`${API_URL}/api/nearby/events`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ city: nearbyCity, lat: nearbyLocation?.lat, lng: nearbyLocation?.lng }), 
+        signal: AbortSignal.timeout(30000) 
+      });
+      if (res.ok) { 
+        const data = await res.json(); 
+        if (data.events?.length > 0) { 
+          setNearbyEvents(data.events); 
+          setEventsLoading(false); 
+          return; 
+        } 
+      }
     } catch { /* fall through */ }
+    
     const cityEnc = encodeURIComponent(nearbyCity);
-    const addDays = (d) => { const dt = new Date(); dt.setDate(dt.getDate()+d); return dt.toLocaleDateString('en-IN', { weekday:'short', month:'short', day:'numeric' }); };
+    const addDays = (d) => { 
+      const dt = new Date(); 
+      dt.setDate(dt.getDate()+d); 
+      return dt.toLocaleDateString('en-IN', { weekday:'short', month:'short', day:'numeric' }); 
+    };
+    
     setNearbyEvents([
-      { id:1, title:'Book Club Meetup', type:'Book Club', description:`Monthly book club in ${nearbyCity} — discuss the latest reads over coffee with fellow book lovers!`, date:addDays(7), venue:`${nearbyCity} Community Library`, link:`https://www.meetup.com/find/?keywords=book+club&location=${cityEnc}`, source:'Meetup', free:true, emoji:'📚' },
-      { id:2, title:'Author Talk & Book Signing', type:'Author Event', description:`Local and national authors visit ${nearbyCity} bookstores for readings, Q&A sessions, and meet-and-greets.`, date:addDays(14), venue:'Local Bookstore', link:`https://www.eventbrite.com/d/${cityEnc}/book-author/`, source:'Eventbrite', free:false, emoji:'✍️' },
-      { id:3, title:'Literary Festival', type:'Festival', description:`Annual celebration of literature featuring panels, author talks, workshops, and a book bazaar.`, date:addDays(30), venue:`${nearbyCity} Cultural Centre`, link:`https://www.eventbrite.com/d/${cityEnc}/literary-festival/`, source:'Eventbrite', free:false, emoji:'🎪' },
+      { 
+        id:1, 
+        title:'Book Club Meetup', 
+        type:'Book Club', 
+        description:`Monthly book club in ${nearbyCity} — discuss the latest reads over coffee with fellow book lovers!`, 
+        date:addDays(7), 
+        venue:`${nearbyCity} Community Library`, 
+        link:`https://www.meetup.com/find/?keywords=book+club&location=${cityEnc}`, 
+        source:'Meetup', 
+        free:true, 
+        emoji:'📚' 
+      },
+      { 
+        id:2, 
+        title:'Author Talk & Book Signing', 
+        type:'Author Event', 
+        description:`Local and national authors visit ${nearbyCity} bookstores for readings, Q&A sessions, and meet-and-greets.`, 
+        date:addDays(14), 
+        venue:'Local Bookstore', 
+        link:`https://www.eventbrite.com/d/${cityEnc}/book-author/`, 
+        source:'Eventbrite', 
+        free:false, 
+        emoji:'✍️' 
+      },
+      { 
+        id:3, 
+        title:'Literary Festival', 
+        type:'Festival', 
+        description:`Annual celebration of literature featuring panels, author talks, workshops, and a book bazaar.`, 
+        date:addDays(30), 
+        venue:`${nearbyCity} Cultural Centre`, 
+        link:`https://www.eventbrite.com/d/${cityEnc}/literary-festival/`, 
+        source:'Eventbrite', 
+        free:false, 
+        emoji:'🎪' 
+      },
     ]);
     setEventsLoading(false);
   };
@@ -2503,40 +3285,82 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   if (mode === 'character') return (
     <div className="min-h-screen bg-[#FAF6F1] pb-24 overflow-y-auto">
       <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center gap-3 z-10">
-        <button onClick={() => setMode('chat')} className="p-1 hover:bg-gray-100 rounded-xl"><ChevronLeft className="w-5 h-5" /></button>
+        <button onClick={() => setMode('chat')} className="p-1 hover:bg-gray-100 rounded-xl">
+          <ChevronLeft className="w-5 h-5" />
+        </button>
         <span className="font-semibold">Find Books by Character</span>
       </div>
       <div className="flex gap-2 px-4 py-3 border-b border-gray-100 overflow-x-auto">
         {[['chat','✨','AI Chat'],['character','🎭','By Character'],['nearby','📍','Nearby']].map(([id,emoji,label]) => (
-          <button key={id} onClick={() => setMode(id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${mode===id ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'}`}>{emoji} {label}</button>
+          <button 
+            key={id} 
+            onClick={() => setMode(id)} 
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+              mode===id ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'
+            }`}
+          >
+            {emoji} {label}
+          </button>
         ))}
       </div>
       <div className="px-4 py-5 space-y-4">
         <div className="bg-white rounded-2xl p-5 border border-gray-200">
           <p className="text-sm text-gray-600 mb-4">Love a fictional character? Find books with similar ones!</p>
-          <input value={charName} onChange={e => setCharName(e.target.value)} placeholder="Character name (e.g. Hermione Granger)" className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm mb-2 outline-none focus:border-orange-400" />
-          <input value={charBook} onChange={e => setCharBook(e.target.value)} placeholder="From which book (optional)" className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm mb-3 outline-none focus:border-orange-400" />
-          <button onClick={searchCharacter} disabled={!charName.trim() || charLoading} className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2">
+          <input 
+            value={charName} 
+            onChange={e => setCharName(e.target.value)} 
+            placeholder="Character name (e.g. Hermione Granger)" 
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm mb-2 outline-none focus:border-orange-400" 
+          />
+          <input 
+            value={charBook} 
+            onChange={e => setCharBook(e.target.value)} 
+            placeholder="From which book (optional)" 
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm mb-3 outline-none focus:border-orange-400" 
+          />
+          <button 
+            onClick={searchCharacter} 
+            disabled={!charName.trim() || charLoading} 
+            className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold disabled:opacity-50 flex items-center justify-center gap-2"
+          >
             {charLoading ? <><LoadingSpinner size="sm" />Searching...</> : '🎭 Find Similar Books'}
           </button>
         </div>
         {charResult && (
           <div className="space-y-4">
-            <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100"><p className="text-sm text-orange-800 leading-relaxed">{charResult.characterAnalysis}</p></div>
+            <div className="bg-orange-50 rounded-2xl p-4 border border-orange-100">
+              <p className="text-sm text-orange-800 leading-relaxed">{charResult.characterAnalysis}</p>
+            </div>
             {(charResult.recommendations||[]).map((book, i) => (
-              <BookCard key={i} book={book} onCreateCrew={() => { onCreateCrew(book); setPage('crews'); }} />
+              <BookCard 
+                key={i} 
+                book={book} 
+                onCreateCrew={() => { onCreateCrew(book); setPage('crews'); }}
+                onViewDetails={(book) => setSelectedBook(book)}
+              />
             ))}
           </div>
         )}
       </div>
+      {selectedBook && (
+        <BookDetailsModal
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          onCreateCrew={onCreateCrew}
+        />
+      )}
     </div>
   );
 
   if (mode === 'nearby') return (
     <div className="min-h-screen pb-24 overflow-y-auto" style={{ background: 'linear-gradient(160deg, #FFF8F2 0%, #F0EBFF 100%)' }}>
       <div className="sticky top-0 z-40 border-b border-orange-100 px-4 py-3 flex items-center gap-3" style={{ background: 'rgba(255,248,242,0.96)', backdropFilter:'blur(12px)' }}>
-        <button onClick={() => setMode('chat')} className="p-1.5 hover:bg-orange-100 rounded-xl"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
-        <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center shadow"><MapPin className="w-3.5 h-3.5 text-white" /></div>
+        <button onClick={() => setMode('chat')} className="p-1.5 hover:bg-orange-100 rounded-xl">
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
+        <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-purple-600 rounded-lg flex items-center justify-center shadow">
+          <MapPin className="w-3.5 h-3.5 text-white" />
+        </div>
         <div className="flex-1">
           <span className="font-bold text-gray-900">Nearby</span>
           {nearbyCity && <span className="text-sm text-gray-400 ml-2">· {nearbyCity}</span>}
@@ -2545,7 +3369,15 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
       <div className="flex gap-2 px-4 py-3 border-b border-orange-100 bg-white/70 overflow-x-auto">
         {[['chat','✨','AI Chat'],['character','🎭','By Character'],['nearby','📍','Nearby']].map(([id,emoji,label]) => (
-          <button key={id} onClick={() => setMode(id)} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${mode===id ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'}`}>{emoji} {label}</button>
+          <button 
+            key={id} 
+            onClick={() => setMode(id)} 
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+              mode===id ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white shadow' : 'bg-white text-gray-600 border border-gray-200'
+            }`}
+          >
+            {emoji} {label}
+          </button>
         ))}
       </div>
 
@@ -2560,8 +3392,11 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               Discover <strong>public libraries</strong> near you and <strong>book events</strong> happening in your city — all for free.
             </p>
             {nearbyLocError && <p className="text-red-500 text-sm mb-3 bg-red-50 rounded-xl px-3 py-2">{nearbyLocError}</p>}
-            <button onClick={getNearbyLocation} disabled={nearbyLocLoading}
-              className="w-full py-4 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-2xl font-bold text-sm shadow-lg disabled:opacity-60 flex items-center justify-center gap-2">
+            <button 
+              onClick={getNearbyLocation} 
+              disabled={nearbyLocLoading}
+              className="w-full py-4 bg-gradient-to-r from-orange-500 to-purple-600 text-white rounded-2xl font-bold text-sm shadow-lg disabled:opacity-60 flex items-center justify-center gap-2"
+            >
               {nearbyLocLoading ? <><LoadingSpinner size="sm" />Detecting location...</> : <><MapPin className="w-4 h-4" />Share My Location</>}
             </button>
           </div>
@@ -2574,17 +3409,31 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             <div className="flex-1 flex items-center gap-2 bg-white rounded-xl px-3 py-2.5 border border-gray-200 shadow-sm">
               <MapPin className="w-4 h-4 text-orange-500 flex-shrink-0" />
               <span className="text-xs text-gray-500">Radius:</span>
-              <select value={radiusKm} onChange={e => setRadiusKm(Number(e.target.value))} className="flex-1 text-sm font-semibold text-gray-800 outline-none bg-transparent">
+              <select 
+                value={radiusKm} 
+                onChange={e => setRadiusKm(Number(e.target.value))} 
+                className="flex-1 text-sm font-semibold text-gray-800 outline-none bg-transparent"
+              >
                 {[1,2,5,10,20].map(r => <option key={r} value={r}>{r} km</option>)}
               </select>
             </div>
-            <button onClick={() => fetchLibraries(nearbyLocation.lat, nearbyLocation.lng, radiusKm)} className="px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-semibold shadow-sm">Search</button>
+            <button 
+              onClick={() => fetchLibraries(nearbyLocation.lat, nearbyLocation.lng, radiusKm)} 
+              className="px-4 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-semibold shadow-sm"
+            >
+              Search
+            </button>
           </div>
 
           <div className="px-4 py-2 flex gap-2">
             {[['libraries','🏛️','Libraries'],['events','📅','Events']].map(([id,emoji,label]) => (
-              <button key={id} onClick={() => setNearbyTab(id)}
-                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${nearbyTab===id ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'}`}>
+              <button 
+                key={id} 
+                onClick={() => setNearbyTab(id)}
+                className={`flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-all ${
+                  nearbyTab===id ? 'bg-gradient-to-r from-orange-500 to-purple-600 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200'
+                }`}
+              >
                 {emoji} {label}
               </button>
             ))}
@@ -2598,26 +3447,60 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   <div className="text-5xl mb-3">🏛️</div>
                   <h3 className="font-bold text-gray-800 mb-1">No libraries found nearby</h3>
                   <p className="text-sm text-gray-500 mb-4">Try increasing the search radius</p>
-                  <button onClick={() => { setRadiusKm(20); fetchLibraries(nearbyLocation.lat, nearbyLocation.lng, 20); }} className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold">Search 20 km</button>
+                  <button 
+                    onClick={() => { setRadiusKm(20); fetchLibraries(nearbyLocation.lat, nearbyLocation.lng, 20); }} 
+                    className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold"
+                  >
+                    Search 20 km
+                  </button>
                 </div>
               )}
               {!libLoading && libraries.map(lib => (
                 <div key={lib.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                   <div className="p-4">
                     <div className="flex items-start gap-3">
-                      <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 border border-orange-200 text-2xl">🏛️</div>
+                      <div className="w-12 h-12 bg-gradient-to-br from-orange-100 to-amber-100 rounded-xl flex items-center justify-center flex-shrink-0 border border-orange-200 text-2xl">
+                        🏛️
+                      </div>
                       <div className="flex-1 min-w-0">
                         <h3 className="font-bold text-gray-900 text-sm">{lib.name}</h3>
                         <p className="text-xs text-gray-500 mt-0.5">{lib.address}</p>
-                        {lib.distKm != null && <span className="inline-block mt-1.5 text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">📍 {lib.distKm < 1 ? `${Math.round(lib.distKm*1000)}m` : `${lib.distKm.toFixed(1)} km`} away</span>}
+                        {lib.distKm != null && (
+                          <span className="inline-block mt-1.5 text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-semibold">
+                            📍 {lib.distKm < 1 ? `${Math.round(lib.distKm*1000)}m` : `${lib.distKm.toFixed(1)} km`} away
+                          </span>
+                        )}
                       </div>
                     </div>
-                    {lib.opening_hours && <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5"><Clock className="w-3 h-3 text-orange-400 flex-shrink-0" />{lib.opening_hours}</div>}
+                    {lib.opening_hours && (
+                      <div className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5">
+                        <Clock className="w-3 h-3 text-orange-400 flex-shrink-0" />
+                        {lib.opening_hours}
+                      </div>
+                    )}
                   </div>
                   <div className="px-4 py-2.5 border-t border-gray-100 flex gap-2">
-                    <a href={`https://www.google.com/maps/dir/?api=1&destination=${lib.lat},${lib.lng}`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"><Navigation className="w-3.5 h-3.5" />Directions</a>
-                    <a href={`https://www.openstreetmap.org/?mlat=${lib.lat}&mlon=${lib.lng}#map=17/${lib.lat}/${lib.lng}`} target="_blank" rel="noreferrer" className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"><Map className="w-3.5 h-3.5" />View Map</a>
-                    {lib.phone && <a href={`tel:${lib.phone}`} className="py-2 px-3 bg-green-100 text-green-700 rounded-xl flex items-center justify-center"><Phone className="w-3.5 h-3.5" /></a>}
+                    <a 
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${lib.lat},${lib.lng}`} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="flex-1 py-2 bg-gradient-to-r from-orange-500 to-orange-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-sm"
+                    >
+                      <Navigation className="w-3.5 h-3.5" />Directions
+                    </a>
+                    <a 
+                      href={`https://www.openstreetmap.org/?mlat=${lib.lat}&mlon=${lib.lng}#map=17/${lib.lat}/${lib.lng}`} 
+                      target="_blank" 
+                      rel="noreferrer" 
+                      className="flex-1 py-2 bg-gray-100 text-gray-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5"
+                    >
+                      <Map className="w-3.5 h-3.5" />View Map
+                    </a>
+                    {lib.phone && (
+                      <a href={`tel:${lib.phone}`} className="py-2 px-3 bg-green-100 text-green-700 rounded-xl flex items-center justify-center">
+                        <Phone className="w-3.5 h-3.5" />
+                      </a>
+                    )}
                   </div>
                 </div>
               ))}
@@ -2626,28 +3509,54 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
           {nearbyTab === 'events' && (
             <div className="px-4 py-3 space-y-3">
-              {eventsLoading && <div className="text-center py-10"><LoadingSpinner size="lg" /><p className="text-gray-500 text-sm mt-3">Finding book events in {nearbyCity}...</p></div>}
+              {eventsLoading && (
+                <div className="text-center py-10">
+                  <LoadingSpinner size="lg" />
+                  <p className="text-gray-500 text-sm mt-3">Finding book events in {nearbyCity}...</p>
+                </div>
+              )}
               {!eventsLoading && nearbyEvents.length > 0 && (
                 <>
                   {nearbyEvents.map(ev => (
                     <div key={ev.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
                       <div className="p-4">
                         <div className="flex items-start gap-3">
-                          <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-orange-100 rounded-xl flex items-center justify-center flex-shrink-0 border border-purple-100 text-2xl">{ev.emoji}</div>
+                          <div className="w-12 h-12 bg-gradient-to-br from-purple-100 to-orange-100 rounded-xl flex items-center justify-center flex-shrink-0 border border-purple-100 text-2xl">
+                            {ev.emoji}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-start justify-between gap-2">
                               <h3 className="font-bold text-gray-900 text-sm">{ev.title}</h3>
-                              {ev.free ? <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-bold flex-shrink-0">FREE</span> : <span className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full font-semibold flex-shrink-0">Paid</span>}
+                              {ev.free ? (
+                                <span className="text-[10px] px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-bold flex-shrink-0">
+                                  FREE
+                                </span>
+                              ) : (
+                                <span className="text-[10px] px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full font-semibold flex-shrink-0">
+                                  Paid
+                                </span>
+                              )}
                             </div>
                             <p className="text-xs text-purple-600 font-medium">{ev.type}</p>
-                            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><Calendar className="w-3 h-3" />{ev.date}</p>
-                            <p className="text-xs text-gray-500 flex items-center gap-1"><MapPin className="w-3 h-3" />{ev.venue}</p>
+                            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+                              <Calendar className="w-3 h-3" />{ev.date}
+                            </p>
+                            <p className="text-xs text-gray-500 flex items-center gap-1">
+                              <MapPin className="w-3 h-3" />{ev.venue}
+                            </p>
                           </div>
                         </div>
                         <p className="text-xs text-gray-600 mt-2.5 leading-relaxed">{ev.description}</p>
                       </div>
                       <div className="px-4 py-2.5 border-t border-gray-100">
-                        <a href={ev.link} target="_blank" rel="noreferrer" className="flex w-full py-2.5 bg-gradient-to-r from-purple-600 to-orange-500 text-white rounded-xl text-xs font-bold items-center justify-center gap-1.5 shadow-sm"><ExternalLink className="w-3.5 h-3.5" />Find on {ev.source}</a>
+                        <a 
+                          href={ev.link} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className="flex w-full py-2.5 bg-gradient-to-r from-purple-600 to-orange-500 text-white rounded-xl text-xs font-bold items-center justify-center gap-1.5 shadow-sm"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />Find on {ev.source}
+                        </a>
                       </div>
                     </div>
                   ))}
@@ -2657,19 +3566,34 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           )}
         </>
       )}
+      {selectedBook && (
+        <BookDetailsModal
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          onCreateCrew={onCreateCrew}
+        />
+      )}
     </div>
   );
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1] pb-24 overflow-y-auto">
       <div className="px-5 pt-8 pb-4">
-        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{fontFamily:'Georgia,serif'}}>What to read next?</h1>
+        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{fontFamily:'Georgia,serif'}}>
+          What to read next?
+        </h1>
         <p className="text-sm text-[#8B7968]">Chat with your AI book guide</p>
       </div>
 
       <div className="flex gap-2 px-5 mb-4 overflow-x-auto">
         {[['chat','✨','AI Chat'],['character','🎭','By Character'],['nearby','📍','Nearby']].map(([id,emoji,label]) => (
-          <button key={id} onClick={() => setMode(id)} className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${mode===id ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 shadow-sm'}`}>
+          <button 
+            key={id} 
+            onClick={() => setMode(id)} 
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
+              mode===id ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 shadow-sm'
+            }`}
+          >
             {emoji} {label}
           </button>
         ))}
@@ -2684,7 +3608,11 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               </div>
             )}
             <div className={`max-w-[78%] ${msg.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
-              <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-[#C8622A] text-white rounded-br-sm' : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'}`}>
+              <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${
+                msg.role === 'user' 
+                  ? 'bg-[#C8622A] text-white rounded-br-sm' 
+                  : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'
+              }`}>
                 {msg.content}
               </div>
               <span className="text-[10px] text-gray-400 mt-1 px-1">{formatTime(msg.timestamp)}</span>
@@ -2715,7 +3643,12 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               <div className="h-px flex-1 bg-orange-200" />
             </div>
             {allBooks.map((book, i) => (
-              <BookCard key={`${i}-${book.title}`} book={book} onCreateCrew={() => { onCreateCrew(book); setPage('crews'); }} />
+              <BookCard 
+                key={`${i}-${book.title}`} 
+                book={book} 
+                onCreateCrew={() => { onCreateCrew(book); setPage('crews'); }}
+                onViewDetails={(book) => setSelectedBook(book)}
+              />
             ))}
 
             <div ref={sentinelRef} className="py-2">
@@ -2734,95 +3667,175 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
       <div className="sticky bottom-20 mx-4 mt-4 bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 px-3 py-2.5">
         <div className="flex items-center gap-2">
-          <input ref={inputRef} value={input} onChange={e => setInput(e.target.value)}
+          <input 
+            ref={inputRef} 
+            value={input} 
+            onChange={e => setInput(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
             placeholder="Tell me what you're in the mood for..."
-            className="flex-1 bg-transparent text-sm text-[#2D1F14] outline-none placeholder-gray-400" />
-          <button onClick={sendMessage} disabled={!input.trim() || loading}
-            className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${input.trim() && !loading ? 'bg-[#C8622A] text-white' : 'bg-gray-100 text-gray-400'}`}>
+            className="flex-1 bg-transparent text-sm text-[#2D1F14] outline-none placeholder-gray-400" 
+          />
+          <button 
+            onClick={sendMessage} 
+            disabled={!input.trim() || loading}
+            className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${
+              input.trim() && !loading ? 'bg-[#C8622A] text-white' : 'bg-gray-100 text-gray-400'
+            }`}
+          >
             <Send className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {selectedBook && (
+        <BookDetailsModal
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          onCreateCrew={onCreateCrew}
+        />
+      )}
     </div>
   );
 };
 
-// ─── POST PAGE ──────────────────────────────────────────────────────────────
+// ========================================
+// POST PAGE
+// ========================================
 const PostPage = ({ user, onPost, setPage }) => {
   const [content, setContent] = useState('');
   const [bookName, setBookName] = useState('');
   const [author, setAuthor] = useState('');
   const [image, setImage] = useState(null);
   const [isPublic, setIsPublic] = useState(true);
+  const [uploading, setUploading] = useState(false);
   const fileRef = useRef();
 
   const handleSubmit = async () => {
     if (!content.trim()) return;
+    
+    setUploading(true);
+    
     const postData = {
-      content, 
-      bookName, 
-      author, 
-      image, 
-      isPublic, 
-      type: 'post',
-      userName: user.name, 
+      content: sanitizeText(content.trim()),
+      bookName: bookName.trim() || undefined,
+      author: author.trim() || undefined,
+      image,
+      isPublic,
+      userName: user.name,
       userEmail: user.email,
     };
 
-    // ✅ Send to SERVER first
     try {
-      await axios.post(`${API_URL}/api/posts`, postData);
-    } catch {
-      // fallback to local if server fails
+      await axios.post(`${API_URL}/api/social/posts`, postData);
+    } catch (error) {
+      console.error('Failed to post to server:', error);
       onPost({ 
         ...postData, 
-        id: Date.now(), 
+        id: generateId(), 
         createdAt: new Date().toISOString(), 
         likes: 0, 
-        reshareCount: 0 
+        reshareCount: 0,
+        userPhoto: user.profileImage,
+        userInitials: user.name.slice(0,2).toUpperCase()
       });
     }
+    
     setPage('home');
+    setUploading(false);
   };
 
   return (
     <div className="fixed inset-0 flex flex-col bg-white z-[55] overflow-hidden" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <button onClick={() => setPage('home')} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-600" /></button>
+        <button onClick={() => setPage('home')} className="p-2 hover:bg-gray-100 rounded-lg">
+          <X className="w-5 h-5 text-gray-600" />
+        </button>
         <h2 className="font-semibold text-gray-900">Create Post</h2>
-        <button onClick={handleSubmit} disabled={!content.trim()} className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-medium disabled:opacity-50">Share</button>
+        <button 
+          onClick={handleSubmit} 
+          disabled={!content.trim() || uploading} 
+          className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-medium disabled:opacity-50"
+        >
+          {uploading ? 'Posting...' : 'Share'}
+        </button>
       </div>
       <div className="flex-1 overflow-y-auto px-4 py-4">
         <div className="flex gap-3 mb-4">
-          <div className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0">{user?.name?.slice(0,2).toUpperCase()}</div>
-          <textarea value={content} onChange={e => setContent(e.target.value)} className="w-full bg-transparent text-gray-900 placeholder-gray-400 outline-none text-base resize-none" placeholder="What are you reading?" rows={5} autoFocus />
+          <Avatar initials={user?.name} size="md" src={user?.profileImage} />
+          <textarea 
+            value={content} 
+            onChange={e => setContent(e.target.value)} 
+            className="w-full bg-transparent text-gray-900 placeholder-gray-400 outline-none text-base resize-none" 
+            placeholder="What are you reading?" 
+            rows={5} 
+            autoFocus 
+          />
         </div>
         <div className="space-y-3 mb-4">
-          <input value={bookName} onChange={e => setBookName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="Book name (optional)" />
-          <input value={author} onChange={e => setAuthor(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="Author (optional)" />
+          <input 
+            value={bookName} 
+            onChange={e => setBookName(e.target.value)} 
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300" 
+            placeholder="Book name (optional)" 
+          />
+          <input 
+            value={author} 
+            onChange={e => setAuthor(e.target.value)} 
+            className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300" 
+            placeholder="Author (optional)" 
+          />
         </div>
         {image && (
           <div className="relative mb-4">
             <img src={image} alt="preview" className="w-full rounded-xl max-h-56 object-cover" />
-            <button onClick={() => setImage(null)} className="absolute top-2 right-2 bg-black/50 rounded-full p-1"><X className="w-4 h-4 text-white" /></button>
+            <button onClick={() => setImage(null)} className="absolute top-2 right-2 bg-black/50 rounded-full p-1">
+              <X className="w-4 h-4 text-white" />
+            </button>
           </div>
         )}
         <div className="flex flex-wrap gap-3">
-          <button onClick={() => fileRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-sm text-gray-700 hover:bg-gray-200">
+          <button 
+            onClick={() => fileRef.current?.click()} 
+            className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-sm text-gray-700 hover:bg-gray-200"
+          >
             <Camera className="w-4 h-4" />Add Photo
           </button>
-          <button onClick={() => setIsPublic(!isPublic)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm ${!isPublic ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'}`}>
-            {isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}{isPublic ? 'Public' : 'Private'}
+          <button 
+            onClick={() => setIsPublic(!isPublic)} 
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm ${
+              !isPublic ? 'bg-gray-800 text-white' : 'bg-gray-100 text-gray-700'
+            }`}
+          >
+            {isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+            {isPublic ? 'Public' : 'Private'}
           </button>
         </div>
-        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e => { const file = e.target.files[0]; if (file) { const r = new FileReader(); r.onload = ev => setImage(ev.target.result); r.readAsDataURL(file); }}} />
+        <input 
+          ref={fileRef} 
+          type="file" 
+          accept="image/*" 
+          className="hidden" 
+          onChange={e => { 
+            const file = e.target.files[0]; 
+            if (file) { 
+              if (file.size > 5 * 1024 * 1024) {
+                alert('Image size should be less than 5MB');
+                return;
+              }
+              const r = new FileReader(); 
+              r.onload = ev => setImage(ev.target.result); 
+              r.readAsDataURL(file); 
+            }
+          }} 
+        />
       </div>
     </div>
   );
 };
 
-// ─── REVIEWS PAGE ──────────────────────────────────────────────────────────
+// ========================================
+// REVIEWS PAGE
+// ========================================
 const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2830,12 +3843,12 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
   const [likedReviews, setLikedReviews] = useState([]);
   const [newReview, setNewReview] = useState({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedBook, setSelectedBook] = useState(null);
 
   useEffect(() => {
-    // ✅ Load from SERVER — all users' reviews visible
-    axios.get(`${API_URL}/api/reviews`)
+    axios.get(`${API_URL}/api/social/reviews`)
       .then(res => {
-        if (res.data.success) setReviews(res.data.reviews || res.data.data || []);
+        if (res.data.success) setReviews(res.data.reviews || []);
       })
       .catch(() => {
         const saved = JSON.parse(localStorage.getItem('reviews') || '[]');
@@ -2856,7 +3869,15 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
     setReviews(updatedReviews);
     localStorage.setItem('reviews', JSON.stringify(updatedReviews));
     if (review.userEmail !== user.email) {
-      const notif = { id: Date.now(), type: 'like', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} liked your review of "${review.bookName}"`, timestamp: new Date().toISOString(), read: false };
+      const notif = { 
+        id: Date.now(), 
+        type: 'review', 
+        fromUser: user.name, 
+        fromUserEmail: user.email, 
+        message: `${user.name} liked your review of "${review.bookName}"`, 
+        timestamp: new Date().toISOString(), 
+        read: false 
+      };
       const notifs = JSON.parse(localStorage.getItem(`user_${review.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
       localStorage.setItem(`user_${review.userEmail}_notifications`, JSON.stringify(notifs));
@@ -2866,20 +3887,21 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
   };
 
   const handleCreateReview = async () => {
-    if (!newReview.bookName || !newReview.author || !newReview.review) { alert('Please fill all fields'); return; }
+    if (!newReview.bookName || !newReview.author || !newReview.review) { 
+      alert('Please fill all fields'); 
+      return; 
+    }
     const reviewData = { ...newReview, userName: user.name, userEmail: user.email };
 
-    // ✅ Save to SERVER
     try {
-      const res = await axios.post(`${API_URL}/api/reviews`, reviewData);
-      if (res.data.success || res.data.review) {
-        const saved = res.data.review || { ...reviewData, _id: Date.now().toString(), createdAt: new Date().toISOString(), likes: 0 };
+      const res = await axios.post(`${API_URL}/api/social/reviews`, reviewData);
+      if (res.data.success) {
+        const saved = res.data.review;
         setReviews(prev => [saved, ...prev]);
       }
     } catch {
-      // fallback to localStorage
       const saved = JSON.parse(localStorage.getItem('reviews') || '[]');
-      const r = { id: Date.now().toString(), ...reviewData, createdAt: new Date().toISOString(), likes: 0 };
+      const r = { id: generateId(), ...reviewData, createdAt: new Date().toISOString(), likes: 0 };
       saved.unshift(r); 
       localStorage.setItem('reviews', JSON.stringify(saved));
       setReviews(prev => [r, ...prev]);
@@ -2899,11 +3921,27 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
+      {selectedBook && (
+        <BookDetailsModal
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          onCreateCrew={() => {}}
+        />
+      )}
+      
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
-        <button onClick={() => setPage('home')} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
+        <button onClick={() => setPage('home')} className="p-1 hover:bg-gray-100 rounded-lg">
+          <ChevronLeft className="w-5 h-5 text-gray-600" />
+        </button>
         <h2 className="font-semibold text-gray-900">Book Reviews</h2>
-        <button onClick={() => setShowCreateForm(!showCreateForm)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium">{showCreateForm ? 'Cancel' : 'Write Review'}</button>
+        <button 
+          onClick={() => setShowCreateForm(!showCreateForm)} 
+          className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
+        >
+          {showCreateForm ? 'Cancel' : 'Write Review'}
+        </button>
       </div>
+      
       <div className="px-4 py-4">
         <div className="mb-4">
           <div className="relative">
@@ -2927,28 +3965,68 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
           <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-4">
             <h3 className="font-semibold text-gray-900 mb-3">Write a Review</h3>
             <div className="space-y-3 mb-4">
-              <input type="text" value={newReview.bookName} onChange={e => setNewReview({...newReview, bookName: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book name" />
-              <input type="text" value={newReview.author} onChange={e => setNewReview({...newReview, author: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author" />
-              <div><label className="text-xs text-gray-600 mb-1 block">Rating</label><StarRating rating={newReview.rating} onChange={r => setNewReview({...newReview, rating: r})} size="md" /></div>
-              <textarea value={newReview.review} onChange={e => setNewReview({...newReview, review: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Write your review..." rows={4} />
+              <input 
+                type="text" 
+                value={newReview.bookName} 
+                onChange={e => setNewReview({...newReview, bookName: e.target.value})} 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                placeholder="Book name" 
+              />
+              <input 
+                type="text" 
+                value={newReview.author} 
+                onChange={e => setNewReview({...newReview, author: e.target.value})} 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                placeholder="Author" 
+              />
+              <div>
+                <label className="text-xs text-gray-600 mb-1 block">Rating</label>
+                <StarRating rating={newReview.rating} onChange={r => setNewReview({...newReview, rating: r})} size="md" />
+              </div>
+              <textarea 
+                value={newReview.review} 
+                onChange={e => setNewReview({...newReview, review: e.target.value})} 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" 
+                placeholder="Write your review..." 
+                rows={4} 
+              />
               <div className="flex gap-2">
                 {['positive','negative'].map(s => (
-                  <button key={s} type="button" onClick={() => setNewReview({...newReview, sentiment: s})} className={`flex-1 py-2 rounded-lg text-sm font-medium ${newReview.sentiment === s ? (s === 'positive' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-gray-100 text-gray-600'}`}>
+                  <button 
+                    key={s} 
+                    type="button" 
+                    onClick={() => setNewReview({...newReview, sentiment: s})} 
+                    className={`flex-1 py-2 rounded-lg text-sm font-medium ${
+                      newReview.sentiment === s 
+                        ? (s === 'positive' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}
+                  >
                     {s === 'positive' ? '👍 Positive' : '👎 Negative'}
                   </button>
                 ))}
               </div>
             </div>
-            <button onClick={handleCreateReview} className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium">Submit Review</button>
+            <button 
+              onClick={handleCreateReview} 
+              className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium"
+            >
+              Submit Review
+            </button>
           </div>
         )}
-        {loading ? <div className="flex justify-center py-8"><LoadingSpinner /></div> : filteredReviews.length === 0 ? (
+        
+        {loading ? (
+          <div className="flex justify-center py-8"><LoadingSpinner /></div>
+        ) : filteredReviews.length === 0 ? (
           <div className="text-center py-12">
             {searchQuery ? (
               <>
                 <Search className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No reviews found for "{searchQuery}"</p>
-                <button onClick={() => setSearchQuery('')} className="mt-3 text-orange-500 text-sm font-medium">Clear search</button>
+                <button onClick={() => setSearchQuery('')} className="mt-3 text-orange-500 text-sm font-medium">
+                  Clear search
+                </button>
               </>
             ) : (
               <>
@@ -2964,11 +4042,18 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
               return (
                 <div key={idx} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                   <div className="flex items-start gap-3 mb-2">
-                    <DynamicBookCover title={review.bookName} author={review.author} size="sm" />
+                    <DynamicBookCover 
+                      title={review.bookName} 
+                      author={review.author} 
+                      size="sm" 
+                      onClick={() => setSelectedBook({ title: review.bookName, author: review.author })}
+                    />
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900 text-sm">{review.bookName}</h3>
                       <p className="text-xs text-gray-500">by {review.author}</p>
-                      <div className="flex items-center gap-1 mt-1"><StarRating rating={review.rating} size="xs" /></div>
+                      <div className="flex items-center gap-1 mt-1">
+                        <StarRating rating={review.rating} size="xs" />
+                      </div>
                     </div>
                   </div>
                   <p className="text-sm text-gray-700 mb-3">{review.review}</p>
@@ -2977,16 +4062,25 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
                       onClick={() => onViewUserProfile(review.userEmail, review.userName)}
                       className="flex items-center gap-2 hover:opacity-75 transition"
                     >
-                      <div className="w-6 h-6 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold">
-                        {review.userName?.slice(0,2)||'U'}
-                      </div>
+                      <Avatar initials={review.userName} size="xs" />
                       <span className="text-xs text-gray-600 hover:underline">{review.userName}</span>
                     </button>
                     <div className="flex items-center gap-3">
-                      <button onClick={() => handleLikeReview(review.id, review)} disabled={isLiked} className={`flex items-center gap-1 text-xs ${isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}>
-                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500' : ''}`} />{review.likes||0}
+                      <button 
+                        onClick={() => handleLikeReview(review.id, review)} 
+                        disabled={isLiked} 
+                        className={`flex items-center gap-1 text-xs ${
+                          isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'
+                        }`}
+                      >
+                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500' : ''}`} />
+                        {review.likes||0}
                       </button>
-                      <span className={`text-xs px-2 py-1 rounded-full ${review.sentiment === 'positive' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{review.sentiment === 'positive' ? '👍' : '👎'}</span>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        review.sentiment === 'positive' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}>
+                        {review.sentiment === 'positive' ? '👍' : '👎'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -2999,7 +4093,9 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
   );
 };
 
-// ─── CREWS PAGE ─────────────────────────────────────────────────────────────
+// ========================================
+// CREWS PAGE
+// ========================================
 const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount, onViewUserProfile }) => {
   const [view, setView] = useState('list');
   const [selectedCrew, setSelectedCrew] = useState(null);
@@ -3015,6 +4111,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const [searchQuery, setSearchQuery] = useState('');
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
+  const [selectedBook, setSelectedBook] = useState(null);
 
   const crewExists = (bookName, author) => {
     return crews.some(crew => 
@@ -3036,7 +4133,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       setMessages(msgs.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
       const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
       
-      // Get online users from presence system
       const crewOnlineKeys = [];
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
@@ -3054,7 +4150,16 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         online: onlineUserIds.has(u.id)
       }));
 
-      if (!members.find(m => m.email === selectedCrew.createdBy)) members.push({ id: selectedCrew.createdBy, name: selectedCrew.createdByName||'Creator', email: selectedCrew.createdBy, initials: (selectedCrew.createdByName||'CR').slice(0,2), online: onlineUserIds.has(selectedCrew.createdBy), isCreator: true });
+      if (!members.find(m => m.email === selectedCrew.createdBy)) {
+        members.push({ 
+          id: selectedCrew.createdBy, 
+          name: selectedCrew.createdByName||'Creator', 
+          email: selectedCrew.createdBy, 
+          initials: (selectedCrew.createdByName||'CR').slice(0,2), 
+          online: onlineUserIds.has(selectedCrew.createdBy), 
+          isCreator: true 
+        });
+      }
       setCrewMembers(members);
     }
   }, [selectedCrew]);
@@ -3064,25 +4169,28 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const isJoined = (crewId) => joinedCrews.includes(crewId);
 
   const joinCrew = async (crew) => {
-    // ✅ Tell server this user joined
-    axios.post(`${API_URL}/api/crews/${crew.id}/join`, { 
-      userEmail: user.email, 
-      action: 'join' 
+    axios.post(`${API_URL}/api/social/crews/${crew.id}/join`, { 
+      userEmail: user.email
     }).catch(() => {});
     
     const updated = [...joinedCrews, crew.id];
     setJoinedCrews(updated);
     localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updated));
+    
     const updatedCrews = crews.map(c => c.id === crew.id ? { ...c, members: (c.members||1)+1 } : c);
     setCrews(updatedCrews);
     localStorage.setItem('crews', JSON.stringify(updatedCrews));
+    
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     localStorage.setItem('users', JSON.stringify(users.map(u => u.email === user.email ? { ...u, joinedCrews: updated } : u)));
+    
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     stats.crewsJoined = (stats.crewsJoined||0) + 1;
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
+    
     const cu = JSON.parse(localStorage.getItem('currentUser') || '{}');
     localStorage.setItem('currentUser', JSON.stringify({ ...cu, joinedCrews: updated, stats }));
+    
     setShowJoinMsg(`🎉 Joined "${crew.name}"!`);
     setTimeout(() => setShowJoinMsg(''), 3000);
   };
@@ -3099,14 +4207,26 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   };
 
   const createCrew = async () => {
-    if (!newCrewData.name || !newCrewData.author) { alert('Please fill book name and author'); return; }
+    if (!newCrewData.name || !newCrewData.author) { 
+      alert('Please fill book name and author'); 
+      return; 
+    }
     
     if (crewExists(newCrewData.name, newCrewData.author)) {
       alert('A crew for this book by this author already exists! Each book can have only one crew.');
       return;
     }
 
-    const newCrew = { id: Date.now(), ...newCrewData, members: 1, chats: 0, createdBy: user.email, createdByName: user.name, createdAt: new Date().toISOString() };
+    const newCrew = { 
+      id: Date.now(), 
+      ...newCrewData, 
+      members: 1, 
+      chats: 0, 
+      createdBy: user.email, 
+      createdByName: user.name, 
+      createdAt: new Date().toISOString() 
+    };
+    
     const updatedCrews = [newCrew, ...crews];
     setCrews(updatedCrews);
     localStorage.setItem('crews', JSON.stringify(updatedCrews));
@@ -3124,26 +4244,24 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       userEmail: user.email,
       userInitials: user.name?.slice(0,2).toUpperCase(),
       content: newMessage.trim(), 
-      type: 'text'
+      type: 'text',
+      timestamp: new Date().toISOString()
     };
     setNewMessage('');
 
-    // ✅ Send to SERVER — all crew members see it
     try {
-      const res = await axios.post(`${API_URL}/api/crews/${selectedCrew.id}/messages`, msg);
+      const res = await axios.post(`${API_URL}/api/social/crews/${selectedCrew.id}/messages`, msg);
       if (res.data.success) {
         setMessages(prev => [...prev, { ...res.data.message, timestamp: new Date(res.data.message.timestamp) }]);
       }
     } catch {
-      // fallback to localStorage
-      const localMsg = { id: `msg_${Date.now()}`, ...msg, timestamp: new Date().toISOString() };
+      const localMsg = { id: `msg_${Date.now()}`, ...msg };
       const existing = JSON.parse(localStorage.getItem(`crew_${selectedCrew.id}_messages`) || '[]');
       existing.push(localMsg);
       localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existing));
       setMessages(prev => [...prev, { ...localMsg, timestamp: new Date() }]);
     }
 
-    // Send notifications to all other crew members
     const otherMembers = crewMembers.filter(member => member.email !== user.email);
     otherMembers.forEach(member => {
       const notif = {
@@ -3162,7 +4280,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       localStorage.setItem(`user_${member.email}_notifications`, JSON.stringify(memberNotifs));
     });
     
-    // Trigger storage event for other tabs
     window.dispatchEvent(new StorageEvent('storage', { key: `user_${user.email}_notifications` }));
     updateNotificationCount?.();
   };
@@ -3170,10 +4287,16 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const sendImage = (e) => {
     const file = e.target.files[0];
     if (!file || !selectedCrew || !isJoined(selectedCrew.id)) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size should be less than 5MB');
+      return;
+    }
+    
     const reader = new FileReader();
     reader.onload = (ev) => {
       const msg = { 
-        id: Date.now(), 
+        id: `msg_${Date.now()}`, 
         userId: user.id, 
         userName: user.name, 
         userEmail: user.email,
@@ -3187,7 +4310,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existing));
       setMessages(prev => [...prev, { ...msg, timestamp: new Date(msg.timestamp) }]);
       
-      // Send notifications for image messages too
       const otherMembers = crewMembers.filter(member => member.email !== user.email);
       otherMembers.forEach(member => {
         const notif = {
@@ -3215,14 +4337,19 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const formatTime = (ts) => {
     const diff = Date.now() - new Date(ts);
     const mins = Math.floor(diff/60000), hrs = Math.floor(diff/3600000), days = Math.floor(diff/86400000);
-    if (mins < 1) return 'Just now'; if (mins < 60) return `${mins}m`; if (hrs < 24) return `${hrs}h`; if (days < 7) return `${days}d`; return new Date(ts).toLocaleDateString();
+    if (mins < 1) return 'Just now'; 
+    if (mins < 60) return `${mins}m`; 
+    if (hrs < 24) return `${hrs}h`; 
+    if (days < 7) return `${days}d`; 
+    return new Date(ts).toLocaleDateString();
   };
 
   const Toast = () => showJoinMsg ? (
-    <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] text-center">{showJoinMsg}</div>
+    <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] text-center">
+      {showJoinMsg}
+    </div>
   ) : null;
 
-  // Filter crews based on search query
   const filteredCrews = crews.filter(crew => 
     crew.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     crew.author.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -3235,7 +4362,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     const { onlineUsers, onlineCount } = useCrewPresence(selectedCrew.id, user.id, user.name);
     const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(selectedCrew.id, user.id, user.name);
     
-    // ✅ Join socket room for real-time messages
     useEffect(() => {
       if (!selectedCrew) return;
       
@@ -3252,7 +4378,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       };
     }, [selectedCrew]);
     
-    // Mark messages as read when chat is open
     React.useEffect(() => { markCrewMessagesRead(selectedCrew.id, user.id); }, [messages.length]);
     
     const groupsByDate = messages.reduce((acc, msg) => {
@@ -3267,8 +4392,15 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         <Toast />
         <div className="flex-shrink-0 bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm">
           <div className="flex items-center gap-3">
-            <button onClick={() => { setView('detail'); }} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
-            <DynamicBookCover title={selectedCrew.name} author={selectedCrew.author} size="xs" />
+            <button onClick={() => { setView('detail'); }} className="p-1 hover:bg-gray-100 rounded-full">
+              <ChevronLeft className="w-5 h-5 text-gray-600" />
+            </button>
+            <DynamicBookCover 
+              title={selectedCrew.name} 
+              author={selectedCrew.author} 
+              size="xs" 
+              onClick={() => setSelectedBook({ title: selectedCrew.name, author: selectedCrew.author })}
+            />
             
             <div>
               <p className="font-semibold text-gray-900 text-sm">{selectedCrew.name}</p>
@@ -3283,7 +4415,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
               </div>
             </div>
           </div>
-          <button className="p-2 hover:bg-gray-100 rounded-full"><MoreHorizontal className="w-5 h-5 text-gray-600" /></button>
+          <button className="p-2 hover:bg-gray-100 rounded-full">
+            <MoreHorizontal className="w-5 h-5 text-gray-600" />
+          </button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
@@ -3291,26 +4425,47 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
             <div className="flex flex-col items-center justify-center h-full text-center">
               <Lock className="w-16 h-16 text-gray-300 mb-4" />
               <p className="text-gray-600 font-medium mb-2">Join to see messages</p>
-              <button onClick={() => joinCrew(selectedCrew)} className="px-6 py-3 bg-orange-500 text-white rounded-xl font-medium">Join Crew</button>
+              <button 
+                onClick={() => joinCrew(selectedCrew)} 
+                className="px-6 py-3 bg-orange-500 text-white rounded-xl font-medium"
+              >
+                Join Crew
+              </button>
             </div>
           ) : (
             <>
               {Object.entries(groupsByDate).map(([date, msgs]) => (
                 <div key={date}>
-                  <div className="flex justify-center my-4"><span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full">{new Date(date).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })}</span></div>
+                  <div className="flex justify-center my-4">
+                    <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full">
+                      {new Date(date).toLocaleDateString(undefined, { weekday:'short', month:'short', day:'numeric' })}
+                    </span>
+                  </div>
                   {msgs.map((msg) => {
                     const isOwn = msg.userId === user.id;
                     return (
                       <div key={msg.id} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
                         <div className={`flex max-w-[78%] items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
                           {!isOwn && (
-                            <button onClick={() => onViewUserProfile(msg.userEmail, msg.userName)} className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:opacity-80 transition">
+                            <button 
+                              onClick={() => onViewUserProfile(msg.userEmail, msg.userName)} 
+                              className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:opacity-80 transition"
+                            >
                               {msg.userInitials}
                             </button>
                           )}
                           <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#dcf8c6] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
                             {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
-                            {msg.type === 'image' ? <img src={msg.content} alt="Shared" className="max-w-full rounded-xl max-h-60" /> : <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>}
+                            {msg.type === 'image' ? (
+                              <img 
+                                src={msg.content} 
+                                alt="Shared" 
+                                className="max-w-full rounded-xl max-h-60 cursor-pointer"
+                                onClick={() => window.open(msg.content, '_blank')}
+                              />
+                            ) : (
+                              <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>
+                            )}
                             
                             <p className="text-[10px] text-gray-400 text-right mt-0.5">
                               {formatTime(msg.timestamp)}
@@ -3358,8 +4513,19 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
               </div>
             )}
             <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow border border-gray-100">
-              <button onClick={() => fileInputRef.current?.click()} className="w-8 h-8 flex items-center justify-center flex-shrink-0"><Plus className="w-5 h-5 text-orange-500" /></button>
-              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={sendImage} />
+              <button 
+                onClick={() => fileInputRef.current?.click()} 
+                className="w-8 h-8 flex items-center justify-center flex-shrink-0"
+              >
+                <Plus className="w-5 h-5 text-orange-500" />
+              </button>
+              <input 
+                type="file" 
+                ref={fileInputRef} 
+                className="hidden" 
+                accept="image/*" 
+                onChange={sendImage} 
+              />
               <input
                 type="text"
                 value={newMessage}
@@ -3378,11 +4544,39 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                 className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
                 placeholder="Type a message..."
               />
-              <button onClick={() => { stopTyping(); sendMessage(); }} disabled={!newMessage.trim()} className={`w-8 h-8 flex items-center justify-center rounded-full transition ${newMessage.trim() ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}>
+              <button 
+                onClick={() => { stopTyping(); sendMessage(); }} 
+                disabled={!newMessage.trim()} 
+                className={`w-8 h-8 flex items-center justify-center rounded-full transition ${
+                  newMessage.trim() ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'
+                }`}
+              >
                 <Send className="w-4 h-4" />
               </button>
             </div>
           </div>
+        )}
+        {selectedBook && (
+          <BookDetailsModal
+            book={selectedBook}
+            onClose={() => setSelectedBook(null)}
+            onCreateCrew={(book) => {
+              const newCrew = {
+                id: Date.now(),
+                name: book.title,
+                author: book.author,
+                genre: book.genre || 'General',
+                members: 1,
+                chats: 0,
+                createdBy: user.email,
+                createdByName: user.name,
+                createdAt: new Date().toISOString()
+              };
+              const updatedCrews = [newCrew, ...crews];
+              localStorage.setItem('crews', JSON.stringify(updatedCrews));
+              setSelectedBook(null);
+            }}
+          />
         )}
       </div>
     );
@@ -3394,50 +4588,126 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       <div className="h-screen flex flex-col bg-white overflow-hidden" style={{ maxWidth: '448px', margin: '0 auto' }}>
         <Toast />
         <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center gap-3 z-10 flex-shrink-0">
-          <button onClick={() => { setView('list'); }} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5" /></button>
+          <button onClick={() => { setView('list'); }} className="p-1 hover:bg-gray-100 rounded-lg">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
           <span className="font-semibold flex-1">Crew Info</span>
         </div>
         <div className="flex-1 overflow-y-auto">
           <div className="bg-gradient-to-b from-orange-50 to-white px-4 pt-6 pb-4">
             <div className="flex flex-col items-center text-center">
-              <DynamicBookCover title={selectedCrew.name} author={selectedCrew.author} size="xl" className="mb-4" />
+              <DynamicBookCover 
+                title={selectedCrew.name} 
+                author={selectedCrew.author} 
+                size="xl" 
+                className="mb-4 cursor-pointer"
+                onClick={() => setSelectedBook({ title: selectedCrew.name, author: selectedCrew.author })}
+              />
               <h1 className="text-2xl font-bold text-gray-900">{selectedCrew.name}</h1>
               <p className="text-gray-500">by {selectedCrew.author}</p>
-              {selectedCrew.genre && <span className="mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">{selectedCrew.genre}</span>}
+              {selectedCrew.genre && (
+                <span className="mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">
+                  {selectedCrew.genre}
+                </span>
+              )}
               <div className="flex gap-8 mt-4">
-                <div className="text-center"><p className="text-xl font-bold">{crewMembers.length}</p><p className="text-xs text-gray-500">Members</p></div>
-                <div className="text-center"><p className="text-xl font-bold">{messages.length}</p><p className="text-xs text-gray-500">Messages</p></div>
+                <div className="text-center">
+                  <p className="text-xl font-bold">{crewMembers.length}</p>
+                  <p className="text-xs text-gray-500">Members</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xl font-bold">{messages.length}</p>
+                  <p className="text-xs text-gray-500">Messages</p>
+                </div>
               </div>
               <div className="flex gap-3 mt-5 w-full">
                 {!hasJoined ? (
-                  <button onClick={() => joinCrew(selectedCrew)} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold">Join Crew</button>
+                  <button 
+                    onClick={() => joinCrew(selectedCrew)} 
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold"
+                  >
+                    Join Crew
+                  </button>
                 ) : (
-                  <button onClick={() => { setView('chat'); }} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold">Go to Chat</button>
+                  <button 
+                    onClick={() => { setView('chat'); }} 
+                    className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold"
+                  >
+                    Go to Chat
+                  </button>
                 )}
-                <button onClick={() => { const e = prompt("Friend's email to invite:"); if (e) { const n = { id: Date.now(), type: 'invite', fromUser: user.name, message: `${user.name} invited you to join "${selectedCrew.name}"!`, timestamp: new Date().toISOString(), read: false }; const ns = JSON.parse(localStorage.getItem(`user_${e}_notifications`) || '[]'); ns.unshift(n); localStorage.setItem(`user_${e}_notifications`, JSON.stringify(ns)); alert(`Invited ${e}!`); }}} className="px-4 py-3 border border-gray-200 rounded-xl"><UserPlus className="w-5 h-5" /></button>
+                <button 
+                  onClick={() => { 
+                    const e = prompt("Friend's email to invite:"); 
+                    if (e && isValidEmail(e)) { 
+                      const n = { 
+                        id: Date.now(), 
+                        type: 'invite', 
+                        fromUser: user.name, 
+                        message: `${user.name} invited you to join "${selectedCrew.name}"!`, 
+                        timestamp: new Date().toISOString(), 
+                        read: false 
+                      }; 
+                      const ns = JSON.parse(localStorage.getItem(`user_${e}_notifications`) || '[]'); 
+                      ns.unshift(n); 
+                      localStorage.setItem(`user_${e}_notifications`, JSON.stringify(ns)); 
+                      alert(`Invited ${e}!`); 
+                    } else if (e) {
+                      alert('Please enter a valid email');
+                    }
+                  }} 
+                  className="px-4 py-3 border border-gray-200 rounded-xl"
+                >
+                  <UserPlus className="w-5 h-5" />
+                </button>
               </div>
             </div>
           </div>
           <div className="flex border-b border-gray-200 px-4">
             {['Chat','Members','About'].map(tab => (
-              <button key={tab} onClick={() => setSelectedTab(tab.toLowerCase())} className={`flex-1 py-3 text-sm font-medium border-b-2 ${selectedTab === tab.toLowerCase() ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'}`}>{tab}</button>
+              <button 
+                key={tab} 
+                onClick={() => setSelectedTab(tab.toLowerCase())} 
+                className={`flex-1 py-3 text-sm font-medium border-b-2 ${
+                  selectedTab === tab.toLowerCase() ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'
+                }`}
+              >
+                {tab}
+              </button>
             ))}
           </div>
           <div className="p-4 pb-24">
             {selectedTab === 'chat' && (
               hasJoined ? (
                 <div className="space-y-3">
-                  <button onClick={() => { setView('chat'); }} className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2">
+                  <button 
+                    onClick={() => { setView('chat'); }} 
+                    className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2"
+                  >
                     <MessageCircle className="w-5 h-5" />Open Chat
                   </button>
                   {messages.slice(-3).reverse().map(msg => (
                     <div key={msg.id} className="flex items-start gap-3 py-2">
-                      <div className="w-8 h-8 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0">{msg.userInitials}</div>
-                      <div className="flex-1 min-w-0"><span className="font-semibold text-sm">{msg.userName}</span><p className="text-sm text-gray-600 truncate">{msg.type === 'image' ? '📷 Image' : msg.content}</p></div>
+                      <Avatar 
+                        initials={msg.userName} 
+                        size="sm" 
+                        src={msg.userPhoto}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <span className="font-semibold text-sm">{msg.userName}</span>
+                        <p className="text-sm text-gray-600 truncate">
+                          {msg.type === 'image' ? '📷 Image' : msg.content}
+                        </p>
+                      </div>
                     </div>
                   ))}
                 </div>
-              ) : <div className="text-center py-8"><Lock className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">Join to see messages</p></div>
+              ) : (
+                <div className="text-center py-8">
+                  <Lock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
+                  <p className="text-gray-500">Join to see messages</p>
+                </div>
+              )
             )}
             {selectedTab === 'members' && (
               <div className="space-y-4">
@@ -3445,12 +4715,26 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   <div key={member.id} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="relative">
-                        <button onClick={() => onViewUserProfile(member.email, member.name)} className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 hover:opacity-80 transition">{member.initials}</button>
-                        {member.online && <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />}
+                        <button 
+                          onClick={() => onViewUserProfile(member.email, member.name)} 
+                          className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 hover:opacity-80 transition"
+                        >
+                          {member.initials}
+                        </button>
+                        {member.online && (
+                          <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
+                        )}
                       </div>
                       <div className="flex-1 min-w-0">
-                        <button onClick={() => onViewUserProfile(member.email, member.name)} className="font-semibold hover:underline">{member.name}</button>
-                        <p className="text-xs text-gray-500">{member.isCreator ? '👑 Creator' : member.online ? 'Online' : 'Offline'}</p>
+                        <button 
+                          onClick={() => onViewUserProfile(member.email, member.name)} 
+                          className="font-semibold hover:underline"
+                        >
+                          {member.name}
+                        </button>
+                        <p className="text-xs text-gray-500">
+                          {member.isCreator ? '👑 Creator' : member.online ? 'Online' : 'Offline'}
+                        </p>
                       </div>
                     </div>
                   </div>
@@ -3461,18 +4745,60 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
               <div className="space-y-4">
                 <div className="bg-gray-50 rounded-xl p-4">
                   <h3 className="font-semibold mb-2">About this Crew</h3>
-                  <p className="text-sm text-gray-600">A crew for readers of "{selectedCrew.name}" by {selectedCrew.author}. Share thoughts, discuss themes, and connect!</p>
+                  <p className="text-sm text-gray-600">
+                    A crew for readers of "{selectedCrew.name}" by {selectedCrew.author}. Share thoughts, discuss themes, and connect!
+                  </p>
                 </div>
                 <div className="bg-gray-50 rounded-xl p-4 space-y-2 text-sm">
-                  <div className="flex justify-between"><span className="text-gray-500">Created</span><span>{new Date(selectedCrew.createdAt).toLocaleDateString()}</span></div>
-                  <div className="flex justify-between"><span className="text-gray-500">By</span><span>{selectedCrew.createdByName||'Creator'}</span></div>
-                  {selectedCrew.genre && <div className="flex justify-between"><span className="text-gray-500">Genre</span><span>{selectedCrew.genre}</span></div>}
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">Created</span>
+                    <span>{new Date(selectedCrew.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-500">By</span>
+                    <span>{selectedCrew.createdByName||'Creator'}</span>
+                  </div>
+                  {selectedCrew.genre && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-500">Genre</span>
+                      <span>{selectedCrew.genre}</span>
+                    </div>
+                  )}
                 </div>
-                {hasJoined && <button onClick={() => leaveCrew(selectedCrew)} className="w-full py-3 border border-red-200 text-red-500 rounded-xl font-medium">Leave Crew</button>}
+                {hasJoined && (
+                  <button 
+                    onClick={() => leaveCrew(selectedCrew)} 
+                    className="w-full py-3 border border-red-200 text-red-500 rounded-xl font-medium"
+                  >
+                    Leave Crew
+                  </button>
+                )}
               </div>
             )}
           </div>
         </div>
+        {selectedBook && (
+          <BookDetailsModal
+            book={selectedBook}
+            onClose={() => setSelectedBook(null)}
+            onCreateCrew={(book) => {
+              const newCrew = {
+                id: Date.now(),
+                name: book.title,
+                author: book.author,
+                genre: book.genre || 'General',
+                members: 1,
+                chats: 0,
+                createdBy: user.email,
+                createdByName: user.name,
+                createdAt: new Date().toISOString()
+              };
+              const updatedCrews = [newCrew, ...crews];
+              localStorage.setItem('crews', JSON.stringify(updatedCrews));
+              setSelectedBook(null);
+            }}
+          />
+        )}
       </div>
     );
   }
@@ -3482,14 +4808,20 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       <Toast />
       <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-md flex items-center justify-center"><BookOpen className="w-3.5 h-3.5 text-white" /></div>
+          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-md flex items-center justify-center">
+            <BookOpen className="w-3.5 h-3.5 text-white" />
+          </div>
           <span className="font-bold" style={{fontFamily:'Georgia,serif'}}>Reading Crews</span>
         </div>
-        <button onClick={() => setShowCreateCrewForm(true)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium">Create Crew</button>
+        <button 
+          onClick={() => setShowCreateCrewForm(true)} 
+          className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
+        >
+          Create Crew
+        </button>
       </div>
       
       <div className="px-4 py-4">
-        {/* Search Bar */}
         <div className="mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
@@ -3513,45 +4845,94 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
             <h3 className="font-semibold mb-3">Create New Crew</h3>
             {newCrewData.name && (
               <div className="flex justify-center mb-4">
-                <DynamicBookCover title={newCrewData.name} author={newCrewData.author} size="lg" />
+                <DynamicBookCover 
+                  title={newCrewData.name} 
+                  author={newCrewData.author} 
+                  size="lg" 
+                />
               </div>
             )}
             <div className="space-y-3">
-              <input value={newCrewData.name} onChange={e => setNewCrewData({...newCrewData, name: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title" />
-              <input value={newCrewData.author} onChange={e => setNewCrewData({...newCrewData, author: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author" />
-              <input value={newCrewData.genre} onChange={e => setNewCrewData({...newCrewData, genre: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Genre (e.g. Fiction, Self-Help)" />
+              <input 
+                value={newCrewData.name} 
+                onChange={e => setNewCrewData({...newCrewData, name: e.target.value})} 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                placeholder="Book title" 
+              />
+              <input 
+                value={newCrewData.author} 
+                onChange={e => setNewCrewData({...newCrewData, author: e.target.value})} 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                placeholder="Author" 
+              />
+              <input 
+                value={newCrewData.genre} 
+                onChange={e => setNewCrewData({...newCrewData, genre: e.target.value})} 
+                className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                placeholder="Genre (e.g. Fiction, Self-Help)" 
+              />
               <div className="flex gap-2">
-                <button onClick={createCrew} className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">Create</button>
-                <button onClick={() => setShowCreateCrewForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm">Cancel</button>
+                <button 
+                  onClick={createCrew} 
+                  className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+                >
+                  Create
+                </button>
+                <button 
+                  onClick={() => setShowCreateCrewForm(false)} 
+                  className="px-4 py-2 border border-gray-200 rounded-lg text-sm"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
           </div>
         )}
 
         <div className="mb-6">
-          <h2 className="text-lg font-bold mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />My Crews</h2>
+          <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+            <Users className="w-5 h-5 text-orange-500" />My Crews
+          </h2>
           {filteredCrews.filter(c => isJoined(c.id)).length === 0 ? (
             <div className="bg-white rounded-xl p-6 text-center border border-gray-200">
               <p className="text-gray-500 text-sm">No crews joined yet. Explore below!</p>
             </div>
-          ) : filteredCrews.filter(c => isJoined(c.id)).map(crew => (
-            <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-green-200 shadow-sm cursor-pointer mb-3" onClick={() => { setSelectedCrew(crew); setView('detail'); }}>
-              <div className="flex items-center px-4 gap-4 py-3">
-                <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2"><p className="font-bold text-gray-900 truncate">{crew.name}</p><span className="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full flex-shrink-0">Joined</span></div>
-                  <p className="text-xs text-gray-500">by {crew.author}</p>
-                  <div className="flex items-center gap-3 mt-1">
-                    {crew.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{crew.genre}</span>}
-                    <span className="text-xs text-gray-400">{crew.members||1} members</span>
+          ) : (
+            filteredCrews.filter(c => isJoined(c.id)).map(crew => (
+              <div 
+                key={crew.id} 
+                className="bg-white rounded-xl overflow-hidden border border-green-200 shadow-sm cursor-pointer mb-3" 
+                onClick={() => { setSelectedCrew(crew); setView('detail'); }}
+              >
+                <div className="flex items-center px-4 gap-4 py-3">
+                  <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-gray-900 truncate">{crew.name}</p>
+                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full flex-shrink-0">Joined</span>
+                    </div>
+                    <p className="text-xs text-gray-500">by {crew.author}</p>
+                    <div className="flex items-center gap-3 mt-1">
+                      {crew.genre && (
+                        <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
+                          {crew.genre}
+                        </span>
+                      )}
+                      <span className="text-xs text-gray-400">{crew.members||1} members</span>
+                    </div>
                   </div>
                 </div>
+                <div className="px-4 py-2 flex justify-end gap-2 border-t border-gray-100">
+                  <button 
+                    onClick={e => { e.stopPropagation(); setSelectedCrew(crew); setView('chat'); }} 
+                    className="px-3 py-1 bg-orange-100 text-orange-600 rounded-lg text-xs font-medium"
+                  >
+                    Chat
+                  </button>
+                </div>
               </div>
-              <div className="px-4 py-2 flex justify-end gap-2 border-t border-gray-100">
-                <button onClick={e => { e.stopPropagation(); setSelectedCrew(crew); setView('chat'); }} className="px-3 py-1 bg-orange-100 text-orange-600 rounded-lg text-xs font-medium">Chat</button>
-              </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         <div>
@@ -3561,32 +4942,71 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
               <div className="bg-white rounded-xl p-6 text-center border border-gray-200">
                 <p className="text-gray-500 text-sm">No crews match your search</p>
               </div>
-            ) : filteredCrews.filter(c => !isJoined(c.id)).map(crew => (
-              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer" onClick={() => { setSelectedCrew(crew); setView('detail'); }}>
-                <div className="flex items-center px-4 gap-4 py-3">
-                  <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 truncate">{crew.name}</p>
-                    <p className="text-xs text-gray-500">by {crew.author}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      {crew.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{crew.genre}</span>}
-                      <span className="text-xs text-gray-400">{crew.members||1} members</span>
+            ) : (
+              filteredCrews.filter(c => !isJoined(c.id)).map(crew => (
+                <div 
+                  key={crew.id} 
+                  className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer" 
+                  onClick={() => { setSelectedCrew(crew); setView('detail'); }}
+                >
+                  <div className="flex items-center px-4 gap-4 py-3">
+                    <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
+                    <div className="flex-1 min-w-0">
+                      <p className="font-bold text-gray-900 truncate">{crew.name}</p>
+                      <p className="text-xs text-gray-500">by {crew.author}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        {crew.genre && (
+                          <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">
+                            {crew.genre}
+                          </span>
+                        )}
+                        <span className="text-xs text-gray-400">{crew.members||1} members</span>
+                      </div>
                     </div>
                   </div>
+                  <div className="px-4 py-3 flex justify-end border-t border-gray-100">
+                    <button 
+                      onClick={e => { e.stopPropagation(); joinCrew(crew); }} 
+                      className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold"
+                    >
+                      Join
+                    </button>
+                  </div>
                 </div>
-                <div className="px-4 py-3 flex justify-end border-t border-gray-100">
-                  <button onClick={e => { e.stopPropagation(); joinCrew(crew); }} className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold">Join</button>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
+      {selectedBook && (
+        <BookDetailsModal
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          onCreateCrew={(book) => {
+            const newCrew = {
+              id: Date.now(),
+              name: book.title,
+              author: book.author,
+              genre: book.genre || 'General',
+              members: 1,
+              chats: 0,
+              createdBy: user.email,
+              createdByName: user.name,
+              createdAt: new Date().toISOString()
+            };
+            const updatedCrews = [newCrew, ...crews];
+            localStorage.setItem('crews', JSON.stringify(updatedCrews));
+            setSelectedBook(null);
+          }}
+        />
+      )}
     </div>
   );
 };
 
-// ─── PROFILE PAGE ────────────────────────────────────────────────────────
+// ========================================
+// PROFILE PAGE
+// ========================================
 const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc, setProfileSrc, savedPosts, following, followers, onFollow }) => {
   const [activeTab, setActiveTab] = useState('Posts');
   const [userStats, setUserStats] = useState(user?.stats || { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
@@ -3599,6 +5019,10 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
   const [editingProfile, setEditingProfile] = useState(false);
   const [editName, setEditName] = useState(user?.name || '');
   const [editBio, setEditBio] = useState(user?.bio || '');
+  const [editLocation, setEditLocation] = useState(user?.location || '');
+  const [editWebsite, setEditWebsite] = useState(user?.website || '');
+  const [showFollowers, setShowFollowers] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
   const fileRef = useRef();
 
   const myPosts = posts.filter(p => p.userEmail === user?.email);
@@ -3610,13 +5034,19 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
     if (savedStats) setUserStats(JSON.parse(savedStats));
     const savedImg = localStorage.getItem(`user_${user.email}_profile_image`);
     if (savedImg) setProfileSrc(savedImg);
-    const savedBooks = JSON.parse(localStorage.getItem(`user_${user.email}_booksRead`) || '[]');
+    const savedBooks = JSON.parse(localStorage.getItem(`user_${user.email}_readingList`) || '[]');
     setMyBooks(savedBooks);
   }, [user.email]);
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Image size should be less than 5MB');
+      return;
+    }
+    
     const reader = new FileReader();
     reader.onload = (ev) => {
       const imgData = ev.target.result;
@@ -3640,7 +5070,7 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
   };
 
   const handleSaveProfile = () => {
-    const updatedUser = { ...user, name: editName, bio: editBio };
+    const updatedUser = { ...user, name: editName, bio: editBio, location: editLocation, website: editWebsite };
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     localStorage.setItem('users', JSON.stringify(users.map(u => u.email === user.email ? updatedUser : u)));
@@ -3649,11 +5079,14 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
   };
 
   const handleAddBook = () => {
-    if (!newBook.title) { alert('Enter book title'); return; }
-    const book = { id: Date.now(), ...newBook, addedAt: new Date().toISOString() };
+    if (!newBook.title) { 
+      alert('Enter book title'); 
+      return; 
+    }
+    const book = { id: generateId(), ...newBook, addedAt: new Date().toISOString() };
     const updated = [book, ...myBooks];
     setMyBooks(updated);
-    localStorage.setItem(`user_${user.email}_booksRead`, JSON.stringify(updated));
+    localStorage.setItem(`user_${user.email}_readingList`, JSON.stringify(updated));
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     stats.booksRead = updated.length;
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
@@ -3667,31 +5100,111 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
   const handleDeleteBook = (bookId) => {
     const updated = myBooks.filter(b => b.id !== bookId);
     setMyBooks(updated);
-    localStorage.setItem(`user_${user.email}_booksRead`, JSON.stringify(updated));
+    localStorage.setItem(`user_${user.email}_readingList`, JSON.stringify(updated));
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     stats.booksRead = updated.length;
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
     setUserStats(prev => ({ ...prev, booksRead: updated.length }));
   };
 
+  const FollowerModal = ({ title, users, onClose, onUserClick }) => (
+    <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+          <h3 className="font-bold">{title}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="p-4">
+          {users.length === 0 ? (
+            <p className="text-center text-gray-500 py-4">No users to show</p>
+          ) : (
+            <div className="space-y-3">
+              {users.map(email => {
+                const usersList = JSON.parse(localStorage.getItem('users') || '[]');
+                const userData = usersList.find(u => u.email === email);
+                return (
+                  <button
+                    key={email}
+                    onClick={() => {
+                      onClose();
+                      onUserClick(email, userData?.name || email);
+                    }}
+                    className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition"
+                  >
+                    <Avatar 
+                      initials={userData?.name || email} 
+                      size="sm" 
+                      src={userData?.profileImage}
+                    />
+                    <div className="flex-1 text-left">
+                      <p className="font-semibold text-gray-900">{userData?.name || email}</p>
+                      <p className="text-xs text-gray-500">@{email.split('@')[0]}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
   const tabs = ['Posts', 'Reviews', 'Books Read', 'Crews', 'Saved Posts'];
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
+      {showFollowers && (
+        <FollowerModal
+          title="Followers"
+          users={followers}
+          onClose={() => setShowFollowers(false)}
+          onUserClick={(email, name) => {
+            // Navigate to user profile
+          }}
+        />
+      )}
+      {showFollowing && (
+        <FollowerModal
+          title="Following"
+          users={following}
+          onClose={() => setShowFollowing(false)}
+          onUserClick={(email, name) => {
+            // Navigate to user profile
+          }}
+        />
+      )}
+
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-md flex items-center justify-center"><BookOpen className="w-3.5 h-3.5 text-white" /></div>
+          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-md flex items-center justify-center">
+            <BookOpen className="w-3.5 h-3.5 text-white" />
+          </div>
           <span className="font-bold" style={{fontFamily:'Georgia,serif'}}>Profile</span>
         </div>
-        <button onClick={onLogout} className="p-2 hover:bg-gray-100 rounded-lg"><LogOut className="w-5 h-5 text-gray-600" /></button>
+        <button onClick={onLogout} className="p-2 hover:bg-gray-100 rounded-lg">
+          <LogOut className="w-5 h-5 text-gray-600" />
+        </button>
       </div>
 
       <div className="px-4 py-5">
         <div className="flex items-start gap-4 mb-5">
           <div className="relative flex-shrink-0">
-            {profileSrc ? <img src={profileSrc} alt={user?.name} className="w-20 h-20 rounded-full object-cover border-2 border-orange-200" />
-              : <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center text-white text-2xl font-bold">{user?.name?.slice(0,2).toUpperCase()}</div>}
-            <button onClick={() => fileRef.current?.click()} className="absolute bottom-0 right-0 w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow">
+            {profileSrc ? (
+              <img 
+                src={profileSrc} 
+                alt={user?.name} 
+                className="w-20 h-20 rounded-full object-cover border-2 border-orange-200" 
+              />
+            ) : (
+              <Avatar initials={user?.name} size="xl" />
+            )}
+            <button 
+              onClick={() => fileRef.current?.click()} 
+              className="absolute bottom-0 right-0 w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow hover:bg-orange-600 transition"
+            >
               <Camera className="w-3.5 h-3.5 text-white" />
             </button>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
@@ -3699,31 +5212,90 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
           <div className="flex-1 min-w-0">
             {editingProfile ? (
               <div className="space-y-2">
-                <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Your name" />
-                <input value={editBio} onChange={e => setEditBio(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Your bio..." />
+                <input 
+                  value={editName} 
+                  onChange={e => setEditName(e.target.value)} 
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                  placeholder="Your name" 
+                />
+                <input 
+                  value={editLocation} 
+                  onChange={e => setEditLocation(e.target.value)} 
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                  placeholder="Location" 
+                />
+                <input 
+                  value={editWebsite} 
+                  onChange={e => setEditWebsite(e.target.value)} 
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                  placeholder="Website" 
+                />
+                <textarea 
+                  value={editBio} 
+                  onChange={e => setEditBio(e.target.value)} 
+                  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" 
+                  placeholder="Your bio..." 
+                  rows={2} 
+                />
                 <div className="flex gap-2">
-                  <button onClick={handleSaveProfile} className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">Save</button>
-                  <button onClick={() => setEditingProfile(false)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm">Cancel</button>
+                  <button 
+                    onClick={handleSaveProfile} 
+                    className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition"
+                  >
+                    Save
+                  </button>
+                  <button 
+                    onClick={() => setEditingProfile(false)} 
+                    className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition"
+                  >
+                    Cancel
+                  </button>
                 </div>
               </div>
             ) : (
               <>
                 <h2 className="text-xl font-bold text-gray-900 truncate">{user?.name}</h2>
                 <p className="text-sm text-gray-500">@{user?.name?.toLowerCase().replace(/\s/g,'')}</p>
-                <p className="text-sm text-gray-600 mt-1 italic">"{user?.bio || 'Reading is my superpower'}"</p>
+                {user?.location && (
+                  <p className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
+                    {user.location}
+                  </p>
+                )}
+                {user?.website && (
+                  <a 
+                    href={user.website.startsWith('http') ? user.website : `https://${user.website}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-xs text-orange-500 mt-1 flex items-center gap-1 hover:underline"
+                  >
+                    <ExternalLink className="w-3 h-3" />
+                    {user.website.replace(/^https?:\/\//, '')}
+                  </a>
+                )}
+                <p className="text-sm text-gray-600 mt-2 italic">"{user?.bio || 'Reading is my superpower'}"</p>
                 
                 <div className="flex gap-4 mt-2">
-                  <div className="text-center">
+                  <button 
+                    onClick={() => setShowFollowers(true)}
+                    className="text-center hover:opacity-75 transition"
+                  >
                     <p className="font-bold text-gray-900">{followers?.length || 0}</p>
                     <p className="text-xs text-gray-500">Followers</p>
-                  </div>
-                  <div className="text-center">
+                  </button>
+                  <button 
+                    onClick={() => setShowFollowing(true)}
+                    className="text-center hover:opacity-75 transition"
+                  >
                     <p className="font-bold text-gray-900">{following?.length || 0}</p>
                     <p className="text-xs text-gray-500">Following</p>
-                  </div>
+                  </button>
                 </div>
                 
-                <button onClick={() => setEditingProfile(true)} className="mt-3 px-4 py-1.5 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-1.5">
+                <button 
+                  onClick={() => setEditingProfile(true)} 
+                  className="mt-3 px-4 py-1.5 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-1.5"
+                >
                   <Edit className="w-3.5 h-3.5" />Edit Profile
                 </button>
               </>
@@ -3733,26 +5305,64 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
 
         <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100 mb-5">
           <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2"><Target className="w-4 h-4 text-orange-500" /><h3 className="font-semibold">Reading Goal {new Date().getFullYear()}</h3></div>
-            <button onClick={() => setShowEditGoal(!showEditGoal)} className="text-sm text-orange-500 font-medium">{showEditGoal ? 'Cancel' : 'Edit'}</button>
+            <div className="flex items-center gap-2">
+              <Target className="w-4 h-4 text-orange-500" />
+              <h3 className="font-semibold">Reading Goal {new Date().getFullYear()}</h3>
+            </div>
+            <button 
+              onClick={() => setShowEditGoal(!showEditGoal)} 
+              className="text-sm text-orange-500 font-medium"
+            >
+              {showEditGoal ? 'Cancel' : 'Edit'}
+            </button>
           </div>
           {showEditGoal ? (
             <div className="space-y-3 mt-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="text-xs text-gray-600 mb-1 block">Yearly Goal</label><input type="number" value={editGoal.yearly} onChange={e => setEditGoal({...editGoal, yearly: parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" /></div>
-                <div><label className="text-xs text-gray-600 mb-1 block">Monthly Goal</label><input type="number" value={editGoal.monthly} onChange={e => setEditGoal({...editGoal, monthly: parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" /></div>
+                <div>
+                  <label className="text-xs text-gray-600 mb-1 block">Yearly Goal</label>
+                  <input 
+                    type="number" 
+                    value={editGoal.yearly} 
+                    onChange={e => setEditGoal({...editGoal, yearly: parseInt(e.target.value)||0})} 
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" 
+                    min="0" 
+                    max="100" 
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-600 mb-1 block">Monthly Goal</label>
+                  <input 
+                    type="number" 
+                    value={editGoal.monthly} 
+                    onChange={e => setEditGoal({...editGoal, monthly: parseInt(e.target.value)||0})} 
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" 
+                    min="0" 
+                    max="20" 
+                  />
+                </div>
               </div>
-              <button onClick={handleSaveGoal} className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-medium">Save Goal</button>
+              <button 
+                onClick={handleSaveGoal} 
+                className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-medium"
+              >
+                Save Goal
+              </button>
             </div>
           ) : (
             <>
               <div className="flex items-center justify-between text-sm mb-1">
                 <span className="text-gray-600">Progress</span>
-                <span className="font-semibold">{readingGoal.yearly > 0 ? `${userStats.booksRead}/${readingGoal.yearly} books` : 'No goal set'}</span>
+                <span className="font-semibold">
+                  {readingGoal.yearly > 0 ? `${userStats.booksRead}/${readingGoal.yearly} books` : 'No goal set'}
+                </span>
               </div>
               {readingGoal.yearly > 0 && (
                 <div className="h-2 bg-orange-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-500 rounded-full" style={{ width: `${Math.min((userStats.booksRead/readingGoal.yearly)*100, 100)}%` }} />
+                  <div 
+                    className="h-full bg-orange-500 rounded-full" 
+                    style={{ width: `${Math.min((userStats.booksRead/readingGoal.yearly)*100, 100)}%` }} 
+                  />
                 </div>
               )}
             </>
@@ -3774,9 +5384,22 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
           ))}
         </div>
 
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-3 px-1">
+          <Globe className="w-3 h-3" />
+          <span>Posts, Reviews, Books & Crews are public · Saved posts are private</span>
+        </div>
+
         <div className="flex border-b border-gray-200 mb-4 overflow-x-auto">
           {tabs.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-shrink-0 text-sm pb-2.5 px-3 font-medium border-b-2 transition ${activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'}`}>{tab}</button>
+            <button 
+              key={tab} 
+              onClick={() => setActiveTab(tab)} 
+              className={`flex-shrink-0 text-sm pb-2.5 px-3 font-medium border-b-2 transition ${
+                activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'
+              }`}
+            >
+              {tab}
+            </button>
           ))}
         </div>
 
@@ -3786,19 +5409,28 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
               <div className="text-center py-8">
                 <Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No posts yet</p>
-                <button onClick={() => setPage('post')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Create First Post</button>
+                <button 
+                  onClick={() => setPage('post')} 
+                  className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm"
+                >
+                  Create First Post
+                </button>
               </div>
-            ) : myPosts.map(post => (
-              <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <p className="text-sm text-gray-700 mb-2">{post.content}</p>
-                {post.bookName && <p className="text-xs text-orange-500">📖 {post.bookName}</p>}
-                {post.image && <img src={post.image} alt="" className="w-full rounded-xl mt-2" />}
-                <div className="flex items-center gap-4 pt-2 border-t border-gray-100 mt-2 text-xs text-gray-400">
-                  <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{post.likes||0}</span>
-                  <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+            ) : (
+              myPosts.map(post => (
+                <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                  <p className="text-sm text-gray-700 mb-2">{post.content}</p>
+                  {post.bookName && <p className="text-xs text-orange-500">📖 {post.bookName}</p>}
+                  {post.image && <img src={post.image} alt="" className="w-full rounded-xl mt-2 max-h-40 object-cover" />}
+                  <div className="flex items-center gap-4 pt-2 border-t border-gray-100 mt-2 text-xs text-gray-400">
+                    <span className="flex items-center gap-1">
+                      <Heart className="w-3.5 h-3.5" />{post.likes||0}
+                    </span>
+                    <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
@@ -3808,21 +5440,28 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
               <div className="text-center py-8">
                 <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No reviews yet</p>
-                <button onClick={() => setPage('reviews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Write a Review</button>
+                <button 
+                  onClick={() => setPage('reviews')} 
+                  className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm"
+                >
+                  Write a Review
+                </button>
               </div>
-            ) : myReviews.map(review => (
-              <div key={review.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <div className="flex items-start gap-3 mb-2">
-                  <DynamicBookCover title={review.bookName} author={review.author} size="sm" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm">{review.bookName}</h3>
-                    <p className="text-xs text-gray-500">by {review.author}</p>
-                    <StarRating rating={review.rating} size="xs" />
+            ) : (
+              myReviews.map(review => (
+                <div key={review.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                  <div className="flex items-start gap-3 mb-2">
+                    <DynamicBookCover title={review.bookName} author={review.author} size="sm" />
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-sm">{review.bookName}</h3>
+                      <p className="text-xs text-gray-500">by {review.author}</p>
+                      <StarRating rating={review.rating} size="xs" />
+                    </div>
                   </div>
+                  <p className="text-sm text-gray-700">{review.review}</p>
                 </div>
-                <p className="text-sm text-gray-700">{review.review}</p>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
 
@@ -3830,7 +5469,10 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-2">
               <p className="text-sm font-semibold text-gray-700">{myBooks.length} books read</p>
-              <button onClick={() => setShowAddBook(!showAddBook)} className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium">
+              <button 
+                onClick={() => setShowAddBook(!showAddBook)} 
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium"
+              >
                 <Plus className="w-4 h-4" />{showAddBook ? 'Cancel' : 'Add Book'}
               </button>
             </div>
@@ -3843,11 +5485,35 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
                   </div>
                 )}
                 <div className="space-y-3">
-                  <input value={newBook.title} onChange={e => setNewBook({...newBook, title: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
-                  <input value={newBook.author} onChange={e => setNewBook({...newBook, author: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author" />
-                  <div><label className="text-xs text-gray-600 mb-1 block">Your Rating</label><StarRating rating={newBook.rating} onChange={r => setNewBook({...newBook, rating: r})} size="md" /></div>
-                  <textarea value={newBook.notes} onChange={e => setNewBook({...newBook, notes: e.target.value})} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Notes (optional)" rows={2} />
-                  <button onClick={handleAddBook} className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium">Add to My Books</button>
+                  <input 
+                    value={newBook.title} 
+                    onChange={e => setNewBook({...newBook, title: e.target.value})} 
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                    placeholder="Book title *" 
+                  />
+                  <input 
+                    value={newBook.author} 
+                    onChange={e => setNewBook({...newBook, author: e.target.value})} 
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" 
+                    placeholder="Author" 
+                  />
+                  <div>
+                    <label className="text-xs text-gray-600 mb-1 block">Your Rating</label>
+                    <StarRating rating={newBook.rating} onChange={r => setNewBook({...newBook, rating: r})} size="md" />
+                  </div>
+                  <textarea 
+                    value={newBook.notes} 
+                    onChange={e => setNewBook({...newBook, notes: e.target.value})} 
+                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" 
+                    placeholder="Notes (optional)" 
+                    rows={2} 
+                  />
+                  <button 
+                    onClick={handleAddBook} 
+                    className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium"
+                  >
+                    Add to My Books
+                  </button>
                 </div>
               </div>
             )}
@@ -3866,11 +5532,18 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-sm text-gray-900">{book.title}</h3>
                       <p className="text-xs text-gray-500">{book.author}</p>
-                      <div className="flex items-center gap-1 mt-1"><StarRating rating={book.rating} size="xs" /></div>
+                      <div className="flex items-center gap-1 mt-1">
+                        <StarRating rating={book.rating} size="xs" />
+                      </div>
                       {book.notes && <p className="text-xs text-gray-600 mt-1 italic">"{book.notes}"</p>}
                       <p className="text-xs text-gray-400 mt-1">{new Date(book.addedAt).toLocaleDateString()}</p>
                     </div>
-                    <button onClick={() => handleDeleteBook(book.id)} className="p-1 hover:bg-red-50 rounded-lg"><Trash2 className="w-4 h-4 text-red-400" /></button>
+                    <button 
+                      onClick={() => handleDeleteBook(book.id)} 
+                      className="p-1 hover:bg-red-50 rounded-lg"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-400" />
+                    </button>
                   </div>
                 ))}
               </div>
@@ -3884,10 +5557,20 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
               <div className="text-center py-8">
                 <Users className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No crews joined yet</p>
-                <button onClick={() => setPage('crews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Browse Crews</button>
+                <button 
+                  onClick={() => setPage('crews')} 
+                  className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm"
+                >
+                  Browse Crews
+                </button>
               </div>
             ) : (
-              <button onClick={() => setPage('crews')} className="w-full py-3 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl font-medium">View My Crews →</button>
+              <button 
+                onClick={() => setPage('crews')} 
+                className="w-full py-3 bg-orange-50 border border-orange-200 text-orange-600 rounded-xl font-medium"
+              >
+                View My Crews →
+              </button>
             )}
           </div>
         )}
@@ -3900,16 +5583,18 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
                 <p className="text-gray-500">No saved posts yet</p>
                 <p className="text-xs text-gray-400 mt-1">Save posts from the home feed to see them here!</p>
               </div>
-            ) : savedPostsList.map(post => (
-              <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <p className="text-sm text-gray-700 mb-2">{post.content}</p>
-                {post.bookName && <p className="text-xs text-orange-500">📖 {post.bookName}</p>}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-2">
-                  <span className="text-xs text-gray-400">by {post.userName}</span>
-                  <span className="text-xs text-gray-400">{new Date(post.createdAt).toLocaleDateString()}</span>
+            ) : (
+              savedPostsList.map(post => (
+                <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                  <p className="text-sm text-gray-700 mb-2">{post.content}</p>
+                  {post.bookName && <p className="text-xs text-orange-500">📖 {post.bookName}</p>}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-2">
+                    <span className="text-xs text-gray-400">by {post.userName}</span>
+                    <span className="text-xs text-gray-400">{new Date(post.createdAt).toLocaleDateString()}</span>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         )}
       </div>
@@ -3917,7 +5602,9 @@ const ProfilePage = ({ user, posts, setPage, onLogout, onUpdateUser, profileSrc,
   );
 };
 
-// ─── MAIN APP COMPONENT ──────────────────────────────────────────────────
+// ========================================
+// MAIN APP COMPONENT
+// ========================================
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -3929,6 +5616,8 @@ export default function App() {
     { id: 1, name: 'Atomic Habits', author: 'James Clear', genre: 'Self Improvement', members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
     { id: 2, name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
     { id: 3, name: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
+    { id: 4, name: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
+    { id: 5, name: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
   ]);
   const [savedPosts, setSavedPosts] = useState([]);
   const [following, setFollowing] = useState([]);
@@ -3940,6 +5629,21 @@ export default function App() {
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
   const [showUserProfile, setShowUserProfile] = useState(false);
   const [viewingFullProfile, setViewingFullProfile] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (currentPage === 'post' || viewingFullProfile) {
@@ -3950,33 +5654,39 @@ export default function App() {
   }, [currentPage, viewingFullProfile]);
 
   useEffect(() => {
-    const storedUser = localStorage.getItem('currentUser');
-    if (storedUser) {
-      const user = JSON.parse(storedUser);
-      setCurrentUser(user);
-      setIsLoggedIn(true);
+    const loadInitialData = async () => {
+      const storedUser = localStorage.getItem('currentUser');
+      if (storedUser) {
+        const user = JSON.parse(storedUser);
+        setCurrentUser(user);
+        setIsLoggedIn(true);
+        
+        const userFollowing = JSON.parse(localStorage.getItem(`user_${user.email}_following`) || '[]');
+        const userFollowers = JSON.parse(localStorage.getItem(`user_${user.email}_followers`) || '[]');
+        const userBlocked = JSON.parse(localStorage.getItem(`user_${user.email}_blocked`) || '[]');
+        const userSaved = JSON.parse(localStorage.getItem(`user_${user.email}_savedPosts`) || '[]');
+        
+        setFollowing(userFollowing);
+        setFollowers(userFollowers);
+        setBlockedUsers(userBlocked);
+        setSavedPosts(userSaved);
+        
+        const profileImage = localStorage.getItem(`user_${user.email}_profile_image`);
+        if (profileImage) setProfileSrc(profileImage);
+      }
       
-      const userFollowing = JSON.parse(localStorage.getItem(`user_${user.email}_following`) || '[]');
-      const userFollowers = JSON.parse(localStorage.getItem(`user_${user.email}_followers`) || '[]');
-      const userBlocked = JSON.parse(localStorage.getItem(`user_${user.email}_blocked`) || '[]');
-      const userSaved = JSON.parse(localStorage.getItem(`user_${user.email}_savedPosts`) || '[]');
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      setPosts(allPosts);
       
-      setFollowing(userFollowing);
-      setFollowers(userFollowers);
-      setBlockedUsers(userBlocked);
-      setSavedPosts(userSaved);
+      const storedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
+      if (storedCrews.length > 0) {
+        setCrews(storedCrews);
+      }
       
-      const profileImage = localStorage.getItem(`user_${user.email}_profile_image`);
-      if (profileImage) setProfileSrc(profileImage);
-    }
-    
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    setPosts(allPosts);
-    
-    const storedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
-    if (storedCrews.length > 0) {
-      setCrews(storedCrews);
-    }
+      setLoading(false);
+    };
+
+    loadInitialData();
   }, []);
 
   const checkForNewNotifications = useCallback(() => {
@@ -4013,6 +5723,23 @@ export default function App() {
       window.removeEventListener('storage', handleStorageChange);
     };
   }, [currentUser, checkForNewNotifications]);
+
+  useEffect(() => {
+    socket.on('new_notification', (notification) => {
+      if (notification.toEmail === currentUser?.email) {
+        setNotificationCount(prev => prev + 1);
+        setCurrentToast(notification);
+        
+        const notifs = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
+        notifs.unshift(notification);
+        localStorage.setItem(`user_${currentUser.email}_notifications`, JSON.stringify(notifs));
+      }
+    });
+
+    return () => {
+      socket.off('new_notification');
+    };
+  }, [currentUser]);
 
   const handleLogin = (userData) => {
     setCurrentUser(userData);
@@ -4053,7 +5780,7 @@ export default function App() {
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     const newPost = {
       ...postData,
-      id: postData.id || Date.now(),
+      id: postData.id || generateId(),
       createdAt: postData.createdAt || new Date().toISOString(),
       likes: postData.likes || 0,
       comments: 0,
@@ -4129,7 +5856,7 @@ export default function App() {
     }
     
     const resharePost = {
-      id: Date.now(),
+      id: generateId(),
       content: originalPost.content,
       bookName: originalPost.bookName,
       author: originalPost.author,
@@ -4138,6 +5865,8 @@ export default function App() {
       type: 'reshare',
       userName: currentUser.name,
       userEmail: currentUser.email,
+      userPhoto: currentUser.profileImage,
+      userInitials: currentUser.name.slice(0,2).toUpperCase(),
       createdAt: new Date().toISOString(),
       likes: 0,
       comments: 0,
@@ -4228,6 +5957,15 @@ export default function App() {
 
   const filteredPosts = posts.filter(post => !blockedUsers.includes(post.userEmail));
 
+  const handleViewBookDetails = (book) => {
+    // This will be handled by the component that uses this function
+    console.log('View book details:', book);
+  };
+
+  if (loading) {
+    return <LoadingSpinner size="xl" fullScreen />;
+  }
+
   if (!isLoggedIn) {
     return <LoginPage onLogin={handleLogin} />;
   }
@@ -4240,6 +5978,14 @@ export default function App() {
           notification={currentToast} 
           onClose={() => setCurrentToast(null)} 
         />
+      )}
+
+      {/* Offline indicator */}
+      {!isOnline && (
+        <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white text-center py-1 text-xs z-[100]">
+          <WifiOff className="w-3 h-3 inline mr-1" />
+          You're offline. Some features may be limited.
+        </div>
       )}
 
       <div className="w-full max-w-md relative bg-white min-h-screen overflow-hidden shadow-xl">
@@ -4297,6 +6043,7 @@ export default function App() {
                 onBlock={handleBlockUser} 
                 blockedUsers={blockedUsers} 
                 onViewUserProfile={handleViewUserProfile}
+                onViewBookDetails={handleViewBookDetails}
               />
             )}
 
@@ -4389,4 +6136,52 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+// Add animation styles
+if (typeof document !== 'undefined' && !document.querySelector('style[data-app-styles]')) {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideDown {
+      from { transform: translate(-50%, -100%); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
+    }
+    .animate-slideDown {
+      animation: slideDown 0.3s ease-out;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    .animate-bounce {
+      animation: bounce 1s infinite;
+    }
+    .line-clamp-1 {
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+    }
+    .line-clamp-2 {
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .line-clamp-3 {
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+  `;
+  style.setAttribute('data-app-styles', 'true');
+  document.head.appendChild(style);
 }
