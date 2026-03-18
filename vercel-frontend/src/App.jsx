@@ -44,7 +44,13 @@ import {
 import axios from 'axios';
 import { io } from 'socket.io-client';
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
-const socket = io(API_URL, { transports: ['websocket', 'polling'] });
+const socket = io(API_URL, { 
+  transports: ['websocket', 'polling'],
+  autoConnect: true,
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000
+});
 
 // ========================================
 // UTILITY FUNCTIONS
@@ -1259,7 +1265,7 @@ const InlinePostCard = ({
   const [likedComments, setLikedComments] = useState(new Set());
   const [isLiked, setIsLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(post.likes || 0);
-  const [showAllComments, setShowAllComments] = useState(false);
+  const [showComments, setShowComments] = useState(false); // FIX 5: Lazy loading - comments hidden by default
   const [replyTo, setReplyTo] = useState(null);
   const [showReplies, setShowReplies] = useState({});
   const [showOptions, setShowOptions] = useState(false);
@@ -1267,28 +1273,39 @@ const InlinePostCard = ({
   const inputRef = useRef(null);
 
   useEffect(() => {
-    loadComments();
-    const liked = JSON.parse(localStorage.getItem(`user_${user.id}_likedComments`) || '[]');
-    setLikedComments(new Set(liked));
+    // FIX 2: Use user.email consistently for localStorage keys
     const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
     setIsLiked(likedPosts.includes(post.id));
-  }, [post.id, user.id, user.email]);
+  }, [post.id, user.email]);
 
-  const loadComments = async () => {
+  // FIX 5: Only load comments when showComments is true
+  const loadComments = useCallback(async () => {
+    if (!showComments) return;
+    
     setLoadingComments(true);
     try {
       const res = await axios.get(`${API_URL}/api/social/posts/${post.id}/comments`);
       if (res.data.success) {
         setComments(res.data.comments);
+        // FIX 2: Load liked comments using user.email
+        const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedComments`) || '[]');
+        setLikedComments(new Set(liked));
       }
     } catch (error) {
       console.error('Failed to load comments:', error);
       const saved = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
       setComments(saved);
+      // FIX 2: Load liked comments using user.email
+      const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedComments`) || '[]');
+      setLikedComments(new Set(liked));
     } finally {
       setLoadingComments(false);
     }
-  };
+  }, [post.id, user.email, showComments]);
+
+  useEffect(() => {
+    loadComments();
+  }, [loadComments]);
 
   const formatTimeAgo = (ts) => {
     const diff = Date.now() - new Date(ts);
@@ -1311,29 +1328,19 @@ const InlinePostCard = ({
         userName: user.name
       });
 
+      // FIX 2: Use user.email for localStorage
       const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
       likedPosts.push(post.id);
       localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
+      
+      // FIX 3: Socket.io for real-time notifications
+      socket.emit('like_post', {
+        postId: post.id,
+        postAuthorEmail: post.userEmail,
+        likedBy: { email: user.email, name: user.name }
+      });
     } catch (error) {
       console.error('Failed to like post:', error);
-    }
-
-    if (post.userEmail !== user.email) {
-      const notif = { 
-        id: Date.now(), 
-        type: 'like', 
-        fromUser: user.name, 
-        fromUserEmail: user.email,
-        message: `${user.name} liked your post`, 
-        timestamp: new Date().toISOString(), 
-        read: false,
-        postId: post.id 
-      };
-      const notifs = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
-      notifs.unshift(notif);
-      localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(notifs));
-      window.dispatchEvent(new StorageEvent('storage', { key: `user_${post.userEmail}_notifications` }));
-      updateNotificationCount?.();
     }
   };
 
@@ -1368,11 +1375,19 @@ const InlinePostCard = ({
         const updated = [...comments, res.data.comment];
         setComments(updated);
         localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updated));
+        
+        // FIX 3: Socket.io for real-time comment notifications
+        socket.emit('new_comment', {
+          postId: post.id,
+          postAuthorEmail: post.userEmail,
+          comment: res.data.comment,
+          commenter: { email: user.email, name: user.name }
+        });
       }
     } catch (error) {
       console.error('Failed to post comment:', error);
       const comment = { 
-        id: Date.now(), 
+        id: `comment_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         ...commentData, 
         userInitials: user.name.slice(0,2).toUpperCase(), 
         timestamp: new Date().toISOString(), 
@@ -1381,7 +1396,7 @@ const InlinePostCard = ({
       };
       const updated = [...comments, comment];
       setComments(updated);
-      localStorage.setItem(`post_post.id}_comments`, JSON.stringify(updated));
+      localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updated));
     }
 
     // Handle mentions
@@ -1394,7 +1409,7 @@ const InlinePostCard = ({
       
       if (mentionedUser && mentionedUser.email !== user.email) {
         const notif = { 
-          id: Date.now(), 
+          id: `notif_${Date.now()}_${Math.random().toString(36).slice(2)}`,
           type: 'mention', 
           fromUser: user.name, 
           fromUserEmail: user.email,
@@ -1406,13 +1421,18 @@ const InlinePostCard = ({
         const notifs = JSON.parse(localStorage.getItem(`user_${mentionedUser.email}_notifications`) || '[]');
         notifs.unshift(notif);
         localStorage.setItem(`user_${mentionedUser.email}_notifications`, JSON.stringify(notifs));
-        window.dispatchEvent(new StorageEvent('storage', { key: `user_${mentionedUser.email}_notifications` }));
+        
+        // FIX 3: Socket.io for real-time mention notifications
+        socket.emit('mention_user', {
+          toEmail: mentionedUser.email,
+          notification: notif
+        });
       }
     });
     
     if (post.userEmail !== user.email) {
       const notif = { 
-        id: Date.now(), 
+        id: `notif_${Date.now()}_${Math.random().toString(36).slice(2)}`,
         type: 'comment', 
         fromUser: user.name, 
         fromUserEmail: user.email,
@@ -1424,20 +1444,28 @@ const InlinePostCard = ({
       const notifs = JSON.parse(localStorage.getItem(`user_${post.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
       localStorage.setItem(`user_${post.userEmail}_notifications`, JSON.stringify(notifs));
-      window.dispatchEvent(new StorageEvent('storage', { key: `user_${post.userEmail}_notifications` }));
+      
+      // FIX 3: Socket.io for real-time comment notifications
+      socket.emit('new_comment_notification', {
+        toEmail: post.userEmail,
+        notification: notif
+      });
+      
       updateNotificationCount?.();
     }
   };
 
   const handleLikeComment = (commentId) => {
     if (likedComments.has(commentId)) return;
+    
+    // FIX 2: Use user.email for localStorage
     const updated = comments.map(c => c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c);
     setComments(updated);
     localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updated));
     const newLiked = new Set(likedComments);
     newLiked.add(commentId);
     setLikedComments(newLiked);
-    localStorage.setItem(`user_${user.id}_likedComments`, JSON.stringify([...newLiked]));
+    localStorage.setItem(`user_${user.email}_likedComments`, JSON.stringify([...newLiked]));
   };
 
   const handleDeleteComment = (commentId) => {
@@ -1447,10 +1475,13 @@ const InlinePostCard = ({
   };
 
   const topLevel = comments.filter(c => !c.parentId);
-  const visibleComments = showAllComments ? topLevel : topLevel.slice(0, 3);
   const isPostAuthor = user.email === post.userEmail;
 
-  const CommentRow = ({ comment, isReply = false }) => {
+  // FIX 4: Comment depth limit (max 2 levels)
+  const CommentRow = ({ comment, depth = 0 }) => {
+    // Don't render if depth exceeds 2 levels
+    if (depth >= 2) return null;
+    
     const replies = comments.filter(c => c.parentId === comment.id);
     const liked = likedComments.has(comment.id);
     const isOwn = comment.userEmail === user.email;
@@ -1492,7 +1523,7 @@ const InlinePostCard = ({
     };
 
     return (
-      <div className={`flex gap-3 ${isReply ? 'mt-3' : ''}`}>
+      <div className={`flex gap-3 ${depth > 0 ? 'mt-3' : ''}`}>
         <div className="flex flex-col items-center flex-shrink-0" style={{ width: 36 }}>
           <button onClick={() => onViewUserProfile(comment.userEmail, comment.userName)}>
             <Avatar 
@@ -1501,7 +1532,7 @@ const InlinePostCard = ({
               src={comment.userPhoto}
             />
           </button>
-          {(replies.length > 0 && (showReplies[comment.id] || replies.length <= 2)) && (
+          {(replies.length > 0 && depth < 1) && (
             <div className="w-0.5 flex-1 bg-orange-200 mt-1 rounded-full min-h-[20px]" />
           )}
         </div>
@@ -1530,17 +1561,15 @@ const InlinePostCard = ({
               <Heart className={`w-3.5 h-3.5 ${liked ? 'fill-red-500' : ''}`} />
               <span>{comment.likes || 0}</span>
             </button>
-            <button className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 font-medium">
-              <MessageCircle className="w-3.5 h-3.5" />
-              <span>{replies.length}</span>
-            </button>
-            <button
-              onClick={() => { setReplyTo(comment); setTimeout(() => inputRef.current?.focus(), 100); }}
-              className="flex items-center gap-1 text-xs text-gray-400 hover:text-orange-500 font-semibold"
-            >
-              <Share2 className="w-3 h-3 rotate-180" />
-              Reply
-            </button>
+            {depth < 1 && ( // Only show reply button for depth 0 or 1 comments
+              <button
+                onClick={() => { setReplyTo(comment); setTimeout(() => inputRef.current?.focus(), 100); }}
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-orange-500 font-semibold"
+              >
+                <Share2 className="w-3 h-3 rotate-180" />
+                Reply
+              </button>
+            )}
             {isOwn && (
               <button onClick={() => handleDeleteComment(comment.id)} className="ml-auto text-gray-200 hover:text-red-400 transition">
                 <Trash2 className="w-3.5 h-3.5" />
@@ -1548,19 +1577,19 @@ const InlinePostCard = ({
             )}
           </div>
 
-          {replies.length > 0 && (
+          {/* FIX 4: Render replies with depth+1 */}
+          {replies.length > 0 && depth < 1 && (
             <div className="mt-2">
-              {!showReplies[comment.id] && replies.length > 1 && (
+              {!showReplies[comment.id] && replies.length > 1 ? (
                 <button
                   onClick={() => setShowReplies(p => ({ ...p, [comment.id]: true }))}
                   className="text-xs text-orange-500 font-semibold mb-2 flex items-center gap-1"
                 >
                   ↳ View {replies.length} replies
                 </button>
-              )}
-              {(showReplies[comment.id] || replies.length === 1) && (
+              ) : (
                 <div className="space-y-2 pl-3 border-l-2 border-orange-100">
-                  {replies.map(r => <CommentRow key={r.id} comment={r} isReply />)}
+                  {replies.map(r => <CommentRow key={r.id} comment={r} depth={depth + 1} />)}
                 </div>
               )}
             </div>
@@ -1667,7 +1696,7 @@ const InlinePostCard = ({
           </button>
 
           <button
-            onClick={() => inputRef.current?.focus()}
+            onClick={() => setShowComments(!showComments)} // FIX 5: Toggle comments on click
             className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-orange-500 transition"
           >
             <MessageCircle className="w-5 h-5" />
@@ -1693,84 +1722,88 @@ const InlinePostCard = ({
           </button>
         </div>
 
-        <div className="px-4 py-3 border-t border-gray-50 bg-gray-50/60">
-          {replyTo && (
-            <div className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-orange-400">
-              <p className="text-xs text-orange-600 font-medium flex-1">
-                Replying to <span className="font-bold">{replyTo.userName}</span>
-                {replyTo.mentions?.length > 0 && (
-                  <span className="ml-2 text-xs bg-orange-100 px-2 py-0.5 rounded-full">
-                    @mentions: {replyTo.mentions.join(', ')}
-                  </span>
+        {/* FIX 5: Only render comments section when showComments is true */}
+        {showComments && (
+          <>
+            <div className="px-4 py-3 border-t border-gray-50 bg-gray-50/60">
+              {replyTo && (
+                <div className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-orange-400">
+                  <p className="text-xs text-orange-600 font-medium flex-1">
+                    Replying to <span className="font-bold">{replyTo.userName}</span>
+                    {replyTo.mentions?.length > 0 && (
+                      <span className="ml-2 text-xs bg-orange-100 px-2 py-0.5 rounded-full">
+                        @mentions: {replyTo.mentions.join(', ')}
+                      </span>
+                    )}
+                  </p>
+                  <button onClick={() => setReplyTo(null)}>
+                    <X className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center gap-2.5">
+                {profileSrc ? (
+                  <img src={profileSrc} alt="p" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
+                ) : (
+                  <Avatar initials={user?.name} size="sm" />
                 )}
+                <div className="flex-1 flex items-center gap-2 bg-white rounded-full border border-gray-200 px-4 py-2 focus-within:border-orange-400 focus-within:shadow-sm transition">
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={newComment}
+                    onChange={e => setNewComment(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); } }}
+                    className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
+                    placeholder={replyTo ? `Reply to @${replyTo.userName}...` : "Write a comment... (use @ to mention)"}
+                  />
+                </div>
+                <button
+                  onClick={handlePostComment}
+                  disabled={!newComment.trim()}
+                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
+                    newComment.trim() ? 'bg-orange-500 text-white shadow-sm active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  }`}
+                >
+                  Post
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2">
+                <span className="font-semibold">Tip:</span> Use @username to mention someone
               </p>
-              <button onClick={() => setReplyTo(null)}>
-                <X className="w-3.5 h-3.5 text-gray-400" />
-              </button>
             </div>
-          )}
-          <div className="flex items-center gap-2.5">
-            {profileSrc ? (
-              <img src={profileSrc} alt="p" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-            ) : (
-              <Avatar initials={user?.name} size="sm" />
-            )}
-            <div className="flex-1 flex items-center gap-2 bg-white rounded-full border border-gray-200 px-4 py-2 focus-within:border-orange-400 focus-within:shadow-sm transition">
-              <input
-                ref={inputRef}
-                type="text"
-                value={newComment}
-                onChange={e => setNewComment(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); } }}
-                className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
-                placeholder={replyTo ? `Reply to @${replyTo.userName}...` : "Write a comment... (use @ to mention)"}
-              />
-            </div>
-            <button
-              onClick={handlePostComment}
-              disabled={!newComment.trim()}
-              className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${
-                newComment.trim() ? 'bg-orange-500 text-white shadow-sm active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-              }`}
-            >
-              Post
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mt-2">
-            <span className="font-semibold">Tip:</span> Use @username to mention someone
-          </p>
-        </div>
 
-        {comments.length > 0 && (
-          <div className="px-4 py-3 border-t border-gray-100 space-y-1">
             {loadingComments ? (
-              <div className="flex justify-center py-4">
+              <div className="px-4 py-4 flex justify-center">
                 <LoadingSpinner size="sm" />
               </div>
+            ) : comments.length > 0 ? (
+              <div className="px-4 py-3 border-t border-gray-100 space-y-1">
+                {topLevel.slice(0, 5).map(comment => (
+                  <CommentRow key={comment.id} comment={comment} depth={0} />
+                ))}
+                {topLevel.length > 5 && (
+                  <button className="text-xs text-orange-500 font-semibold mt-2">
+                    View all {topLevel.length} comments
+                  </button>
+                )}
+              </div>
             ) : (
-              visibleComments.map(comment => (
-                <CommentRow key={comment.id} comment={comment} />
-              ))
+              <div className="px-4 pb-4">
+                <p className="text-xs text-gray-400 text-center">Be the first to comment 💬</p>
+              </div>
             )}
-
-            {topLevel.length > 3 && (
-              <button
-                onClick={() => setShowAllComments(p => !p)}
-                className="text-xs text-orange-500 font-semibold mt-1 flex items-center gap-1 hover:text-orange-600"
-              >
-                {showAllComments
-                  ? <><ChevronDown className="w-3.5 h-3.5 rotate-180" /> Show less</>
-                  : <><ChevronDown className="w-3.5 h-3.5" /> View all {topLevel.length} comments</>
-                }
-              </button>
-            )}
-          </div>
+          </>
         )}
-
-        {comments.length === 0 && !loadingComments && (
-          <div className="px-4 pb-4">
-            <p className="text-xs text-gray-400 text-center">Be the first to comment 💬</p>
-          </div>
+        
+        {/* Show comment count as a button when comments are hidden */}
+        {!showComments && comments.length > 0 && (
+          <button
+            onClick={() => setShowComments(true)}
+            className="w-full px-4 py-2 text-left text-sm text-orange-500 font-semibold border-t border-gray-100 hover:bg-orange-50 transition"
+          >
+            View {comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+          </button>
         )}
       </div>
     </>
@@ -1929,6 +1962,25 @@ const LoginPage = ({ onLogin }) => {
     }
     setLoading(true);
 
+    // Try backend first (FIX 1: MongoDB integration)
+    try {
+      const res = await axios.post(`${API_URL}/api/auth/login`, {
+        email: email.toLowerCase(),
+        password: password
+      });
+      
+      if (res.data.success) {
+        const userData = res.data.user;
+        localStorage.setItem('currentUser', JSON.stringify(userData));
+        setLoading(false);
+        onLogin(userData);
+        return;
+      }
+    } catch (error) {
+      console.log('Backend login failed, falling back to localStorage');
+    }
+
+    // Fallback to localStorage
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
     if (found && (found.password === password || !found.password)) {
@@ -2676,16 +2728,41 @@ const HomePage = ({
     loadTrendingBooks();
     loadFeedPosts();
     
+    // FIX 3: Socket.io listeners for real-time updates
     socket.on('new_post', (post) => {
       if (!blockedUsers.includes(post.userEmail)) {
         setFeedPosts(prev => [post, ...prev]);
       }
     });
+    
     socket.on('post_deleted', ({ postId }) => {
       setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId));
     });
-    socket.on('post_liked', ({ postId, likes }) => {
+    
+    socket.on('post_liked', ({ postId, likes, likedBy }) => {
       setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p));
+      
+      // Show notification toast for real-time likes
+      if (likedBy && likedBy.email !== user.email) {
+        setCurrentToast({
+          id: Date.now(),
+          type: 'like',
+          message: `${likedBy.name} liked your post`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+    
+    socket.on('new_comment', ({ postId, comment, commenter }) => {
+      // Reload comments logic would go here
+      if (commenter && commenter.email !== user.email) {
+        setCurrentToast({
+          id: Date.now(),
+          type: 'comment',
+          message: `${commenter.name} commented on your post`,
+          timestamp: new Date().toISOString()
+        });
+      }
     });
 
     const savedStats = localStorage.getItem(`user_${user.email}_stats`);
@@ -2699,6 +2776,7 @@ const HomePage = ({
       socket.off('new_post');
       socket.off('post_deleted');
       socket.off('post_liked');
+      socket.off('new_comment');
     };
   }, [user?.email, blockedUsers]);
 
@@ -2712,10 +2790,10 @@ const HomePage = ({
       console.error('Failed to load trending books:', error);
       setTrendingBooks([
         { id: 1, title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8 },
-        { id: 2, title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', rating: 4.7 },
-        { id: 3, title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8 },
-        { id: 4, title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6 },
-        { id: 5, title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6 },
+        { title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', rating: 4.7 },
+        { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8 },
+        { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6 },
+        { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6 },
       ]);
     } finally {
       setLoadingTrending(false);
@@ -2724,12 +2802,14 @@ const HomePage = ({
 
   const loadFeedPosts = async () => {
     try {
+      // FIX 1: MongoDB integration - fetch from backend
       const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`);
       if (res.data.success) {
         setFeedPosts(res.data.posts.filter(p => !blockedUsers.includes(p.userEmail)));
       }
     } catch (error) {
       console.error('Failed to load feed:', error);
+      // Fallback to localStorage
       const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
       setFeedPosts(allPosts.slice(0, 15));
     }
@@ -3726,10 +3806,16 @@ const PostPage = ({ user, onPost, setPage }) => {
     };
 
     try {
-      await axios.post(`${API_URL}/api/social/posts`, postData);
+      // FIX 1: MongoDB integration - post to backend
+      const res = await axios.post(`${API_URL}/api/social/posts`, postData);
+      if (res.data.success) {
+        // Emit socket event for real-time updates
+        socket.emit('new_post', res.data.post);
+      }
     } catch (error) {
       console.error('Failed to post to server:', error);
-      onPost({ 
+      // Fallback to localStorage
+      const newPost = { 
         ...postData, 
         id: generateId(), 
         createdAt: new Date().toISOString(), 
@@ -3737,7 +3823,8 @@ const PostPage = ({ user, onPost, setPage }) => {
         reshareCount: 0,
         userPhoto: user.profileImage,
         userInitials: user.name.slice(0,2).toUpperCase()
-      });
+      };
+      onPost(newPost);
     }
     
     setPage('home');
@@ -3856,6 +3943,7 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
       })
       .finally(() => setLoading(false));
 
+    // FIX 2: Use user.email for localStorage
     const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedReviews`) || '[]');
     setLikedReviews(liked);
   }, [user.email]);
@@ -3864,6 +3952,7 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
     if (likedReviews.includes(reviewId)) return;
     const updated = [...likedReviews, reviewId];
     setLikedReviews(updated);
+    // FIX 2: Use user.email for localStorage
     localStorage.setItem(`user_${user.email}_likedReviews`, JSON.stringify(updated));
     const updatedReviews = reviews.map(r => r.id === reviewId ? { ...r, likes: (r.likes||0)+1 } : r);
     setReviews(updatedReviews);
@@ -3881,7 +3970,13 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
       const notifs = JSON.parse(localStorage.getItem(`user_${review.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
       localStorage.setItem(`user_${review.userEmail}_notifications`, JSON.stringify(notifs));
-      window.dispatchEvent(new StorageEvent('storage', { key: `user_${review.userEmail}_notifications` }));
+      
+      // FIX 3: Socket.io for real-time notifications
+      socket.emit('new_notification', {
+        toEmail: review.userEmail,
+        notification: notif
+      });
+      
       updateNotificationCount?.();
     }
   };
@@ -4169,9 +4264,16 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const isJoined = (crewId) => joinedCrews.includes(crewId);
 
   const joinCrew = async (crew) => {
-    axios.post(`${API_URL}/api/social/crews/${crew.id}/join`, { 
-      userEmail: user.email
-    }).catch(() => {});
+    try {
+      await axios.post(`${API_URL}/api/social/crews/${crew.id}/join`, { 
+        userEmail: user.email
+      });
+      
+      // Join socket room for real-time updates
+      socket.emit('join_crew_room', crew.id);
+    } catch (error) {
+      console.log('Backend join failed, using localStorage');
+    }
     
     const updated = [...joinedCrews, crew.id];
     setJoinedCrews(updated);
@@ -4204,6 +4306,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     setCrews(updatedCrews);
     localStorage.setItem('crews', JSON.stringify(updatedCrews));
     if (selectedCrew?.id === crew.id) { setView('list'); setSelectedCrew(null); }
+    
+    // Leave socket room
+    socket.emit('leave_crew_room', crew.id);
   };
 
   const createCrew = async () => {
@@ -4253,6 +4358,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       const res = await axios.post(`${API_URL}/api/social/crews/${selectedCrew.id}/messages`, msg);
       if (res.data.success) {
         setMessages(prev => [...prev, { ...res.data.message, timestamp: new Date(res.data.message.timestamp) }]);
+        
+        // FIX 3: Socket.io for real-time messages
+        socket.emit('new_crew_message', {
+          crewId: selectedCrew.id,
+          message: res.data.message
+        });
       }
     } catch {
       const localMsg = { id: `msg_${Date.now()}`, ...msg };
@@ -4260,6 +4371,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       existing.push(localMsg);
       localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existing));
       setMessages(prev => [...prev, { ...localMsg, timestamp: new Date() }]);
+      
+      // Still emit socket for real-time if backend fails
+      socket.emit('new_crew_message', {
+        crewId: selectedCrew.id,
+        message: localMsg
+      });
     }
 
     const otherMembers = crewMembers.filter(member => member.email !== user.email);
@@ -4278,9 +4395,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       const memberNotifs = JSON.parse(localStorage.getItem(`user_${member.email}_notifications`) || '[]');
       memberNotifs.unshift(notif);
       localStorage.setItem(`user_${member.email}_notifications`, JSON.stringify(memberNotifs));
+      
+      // FIX 3: Socket.io for real-time notifications
+      socket.emit('new_notification', {
+        toEmail: member.email,
+        notification: notif
+      });
     });
     
-    window.dispatchEvent(new StorageEvent('storage', { key: `user_${user.email}_notifications` }));
     updateNotificationCount?.();
   };
 
@@ -4310,6 +4432,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       localStorage.setItem(`crew_${selectedCrew.id}_messages`, JSON.stringify(existing));
       setMessages(prev => [...prev, { ...msg, timestamp: new Date(msg.timestamp) }]);
       
+      // FIX 3: Socket.io for real-time image messages
+      socket.emit('new_crew_message', {
+        crewId: selectedCrew.id,
+        message: msg
+      });
+      
       const otherMembers = crewMembers.filter(member => member.email !== user.email);
       otherMembers.forEach(member => {
         const notif = {
@@ -4326,9 +4454,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         const memberNotifs = JSON.parse(localStorage.getItem(`user_${member.email}_notifications`) || '[]');
         memberNotifs.unshift(notif);
         localStorage.setItem(`user_${member.email}_notifications`, JSON.stringify(memberNotifs));
+        
+        // FIX 3: Socket.io for real-time notifications
+        socket.emit('new_notification', {
+          toEmail: member.email,
+          notification: notif
+        });
       });
       
-      window.dispatchEvent(new StorageEvent('storage', { key: `user_${user.email}_notifications` }));
       updateNotificationCount?.();
     };
     reader.readAsDataURL(file);
@@ -4651,6 +4784,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                       const ns = JSON.parse(localStorage.getItem(`user_${e}_notifications`) || '[]'); 
                       ns.unshift(n); 
                       localStorage.setItem(`user_${e}_notifications`, JSON.stringify(ns)); 
+                      
+                      // FIX 3: Socket.io for real-time invitations
+                      socket.emit('new_notification', {
+                        toEmail: e,
+                        notification: n
+                      });
+                      
                       alert(`Invited ${e}!`); 
                     } else if (e) {
                       alert('Please enter a valid email');
@@ -5632,6 +5772,25 @@ export default function App() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [loading, setLoading] = useState(true);
 
+  // FIX 1: MongoDB integration - sync localStorage to backend on load
+  const syncLocalPostsToBackend = useCallback(async () => {
+    if (!currentUser) return;
+    
+    const localPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const localUserPosts = localPosts.filter(p => p.userEmail === currentUser.email);
+    
+    if (localUserPosts.length === 0) return;
+    
+    try {
+      for (const post of localUserPosts) {
+        await axios.post(`${API_URL}/api/social/posts`, post);
+      }
+      console.log(`Synced ${localUserPosts.length} posts to backend`);
+    } catch (error) {
+      console.error('Failed to sync posts to backend:', error);
+    }
+  }, [currentUser]);
+
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -5661,6 +5820,7 @@ export default function App() {
         setCurrentUser(user);
         setIsLoggedIn(true);
         
+        // FIX 2: Use user.email for all localStorage keys
         const userFollowing = JSON.parse(localStorage.getItem(`user_${user.email}_following`) || '[]');
         const userFollowers = JSON.parse(localStorage.getItem(`user_${user.email}_followers`) || '[]');
         const userBlocked = JSON.parse(localStorage.getItem(`user_${user.email}_blocked`) || '[]');
@@ -5673,10 +5833,28 @@ export default function App() {
         
         const profileImage = localStorage.getItem(`user_${user.email}_profile_image`);
         if (profileImage) setProfileSrc(profileImage);
+        
+        // FIX 1: Try to fetch from MongoDB first
+        try {
+          const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`);
+          if (res.data.success && res.data.posts.length > 0) {
+            setPosts(res.data.posts);
+          } else {
+            // Fallback to localStorage
+            const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+            setPosts(allPosts);
+            
+            // Sync local posts to backend if online
+            if (navigator.onLine) {
+              syncLocalPostsToBackend();
+            }
+          }
+        } catch (error) {
+          // Fallback to localStorage
+          const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+          setPosts(allPosts);
+        }
       }
-      
-      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-      setPosts(allPosts);
       
       const storedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
       if (storedCrews.length > 0) {
@@ -5687,11 +5865,12 @@ export default function App() {
     };
 
     loadInitialData();
-  }, []);
+  }, [syncLocalPostsToBackend]);
 
   const checkForNewNotifications = useCallback(() => {
     if (!currentUser) return;
     
+    // FIX 2: Use user.email for localStorage
     const notifications = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
     const unreadCount = notifications.filter(n => !n.read).length;
     setNotificationCount(unreadCount);
@@ -5724,7 +5903,10 @@ export default function App() {
     };
   }, [currentUser, checkForNewNotifications]);
 
+  // FIX 3: Socket.io listeners for real-time notifications
   useEffect(() => {
+    if (!currentUser) return;
+    
     socket.on('new_notification', (notification) => {
       if (notification.toEmail === currentUser?.email) {
         setNotificationCount(prev => prev + 1);
@@ -5736,8 +5918,37 @@ export default function App() {
       }
     });
 
+    socket.on('post_liked', ({ postId, likes, likedBy }) => {
+      if (likedBy && likedBy.email !== currentUser.email) {
+        setCurrentToast({
+          id: Date.now(),
+          type: 'like',
+          message: `${likedBy.name} liked your post`,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
+      // Update post in state
+      setPosts(prev => prev.map(p => 
+        (p._id || p.id) === postId ? { ...p, likes } : p
+      ));
+    });
+
+    socket.on('new_comment', ({ postId, comment, commenter }) => {
+      if (commenter && commenter.email !== currentUser.email) {
+        setCurrentToast({
+          id: Date.now(),
+          type: 'comment',
+          message: `${commenter.name} commented on your post`,
+          timestamp: new Date().toISOString()
+        });
+      }
+    });
+
     return () => {
       socket.off('new_notification');
+      socket.off('post_liked');
+      socket.off('new_comment');
     };
   }, [currentUser]);
 
@@ -5746,6 +5957,7 @@ export default function App() {
     setIsLoggedIn(true);
     localStorage.setItem('currentUser', JSON.stringify(userData));
     
+    // FIX 2: Use user.email for all localStorage keys
     if (!localStorage.getItem(`user_${userData.email}_following`)) {
       localStorage.setItem(`user_${userData.email}_following`, JSON.stringify([]));
     }
@@ -5792,6 +6004,7 @@ export default function App() {
     localStorage.setItem('allPosts', JSON.stringify(allPosts));
     setPosts(allPosts);
     
+    // FIX 2: Use user.email for localStorage
     const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
     stats.postsCreated = (stats.postsCreated || 0) + 1;
     localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(stats));
@@ -5799,6 +6012,9 @@ export default function App() {
     const updatedUser = { ...currentUser, stats };
     setCurrentUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    
+    // FIX 3: Emit socket event for real-time updates
+    socket.emit('new_post', newPost);
   };
 
   const handleDeletePost = (post) => {
@@ -5807,12 +6023,17 @@ export default function App() {
     localStorage.setItem('allPosts', JSON.stringify(filtered));
     setPosts(filtered);
     
+    // FIX 2: Use user.email for localStorage
     const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
     stats.postsCreated = Math.max((stats.postsCreated || 0) - 1, 0);
     localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(stats));
+    
+    // FIX 3: Emit socket event
+    socket.emit('post_deleted', { postId: post.id });
   };
 
   const handleSavePost = (post) => {
+    // FIX 2: Use user.email for localStorage
     const userSaved = JSON.parse(localStorage.getItem(`user_${currentUser.email}_savedPosts`) || '[]');
     
     if (userSaved.includes(post.id)) {
@@ -5848,10 +6069,17 @@ export default function App() {
         read: false,
         postId: originalPost.id
       };
+      // FIX 2: Use user.email for localStorage
       const notifs = JSON.parse(localStorage.getItem(`user_${originalPost.userEmail}_notifications`) || '[]');
       notifs.unshift(notif);
       localStorage.setItem(`user_${originalPost.userEmail}_notifications`, JSON.stringify(notifs));
-      window.dispatchEvent(new StorageEvent('storage', { key: `user_${originalPost.userEmail}_notifications` }));
+      
+      // FIX 3: Socket.io for real-time notifications
+      socket.emit('new_notification', {
+        toEmail: originalPost.userEmail,
+        notification: notif
+      });
+      
       checkForNewNotifications();
     }
     
@@ -5886,6 +6114,7 @@ export default function App() {
   };
 
   const handleFollow = (targetEmail, targetName) => {
+    // FIX 2: Use user.email for localStorage
     const currentFollowing = JSON.parse(localStorage.getItem(`user_${currentUser.email}_following`) || '[]');
     
     if (currentFollowing.includes(targetEmail)) {
@@ -5916,15 +6145,23 @@ export default function App() {
         timestamp: new Date().toISOString(), 
         read: false 
       };
+      // FIX 2: Use user.email for localStorage
       const notifs = JSON.parse(localStorage.getItem(`user_${targetEmail}_notifications`) || '[]');
       notifs.unshift(notif);
       localStorage.setItem(`user_${targetEmail}_notifications`, JSON.stringify(notifs));
-      window.dispatchEvent(new StorageEvent('storage', { key: `user_${targetEmail}_notifications` }));
+      
+      // FIX 3: Socket.io for real-time notifications
+      socket.emit('new_notification', {
+        toEmail: targetEmail,
+        notification: notif
+      });
+      
       checkForNewNotifications();
     }
   };
 
   const handleBlockUser = (targetEmail, targetName) => {
+    // FIX 2: Use user.email for localStorage
     const currentBlocked = JSON.parse(localStorage.getItem(`user_${currentUser.email}_blocked`) || '[]');
     
     if (currentBlocked.includes(targetEmail)) {
@@ -5958,7 +6195,6 @@ export default function App() {
   const filteredPosts = posts.filter(post => !blockedUsers.includes(post.userEmail));
 
   const handleViewBookDetails = (book) => {
-    // This will be handled by the component that uses this function
     console.log('View book details:', book);
   };
 
