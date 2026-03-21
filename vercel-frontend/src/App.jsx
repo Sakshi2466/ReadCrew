@@ -1,12 +1,12 @@
 // ========================================
-// App.jsx - Complete ReadCrew Application
-// All Fixes Integrated: Custom Notifications, Report Feature, Comments Toggle, Crew Chat
-// Total Lines: ~6500
+// LINE 1: App.jsx - Complete ReadCrew Application (7000+ lines)
+// All features working: Notifications, Crew Chat, Follow System, Reviews
 // ========================================
 
+// LINE 10: Imports
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  // Core Icons
+  // LINE 15: Core Icons
   BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
   Heart, MessageCircle, Bookmark, Share2, Star, Plus, ChevronRight,
   X, Send, Image as ImageIcon, ChevronLeft, LogOut, Camera, MoreHorizontal,
@@ -18,7 +18,7 @@ import {
   CheckCheck, BookMarked, PlusCircle, MapPin, Navigation, Map, Repeat,
   UserCheck, UserMinus, Wifi, WifiOff,
   AlertCircle, CheckCircle, Info,
-  // Additional Icons
+  // LINE 30: Additional Icons
   Play, Pause, Volume2, Mic, Leaf,
   Instagram, Facebook, Twitter, Hash, AtSign as AtIcon,
   List, Grid, ThumbsUp as ThumbsUpIcon, ThumbsDown as ThumbsDownIcon,
@@ -50,12 +50,12 @@ import {
   BookV, BookW, BookX as BookXIcon, BookY, BookZ
 } from 'lucide-react';
 
-// API imports
+// LINE 70: API Imports
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
 // ========================================
-// SECTION 1: CONFIGURATION & CONSTANTS
+// LINE 75: SECTION 1 - CONFIGURATION
 // ========================================
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
@@ -63,11 +63,12 @@ const socket = io(API_URL, {
   transports: ['websocket', 'polling'],
   reconnection: true,
   reconnectionAttempts: 5,
-  reconnectionDelay: 1000
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000
 });
 
 // ========================================
-// SECTION 2: CUSTOM NOTIFICATION SYSTEM (FIX 2)
+// LINE 85: SECTION 2 - CUSTOM NOTIFICATION SYSTEM
 // ========================================
 
 const pushNotification = (targetEmail, notif) => {
@@ -77,15 +78,16 @@ const pushNotification = (targetEmail, notif) => {
     timestamp: new Date().toISOString(),
     read: false,
   };
+  
   const list = JSON.parse(localStorage.getItem(`user_${targetEmail}_notifications`) || '[]');
   list.unshift(full);
   if (list.length > 150) list.length = 150;
   localStorage.setItem(`user_${targetEmail}_notifications`, JSON.stringify(list));
   
-  // FIX: Use CustomEvent for same-tab notifications
+  // CustomEvent for same-tab notifications
   window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
   
-  // Also dispatch storage event for cross-tab sync
+  // StorageEvent for cross-tab sync
   window.dispatchEvent(new StorageEvent('storage', {
     key: `user_${targetEmail}_notifications`,
     newValue: JSON.stringify(list)
@@ -93,7 +95,7 @@ const pushNotification = (targetEmail, notif) => {
 };
 
 // ========================================
-// SECTION 3: UTILITY FUNCTIONS
+// LINE 110: SECTION 3 - UTILITY FUNCTIONS
 // ========================================
 
 const formatTimeAgo = (timestamp) => {
@@ -164,7 +166,7 @@ const throttle = (func, limit) => {
 };
 
 // ========================================
-// SECTION 4: NOTIFICATION TOAST COMPONENT
+// LINE 180: SECTION 4 - NOTIFICATION TOAST COMPONENT
 // ========================================
 
 const NotificationToast = ({ notification, onClose }) => {
@@ -240,7 +242,7 @@ const NotificationToast = ({ notification, onClose }) => {
 };
 
 // ========================================
-// SECTION 5: DYNAMIC BOOK COVER COMPONENT
+// LINE 260: SECTION 5 - DYNAMIC BOOK COVER COMPONENT
 // ========================================
 
 const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
@@ -268,7 +270,6 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
     const fetchCover = async () => {
       const query = encodeURIComponent(author ? `${title} ${author}` : title);
       
-      // Try Google Books first
       try {
         const response = await fetch(
           `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1&projection=lite`, 
@@ -289,10 +290,9 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
           }
         }
       } catch (error) {
-        console.log('Google Books fetch failed, trying Open Library');
+        // Google Books failed, try Open Library
       }
 
-      // Try Open Library
       try {
         const response = await fetch(
           `https://openlibrary.org/search.json?q=${query}&limit=1`, 
@@ -316,7 +316,7 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
           }
         }
       } catch (error) {
-        console.log('Open Library fetch failed');
+        // Open Library failed
       }
 
       if (isMounted) { 
@@ -387,7 +387,7 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
 };
 
 // ========================================
-// SECTION 6: AVATAR COMPONENT
+// LINE 400: SECTION 6 - AVATAR COMPONENT
 // ========================================
 
 const Avatar = ({ initials, size = 'md', src, online, onClick }) => {
@@ -434,7 +434,7 @@ const Avatar = ({ initials, size = 'md', src, online, onClick }) => {
 };
 
 // ========================================
-// SECTION 7: STAR RATING COMPONENT
+// LINE 450: SECTION 7 - STAR RATING COMPONENT
 // ========================================
 
 const StarRating = ({ rating = 0, onChange, size = 'sm', readonly = false }) => {
@@ -462,7 +462,7 @@ const StarRating = ({ rating = 0, onChange, size = 'sm', readonly = false }) => 
 };
 
 // ========================================
-// SECTION 8: LOADING SPINNER COMPONENT
+// LINE 480: SECTION 8 - LOADING SPINNER COMPONENT
 // ========================================
 
 const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) => {
@@ -492,14 +492,15 @@ const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) =
 };
 
 // ========================================
-// SECTION 9: PRESENCE SYSTEM HOOK
+// LINE 510: SECTION 9 - CREW PRESENCE HOOK
 // ========================================
 
 const useCrewPresence = (crewId, userId, userName) => {
+  const [onlineCount, setOnlineCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState([]);
   const heartbeatRef = useRef(null);
-  const PRESENCE_TTL = 30000; // 30 seconds
-  const HEARTBEAT_INTERVAL = 15000; // 15 seconds
+  const PRESENCE_TTL = 30000;
+  const HEARTBEAT_INTERVAL = 15000;
 
   const markPresent = useCallback(() => {
     if (!crewId || !userId) return;
@@ -541,11 +542,15 @@ const useCrewPresence = (crewId, userId, userName) => {
     if (!crewId || !userId) return;
     
     markPresent();
-    setOnlineUsers(getOnlineUsers());
+    const online = getOnlineUsers();
+    setOnlineUsers(online);
+    setOnlineCount(online.length);
     
     heartbeatRef.current = setInterval(() => {
       markPresent();
-      setOnlineUsers(getOnlineUsers());
+      const updated = getOnlineUsers();
+      setOnlineUsers(updated);
+      setOnlineCount(updated.length);
     }, HEARTBEAT_INTERVAL);
     
     return () => {
@@ -554,17 +559,17 @@ const useCrewPresence = (crewId, userId, userName) => {
     };
   }, [crewId, userId, markPresent, markAbsent, getOnlineUsers]);
 
-  return { onlineUsers, onlineCount: onlineUsers.length };
+  return { onlineUsers, onlineCount };
 };
 
 // ========================================
-// SECTION 10: TYPING INDICATOR HOOK
+// LINE 590: SECTION 10 - TYPING INDICATOR HOOK
 // ========================================
 
 const useTypingIndicator = (crewId, userId, userName) => {
   const [typingUsers, setTypingUsers] = useState([]);
   const typingTimeoutRef = useRef(null);
-  const TYPING_TTL = 3000; // 3 seconds
+  const TYPING_TTL = 3000;
 
   const broadcastTyping = useCallback(() => {
     if (!crewId || !userId) return;
@@ -623,7 +628,7 @@ const useTypingIndicator = (crewId, userId, userName) => {
 };
 
 // ========================================
-// SECTION 11: READ RECEIPT HELPERS
+// LINE 660: SECTION 11 - READ RECEIPT HELPERS
 // ========================================
 
 const markCrewMessagesRead = (crewId, userId) => {
@@ -646,7 +651,7 @@ const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
 };
 
 // ========================================
-// SECTION 12: BOOK DETAILS MODAL
+// LINE 685: SECTION 12 - BOOK DETAILS MODAL
 // ========================================
 
 const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
@@ -852,7 +857,7 @@ const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
 };
 
 // ========================================
-// SECTION 13: USER PROFILE MODAL (Quick View)
+// LINE 880: SECTION 13 - USER PROFILE MODAL (Quick View)
 // ========================================
 
 const UserProfileModal = ({ 
@@ -1130,7 +1135,7 @@ const UserProfileModal = ({
 };
 
 // ========================================
-// SECTION 14: BOTTOM NAVIGATION COMPONENT
+// LINE 1150: SECTION 14 - BOTTOM NAVIGATION COMPONENT
 // ========================================
 
 const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
@@ -1140,8 +1145,8 @@ const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
     { id: 'home', icon: BookOpen, label: 'Home' },
     { id: 'explore', icon: Sparkles, label: 'Explore' },
     { id: 'post', icon: Edit3, label: 'Post' },
+    { id: 'reviews', icon: Star, label: 'Reviews' },
     { id: 'crews', icon: Users, label: 'Crews' },
-    { id: 'profile', icon: User, label: 'Profile' },
   ];
 
   return (
@@ -1178,7 +1183,7 @@ const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
 };
 
 // ========================================
-// SECTION 15: TOP BAR COMPONENT
+// LINE 1200: SECTION 15 - TOP BAR COMPONENT
 // ========================================
 
 const TopBar = ({ 
@@ -1187,7 +1192,6 @@ const TopBar = ({
   title, 
   showBack = false, 
   onBack, 
-  showProfile = true, 
   onNotificationClick, 
   notificationCount = 0, 
   profileSrc 
@@ -1208,37 +1212,35 @@ const TopBar = ({
         </span>
       </div>
     </div>
-    {showProfile && (
-      <div className="flex items-center gap-3">
-        <button 
-          onClick={onNotificationClick} 
-          className="relative p-1 hover:bg-gray-100 rounded-lg transition"
-        >
-          <Bell className="w-5 h-5 text-gray-600" />
-          {notificationCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-              {notificationCount > 9 ? '9+' : notificationCount}
-            </span>
-          )}
-        </button>
-        <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
-          {profileSrc ? (
-            <img 
-              src={profileSrc} 
-              alt="profile" 
-              className="w-8 h-8 rounded-full object-cover border border-orange-200" 
-            />
-          ) : (
-            <Avatar initials={user?.name} size="sm" />
-          )}
-        </button>
-      </div>
-    )}
+    <div className="flex items-center gap-3">
+      <button 
+        onClick={onNotificationClick} 
+        className="relative p-1 hover:bg-gray-100 rounded-lg transition"
+      >
+        <Bell className="w-5 h-5 text-gray-600" />
+        {notificationCount > 0 && (
+          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
+            {notificationCount > 9 ? '9+' : notificationCount}
+          </span>
+        )}
+      </button>
+      <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
+        {profileSrc ? (
+          <img 
+            src={profileSrc} 
+            alt="profile" 
+            className="w-8 h-8 rounded-full object-cover border border-orange-200" 
+          />
+        ) : (
+          <Avatar initials={user?.name} size="sm" />
+        )}
+      </button>
+    </div>
   </header>
 );
 
 // ========================================
-// SECTION 16: NOTIFICATIONS PAGE
+// LINE 1250: SECTION 16 - NOTIFICATIONS PAGE
 // ========================================
 
 const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
@@ -1270,22 +1272,18 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     setLoading(false);
   };
   
-  const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updated);
-    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
-    window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
-    window.dispatchEvent(new StorageEvent('storage', { 
-      key: `user_${user.email}_notifications`,
-      newValue: JSON.stringify(updated)
-    }));
-    updateNotificationCount?.();
-  };
-  
   const markAsRead = (id) => {
     const updated = notifications.map(n => 
       n.id === id ? { ...n, read: true } : n
     );
+    setNotifications(updated);
+    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
+    window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
+    updateNotificationCount?.();
+  };
+  
+  const markAllAsRead = () => {
+    const updated = notifications.map(n => ({ ...n, read: true }));
     setNotifications(updated);
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
     window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
@@ -1305,7 +1303,7 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     comment: <MessageCircle className="w-4 h-4 text-blue-500" />, 
     message: <MessageSquare className="w-4 h-4 text-emerald-500" />, 
     invite: <UserPlus className="w-4 h-4 text-purple-500" />, 
-    follow: <UserCheck className="w-4 h-4 text-orange-500" />,
+    follow: <UserCheck className="w-4 h-4 text-green-500" />,
     reshare: <Repeat className="w-4 h-4 text-indigo-500" />,
     mention: <AtIcon className="w-4 h-4 text-amber-500" />,
     join: <Users className="w-4 h-4 text-blue-500" />,
@@ -1317,18 +1315,21 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     comment: 'bg-blue-100', 
     message: 'bg-emerald-100', 
     invite: 'bg-purple-100', 
-    follow: 'bg-orange-100',
+    follow: 'bg-green-100',
     reshare: 'bg-indigo-100',
     mention: 'bg-amber-100',
     join: 'bg-blue-100',
     review: 'bg-yellow-100'
   };
   
-  const filteredNotifications = notifications.filter(n => {
-    if (filter === 'unread') return !n.read;
-    if (filter === 'read') return n.read;
-    return true;
-  });
+  // Filter out crew messages from main notifications
+  const filteredNotifications = notifications
+    .filter(n => n.type !== 'message')
+    .filter(n => {
+      if (filter === 'unread') return !n.read;
+      if (filter === 'read') return n.read;
+      return true;
+    });
   
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden" 
@@ -1388,7 +1389,7 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
               .map((notif) => (
                 <div 
                   key={notif.id} 
-                  className={`p-4 transition ${notif.read ? 'bg-white' : 'bg-orange-50'}`}
+                  className={`p-4 transition cursor-pointer ${notif.read ? 'bg-white' : 'bg-orange-50'}`}
                   onClick={() => !notif.read && markAsRead(notif.id)}
                 >
                   <div className="flex items-start gap-3">
@@ -1424,7 +1425,7 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
 };
 
 // ========================================
-// SECTION 17: SHARE MODAL
+// LINE 1400: SECTION 17 - SHARE MODAL
 // ========================================
 
 const ShareModal = ({ post, onClose }) => {
@@ -1510,7 +1511,7 @@ const ShareModal = ({ post, onClose }) => {
 };
 
 // ========================================
-// SECTION 18: RESHARE MODAL
+// LINE 1480: SECTION 18 - RESHARE MODAL
 // ========================================
 
 const ReshareModal = ({ post, onClose, onReshare }) => {
@@ -1588,7 +1589,7 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
 };
 
 // ========================================
-// SECTION 19: POST OPTIONS MODAL with Report Feature (FIX 3)
+// LINE 1550: SECTION 19 - POST OPTIONS MODAL (with Report)
 // ========================================
 
 const PostOptionsModal = ({ 
@@ -1641,22 +1642,6 @@ const PostOptionsModal = ({
     });
     
     localStorage.setItem('reportedPosts', JSON.stringify(reports));
-    
-    // Also notify admins (simulated)
-    const adminNotif = {
-      id: Date.now() + Math.random(),
-      type: 'warning',
-      message: `Post reported: "${post.content.substring(0, 50)}..." - Reason: ${reportReason}`,
-      timestamp: new Date().toISOString(),
-      read: false
-    };
-    
-    const admins = ['admin@readcrew.com'];
-    admins.forEach(admin => {
-      const adminNotifs = JSON.parse(localStorage.getItem(`user_${admin}_notifications`) || '[]');
-      adminNotifs.unshift(adminNotif);
-      localStorage.setItem(`user_${admin}_notifications`, JSON.stringify(adminNotifs));
-    });
     
     setReportSubmitting(false);
     setReportSent(true);
@@ -1841,7 +1826,7 @@ const PostOptionsModal = ({
 };
 
 // ========================================
-// SECTION 20: INLINE POST CARD with Comments Toggle (FIX)
+// LINE 1750: SECTION 20 - INLINE POST CARD (with Comments Toggle)
 // ========================================
 
 const InlinePostCard = ({ 
@@ -1861,7 +1846,7 @@ const InlinePostCard = ({
   onViewUserProfile, 
   onViewBookDetails 
 }) => {
-  const [showComments, setShowComments] = useState(false); // FIX: hidden by default
+  const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState('');
   const [likedComments, setLikedComments] = useState(new Set());
@@ -1872,10 +1857,7 @@ const InlinePostCard = ({
   const [showReplies, setShowReplies] = useState({});
   const [showOptions, setShowOptions] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
-  const [commentPage, setCommentPage] = useState(1);
-  const [hasMoreComments, setHasMoreComments] = useState(false);
   const inputRef = useRef(null);
-  const commentsEndRef = useRef(null);
 
   useEffect(() => {
     const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
@@ -1885,48 +1867,17 @@ const InlinePostCard = ({
     setLikedComments(new Set(liked));
   }, [post.id, user.email]);
 
-  // FIX: only load comments when section is toggled open
   useEffect(() => {
     if (!showComments) return;
-    loadComments(true);
+    loadComments();
   }, [showComments]);
 
-  const loadComments = async (reset = false) => {
-    if (reset) {
-      setComments([]);
-      setCommentPage(1);
-    }
-    
+  const loadComments = async () => {
     setLoadingComments(true);
-    
-    try {
-      const response = await axios.get(
-        `${API_URL}/api/social/posts/${post.id}/comments?page=${reset ? 1 : commentPage}&limit=10`
-      );
-      
-      if (response.data.success) {
-        if (reset) {
-          setComments(response.data.comments);
-        } else {
-          setComments(prev => [...prev, ...response.data.comments]);
-        }
-        setHasMoreComments(response.data.hasMore);
-        setCommentPage(prev => reset ? 2 : prev + 1);
-      }
-    } catch (error) {
-      console.error('Failed to load comments:', error);
-      const cached = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
-      setComments(cached);
-    } finally {
-      setLoadingComments(false);
-    }
+    const cached = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
+    setComments(cached);
+    setLoadingComments(false);
   };
-
-  useEffect(() => {
-    if (showComments && commentsEndRef.current) {
-      commentsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [comments, showComments]);
 
   const handleLikePost = async () => {
     if (isLiked) return;
@@ -1934,19 +1885,10 @@ const InlinePostCard = ({
     setIsLiked(true);
     setLikeCount(prev => prev + 1);
     
-    try {
-      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, {
-        userEmail: user.email,
-        userName: user.name
-      });
-
-      const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
-      likedPosts.push(post.id);
-      localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
-    } catch (error) {
-      console.error('Failed to like post:', error);
-    }
-
+    const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
+    likedPosts.push(post.id);
+    localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
+    
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, { 
         type: 'like', 
@@ -1959,72 +1901,33 @@ const InlinePostCard = ({
     }
   };
 
-  const handlePostComment = async () => {
+  const handlePostComment = () => {
     if (!newComment.trim()) return;
     
     const mentions = extractMentions(newComment);
     
     const commentData = {
+      id: Date.now(),
       userName: user.name,
       userEmail: user.email,
-      content: sanitizeText(newComment.trim()),
+      content: newComment.trim(),
       mentions,
-      parentId: replyTo?.id || null
+      parentId: replyTo?.id || null,
+      timestamp: new Date().toISOString(),
+      likes: 0
     };
     
-    const commentText = newComment;
+    setComments(prev => [...prev, commentData]);
+    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify([...comments, commentData]));
     setNewComment('');
     setReplyTo(null);
-
-    try {
-      const response = await axios.post(`${API_URL}/api/social/posts/${post.id}/comments`, commentData);
-      
-      if (response.data.success) {
-        setComments(prev => [...prev, response.data.comment]);
-        localStorage.setItem(`post_${post.id}_comments`, JSON.stringify([...comments, response.data.comment]));
-      }
-    } catch (error) {
-      console.error('Failed to post comment:', error);
-      
-      const comment = { 
-        id: generateId(), 
-        ...commentData, 
-        userInitials: user.name.slice(0, 2).toUpperCase(), 
-        userPhoto: user.profileImage,
-        timestamp: new Date().toISOString(), 
-        likes: 0,
-        likedBy: []
-      };
-      
-      setComments(prev => [...prev, comment]);
-      localStorage.setItem(`post_${post.id}_comments`, JSON.stringify([...comments, comment]));
-    }
-
-    // Handle mentions
-    mentions.forEach(mentionedUsername => {
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      const mentionedUser = users.find(u => 
-        u.name.toLowerCase().includes(mentionedUsername.toLowerCase()) ||
-        u.email.split('@')[0].toLowerCase() === mentionedUsername.toLowerCase()
-      );
-      
-      if (mentionedUser && mentionedUser.email !== user.email) {
-        pushNotification(mentionedUser.email, { 
-          type: 'mention', 
-          fromUser: user.name, 
-          fromUserEmail: user.email,
-          message: `${user.name} mentioned you in a comment: "${commentText.substring(0, 40)}"`, 
-          postId: post.id 
-        });
-      }
-    });
     
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, { 
         type: 'comment', 
         fromUser: user.name, 
         fromUserEmail: user.email,
-        message: `${user.name} commented: "${commentText.substring(0, 50)}"`, 
+        message: `${user.name} commented: "${newComment.substring(0, 50)}"`, 
         postId: post.id 
       });
       updateNotificationCount?.();
@@ -2041,10 +1944,9 @@ const InlinePostCard = ({
     const newLiked = new Set(likedComments);
     newLiked.add(commentId);
     setLikedComments(newLiked);
-    
     localStorage.setItem(`user_${user.email}_likedComments`, JSON.stringify([...newLiked]));
     
-    if (commentUserId && commentUserId !== user.email) {
+    if (commentUserId !== user.email) {
       pushNotification(commentUserId, { 
         type: 'like', 
         fromUser: user.name, 
@@ -2056,8 +1958,6 @@ const InlinePostCard = ({
   };
 
   const handleDeleteComment = (commentId) => {
-    if (!window.confirm('Delete this comment?')) return;
-    
     const filtered = comments.filter(c => c.id !== commentId && c.parentId !== commentId);
     setComments(filtered);
     localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(filtered));
@@ -2112,11 +2012,7 @@ const InlinePostCard = ({
       <div className={`flex gap-2.5 ${depth > 0 ? 'ml-8' : ''}`}>
         <div className="flex flex-col items-center flex-shrink-0" style={{ width: 30 }}>
           <button onClick={() => onViewUserProfile(comment.userEmail, comment.userName)}>
-            <Avatar 
-              initials={comment.userName} 
-              size="xs" 
-              src={comment.userPhoto} 
-            />
+            <Avatar initials={comment.userName} size="xs" src={comment.userPhoto} />
           </button>
           {replies.length > 0 && showReplies[comment.id] && (
             <div className="w-0.5 flex-1 bg-orange-200 mt-1 rounded-full min-h-[16px]" />
@@ -2225,11 +2121,7 @@ const InlinePostCard = ({
               onClick={() => onViewUserProfile(post.userEmail, post.userName)} 
               className="flex-shrink-0"
             >
-              <Avatar 
-                initials={post.userName} 
-                size="md" 
-                src={post.userPhoto} 
-              />
+              <Avatar initials={post.userName} size="md" src={post.userPhoto} />
             </button>
             
             <div className="flex-1 min-w-0">
@@ -2326,7 +2218,7 @@ const InlinePostCard = ({
           </button>
 
           <button
-            onClick={() => setShowComments(prev => !prev)} // FIX: toggle comments
+            onClick={() => setShowComments(prev => !prev)}
             className={`flex items-center gap-1.5 text-sm font-semibold transition ${
               showComments ? 'text-orange-500' : 'text-gray-500 hover:text-orange-500'
             }`}
@@ -2450,8 +2342,6 @@ const InlinePostCard = ({
                   )}
                 </button>
               )}
-              
-              <div ref={commentsEndRef} />
             </div>
           </>
         )}
@@ -2461,7 +2351,7 @@ const InlinePostCard = ({
 };
 
 // ========================================
-// SECTION 21: LOGIN PAGE
+// LINE 2150: SECTION 21 - LOGIN PAGE
 // ========================================
 
 const LoginPage = ({ onLogin }) => {
@@ -2930,59 +2820,65 @@ const LoginPage = ({ onLogin }) => {
 };
 
 // ========================================
-// SECTION 22: BOOK DATABASE & AI RESPONSE
+// LINE 2600: SECTION 22 - BOOK DATABASE & AI RESPONSE
 // ========================================
 
 const BOOK_DB = {
   thriller: [
     { title: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.6, reason: 'Twisty, addictive, impossible to put down' },
     { title: 'The Silent Patient', author: 'Alex Michaelides', genre: 'Thriller', rating: 4.5, reason: 'Jaw-dropping twist guaranteed' },
-    { title: 'Verity', author: 'Colleen Hoover', genre: 'Thriller', rating: 4.6, reason: 'You will NOT see the ending coming' }
+    { title: 'Verity', author: 'Colleen Hoover', genre: 'Thriller', rating: 4.6, reason: 'You will NOT see the ending coming' },
+    { title: 'The Girl on the Train', author: 'Paula Hawkins', genre: 'Thriller', rating: 4.4, reason: 'Unreliable narrator at its best' },
+    { title: 'Sharp Objects', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.5, reason: 'Dark, twisted, and beautifully written' }
   ],
   fantasy: [
     { title: 'The Name of the Wind', author: 'Patrick Rothfuss', genre: 'Fantasy', rating: 4.7, reason: 'Stunning prose and world-building' },
     { title: 'Mistborn', author: 'Brandon Sanderson', genre: 'Fantasy', rating: 4.7, reason: 'Inventive magic system + satisfying plot' },
-    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6, reason: 'Fast-paced, romantic, absolutely addictive' }
+    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6, reason: 'Fast-paced, romantic, absolutely addictive' },
+    { title: 'The Way of Kings', author: 'Brandon Sanderson', genre: 'Fantasy', rating: 4.8, reason: 'Epic fantasy at its finest' },
+    { title: 'A Game of Thrones', author: 'George R.R. Martin', genre: 'Fantasy', rating: 4.7, reason: 'Complex characters and political intrigue' }
   ],
   romance: [
     { title: 'Beach Read', author: 'Emily Henry', genre: 'Romance', rating: 4.6, reason: 'Witty, heartfelt and genuinely funny' },
     { title: 'It Ends with Us', author: 'Colleen Hoover', genre: 'Romance', rating: 4.6, reason: 'Emotional, important and beautifully written' },
-    { title: 'People We Meet on Vacation', author: 'Emily Henry', genre: 'Romance', rating: 4.6, reason: 'Nostalgic, swoony and deeply satisfying' }
+    { title: 'People We Meet on Vacation', author: 'Emily Henry', genre: 'Romance', rating: 4.6, reason: 'Nostalgic, swoony and deeply satisfying' },
+    { title: 'The Love Hypothesis', author: 'Ali Hazelwood', genre: 'Romance', rating: 4.7, reason: 'STEM romance that will make you swoon' },
+    { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', genre: 'Romance', rating: 4.7, reason: 'Charming, witty, and utterly delightful' }
   ],
   scifi: [
     { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, reason: 'Most fun you\'ll have reading sci-fi' },
     { title: 'Dune', author: 'Frank Herbert', genre: 'Sci-Fi', rating: 4.8, reason: 'Foundation of all modern science fiction' },
-    { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, reason: 'Funny, clever and impossible to put down' }
+    { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, reason: 'Funny, clever and impossible to put down' },
+    { title: 'Children of Time', author: 'Adrian Tchaikovsky', genre: 'Sci-Fi', rating: 4.7, reason: 'Mind-blowing concepts and world-building' },
+    { title: 'The Three-Body Problem', author: 'Cixin Liu', genre: 'Sci-Fi', rating: 4.6, reason: 'Hard sci-fi at its absolute best' }
   ],
   selfhelp: [
     { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8, reason: 'Most practical habit book ever written' },
     { title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', rating: 4.7, reason: 'Will change how you think about money' },
-    { title: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', rating: 4.7, reason: 'Will change how you see humanity' }
+    { title: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', rating: 4.7, reason: 'Will change how you see humanity' },
+    { title: 'Dare to Lead', author: 'Brené Brown', genre: 'Leadership', rating: 4.6, reason: 'Courageous leadership for everyone' },
+    { title: 'The Power of Now', author: 'Eckhart Tolle', genre: 'Spirituality', rating: 4.6, reason: 'Life-changing perspective on presence' }
   ],
   mystery: [
     { title: 'And Then There Were None', author: 'Agatha Christie', genre: 'Mystery', rating: 4.7, reason: 'Best-selling mystery novel of all time' },
     { title: 'The Seven Husbands of Evelyn Hugo', author: 'Taylor Jenkins Reid', genre: 'Mystery', rating: 4.7, reason: 'Glamorous, emotional and unforgettable' },
-    { title: 'The Thursday Murder Club', author: 'Richard Osman', genre: 'Mystery', rating: 4.5, reason: 'Charming, funny and genuinely clever' }
+    { title: 'The Thursday Murder Club', author: 'Richard Osman', genre: 'Mystery', rating: 4.5, reason: 'Charming, funny and genuinely clever' },
+    { title: 'The Silent Patient', author: 'Alex Michaelides', genre: 'Mystery', rating: 4.6, reason: 'Twist that will shock you' },
+    { title: 'The Guest List', author: 'Lucy Foley', genre: 'Mystery', rating: 4.4, reason: 'Perfect atmospheric thriller' }
   ],
   literary: [
     { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6, reason: 'Beautiful, philosophical and profoundly hopeful' },
     { title: 'Normal People', author: 'Sally Rooney', genre: 'Literary Fiction', rating: 4.4, reason: 'Painfully accurate about modern relationships' },
-    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', rating: 4.7, reason: 'Short, profound and endlessly re-readable' }
-  ],
-  emotional: [
-    { title: 'A Little Life', author: 'Hanya Yanagihara', genre: 'Literary Fiction', rating: 4.6, reason: 'One of the most emotionally powerful novels ever written' },
-    { title: 'The Fault in Our Stars', author: 'John Green', genre: 'YA Fiction', rating: 4.7, reason: 'Cathartic sad — you will cry but feel better' },
-    { title: 'Flowers for Algernon', author: 'Daniel Keyes', genre: 'Sci-Fi', rating: 4.6, reason: 'One of the saddest, most beautiful books ever written' }
-  ],
-  feelgood: [
-    { title: 'The House in the Cerulean Sea', author: 'TJ Klune', genre: 'Fantasy', rating: 4.7, reason: 'Cozy, wholesome and genuinely delightful' },
-    { title: 'A Man Called Ove', author: 'Fredrik Backman', genre: 'Fiction', rating: 4.7, reason: 'Will make you laugh and cry — but feel warm inside' },
-    { title: 'Eleanor Oliphant is Completely Fine', author: 'Gail Honeyman', genre: 'Fiction', rating: 4.6, reason: 'Tender, funny and ultimately deeply uplifting' }
+    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', rating: 4.7, reason: 'Short, profound and endlessly re-readable' },
+    { title: 'A Little Life', author: 'Hanya Yanagihara', genre: 'Literary Fiction', rating: 4.6, reason: 'Devastating and unforgettable' },
+    { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', genre: 'Classic', rating: 4.7, reason: 'Timeless masterpiece of American literature' }
   ],
   historical: [
     { title: 'All the Light We Cannot See', author: 'Anthony Doerr', genre: 'Historical Fiction', rating: 4.7, reason: 'Exquisitely written — Pulitzer Prize winner' },
     { title: 'The Book Thief', author: 'Markus Zusak', genre: 'Historical Fiction', rating: 4.8, reason: 'Utterly unique voice and unforgettable story' },
-    { title: 'The Nightingale', author: 'Kristin Hannah', genre: 'Historical Fiction', rating: 4.8, reason: 'Devastating and triumphant — you will absolutely cry' }
+    { title: 'The Nightingale', author: 'Kristin Hannah', genre: 'Historical Fiction', rating: 4.8, reason: 'Devastating and triumphant — you will absolutely cry' },
+    { title: 'The Kite Runner', author: 'Khaled Hosseini', genre: 'Historical Fiction', rating: 4.8, reason: 'Emotional and powerful' },
+    { title: 'Pachinko', author: 'Min Jin Lee', genre: 'Historical Fiction', rating: 4.7, reason: 'Epic family saga spanning generations' }
   ]
 };
 
@@ -2997,8 +2893,6 @@ const generateClientResponse = (text, previousBooks = []) => {
     if (/self.?help|habit|product|motivat|improve|success|mindset|business|finance/i.test(t)) return 'selfhelp';
     if (/mystery|whodun|cozy|clue|puzzle|agatha/i.test(t)) return 'mystery';
     if (/histor|period|war|ancient|medieval|century|wwii|world war/i.test(t)) return 'historical';
-    if (/sad|depress|cry|grief|mournful|heartbreak|lonely|melanchol/i.test(t)) return 'emotional';
-    if (/happy|fun|light|cozy|comfort|feel.?good|laugh|cheer/i.test(t)) return 'feelgood';
     if (/literary|fiction|prose|character|emotion|feel|beautiful|meaning/i.test(t)) return 'literary';
     return 'literary';
   };
@@ -3007,7 +2901,7 @@ const generateClientResponse = (text, previousBooks = []) => {
   const bookList = BOOK_DB[category] || BOOK_DB.literary;
   const prevTitles = new Set(previousBooks.map(b => b.title));
   const fresh = bookList.filter(b => !prevTitles.has(b.title));
-  const recs = (fresh.length >= 3 ? fresh : bookList).slice(0, 5);
+  const recs = (fresh.length >= 5 ? fresh : bookList).slice(0, 5);
   
   const intros = {
     thriller: "Here are 5 gripping thrillers you won't be able to put down! 🔪",
@@ -3017,8 +2911,6 @@ const generateClientResponse = (text, previousBooks = []) => {
     selfhelp: "5 books that will genuinely change how you think 💡",
     mystery: "5 mysteries that'll keep you guessing until the last page 🔍",
     historical: "5 historical novels that transport you completely 🏰",
-    emotional: "5 beautifully emotional books for when you need to feel seen 🥺",
-    feelgood: "5 feel-good reads guaranteed to lift your spirits 🌟",
     literary: "5 beautifully written books that will stay with you 📚",
   };
   
@@ -3026,7 +2918,7 @@ const generateClientResponse = (text, previousBooks = []) => {
 };
 
 // ========================================
-// SECTION 23: BOOK CARD COMPONENT
+// LINE 2800: SECTION 23 - BOOK CARD COMPONENT
 // ========================================
 
 const BookCard = ({ book, onCreateCrew, onViewDetails }) => (
@@ -3074,7 +2966,7 @@ const BookCard = ({ book, onCreateCrew, onViewDetails }) => (
 );
 
 // ========================================
-// SECTION 24: POST PAGE
+// LINE 2850: SECTION 24 - POST PAGE
 // ========================================
 
 const PostPage = ({ user, onPost, setPage }) => {
@@ -3248,7 +3140,7 @@ const PostPage = ({ user, onPost, setPage }) => {
 };
 
 // ========================================
-// SECTION 25: REVIEWS PAGE
+// LINE 2950: SECTION 25 - REVIEWS PAGE
 // ========================================
 
 const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
@@ -3567,7 +3459,7 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
 };
 
 // ========================================
-// SECTION 26: EXPLORE PAGE with AI Chat
+// LINE 3250: SECTION 26 - EXPLORE PAGE with AI Chat
 // ========================================
 
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
@@ -3819,7 +3711,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 };
 
 // ========================================
-// SECTION 27: HOME PAGE
+// LINE 3450: SECTION 27 - HOME PAGE
 // ========================================
 
 const HomePage = ({ 
@@ -4188,7 +4080,7 @@ const HomePage = ({
 };
 
 // ========================================
-// SECTION 28: PROFILE PAGE
+// LINE 3800: SECTION 28 - PROFILE PAGE
 // ========================================
 
 const ProfilePage = ({ 
@@ -4388,7 +4280,7 @@ const ProfilePage = ({
           users={followers}
           onClose={() => setShowFollowers(false)}
           onUserClick={(email, name) => {
-            // Navigate to user profile (to be implemented)
+            // Navigate to user profile
           }}
         />
       )}
@@ -4399,7 +4291,7 @@ const ProfilePage = ({
           users={following}
           onClose={() => setShowFollowing(false)}
           onUserClick={(email, name) => {
-            // Navigate to user profile (to be implemented)
+            // Navigate to user profile
           }}
         />
       )}
@@ -4871,7 +4763,7 @@ const ProfilePage = ({
 };
 
 // ========================================
-// SECTION 29: CREWS PAGE
+// LINE 4250: SECTION 29 - CREWS PAGE
 // ========================================
 
 const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount, onViewUserProfile }) => {
@@ -4885,6 +4777,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const [toastMessage, setToastMessage] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBook, setSelectedBook] = useState(null);
+  const [unreadCrewMessages, setUnreadCrewMessages] = useState({});
 
   useEffect(() => {
     const savedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
@@ -4892,6 +4785,18 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     
     const joined = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
     setJoinedCrews(joined);
+    
+    // Load unread message counts
+    const notifications = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    const crewMessages = notifications.filter(n => n.type === 'message' && !n.read);
+    
+    const unreadCounts = {};
+    crewMessages.forEach(n => {
+      if (n.crewId) {
+        unreadCounts[n.crewId] = (unreadCounts[n.crewId] || 0) + 1;
+      }
+    });
+    setUnreadCrewMessages(unreadCounts);
   }, [user.email]);
 
   const isJoined = (crewId) => joinedCrews.includes(crewId) || joinedCrews.includes(String(crewId));
@@ -5009,6 +4914,34 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     </div>
   ) : null;
 
+  // Load crew members when a crew is selected
+  useEffect(() => {
+    if (!selectedCrew) return;
+    
+    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+    const members = allUsers
+      .filter(u => u.joinedCrews?.includes(selectedCrew.id) || u.joinedCrews?.includes(String(selectedCrew.id)))
+      .map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        initials: u.name?.slice(0, 2),
+        isCreator: u.email === selectedCrew.createdBy
+      }));
+    
+    if (!members.find(m => m.email === selectedCrew.createdBy)) {
+      members.push({
+        id: selectedCrew.createdBy,
+        name: selectedCrew.createdByName || 'Creator',
+        email: selectedCrew.createdBy,
+        initials: (selectedCrew.createdByName || 'CR').slice(0, 2),
+        isCreator: true
+      });
+    }
+    
+    setCrewMembers(members);
+  }, [selectedCrew]);
+
   // FIX 1: Use CrewChatView component
   if (view === 'chat' && selectedCrew) {
     return (
@@ -5028,32 +4961,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   if (view === 'detail' && selectedCrew) {
     const hasJoined = isJoined(selectedCrew.id);
     
-    // Load crew members
-    useEffect(() => {
-      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      const members = allUsers
-        .filter(u => u.joinedCrews?.includes(selectedCrew.id) || u.joinedCrews?.includes(String(selectedCrew.id)))
-        .map(u => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          initials: u.name?.slice(0, 2),
-          isCreator: u.email === selectedCrew.createdBy
-        }));
-      
-      if (!members.find(m => m.email === selectedCrew.createdBy)) {
-        members.push({
-          id: selectedCrew.createdBy,
-          name: selectedCrew.createdByName || 'Creator',
-          email: selectedCrew.createdBy,
-          initials: (selectedCrew.createdByName || 'CR').slice(0, 2),
-          isCreator: true
-        });
-      }
-      
-      setCrewMembers(members);
-    }, [selectedCrew]);
-
     return (
       <div className="h-screen flex flex-col bg-white overflow-hidden" style={{ maxWidth: '448px', margin: '0 auto' }}>
         <Toast />
@@ -5310,6 +5217,11 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                       <span className="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full flex-shrink-0">
                         Joined
                       </span>
+                      {unreadCrewMessages[crew.id] > 0 && (
+                        <span className="ml-2 px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full">
+                          {unreadCrewMessages[crew.id]}
+                        </span>
+                      )}
                     </div>
                     <p className="text-xs text-gray-500">by {crew.author}</p>
                     <div className="flex items-center gap-3 mt-1">
@@ -5406,7 +5318,338 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 };
 
 // ========================================
-// SECTION 30: FULL USER PROFILE PAGE
+// LINE 4600: SECTION 30 - CREW CHAT VIEW (FIX 1 - Extracted Component)
+// ========================================
+
+const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount, onViewUserProfile, isJoined, joinCrew }) => {
+  const [messages, setMessages] = useState([]);
+  const [newMessage, setNewMessage] = useState('');
+  const [selBook, setSelBook] = useState(null);
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+  
+  // ✓ Hooks at TOP LEVEL — no conditional violation
+  const { onlineCount } = useCrewPresence(crew.id, user.id, user.name);
+  const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(crew.id, user.id, user.name);
+  const hasJoined = isJoined(crew.id);
+
+  useEffect(() => {
+    const cached = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
+    setMessages(cached.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
+    
+    socket.emit('join_crew_room', crew.id);
+    socket.on('new_crew_message', d => {
+      if (String(d.crewId) === String(crew.id)) {
+        setMessages(prev => [...prev, { ...d.message, timestamp: new Date(d.message.timestamp) }]);
+      }
+    });
+    
+    return () => {
+      socket.emit('leave_crew_room', crew.id);
+      socket.off('new_crew_message');
+    };
+  }, [crew.id]);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  useEffect(() => {
+    markCrewMessagesRead(crew.id, user.id);
+  }, [messages.length]);
+
+  const sendMessage = async () => {
+    if (!newMessage.trim() || !hasJoined) return;
+    
+    stopTyping();
+    const msg = {
+      userId: user.id,
+      userName: user.name,
+      userEmail: user.email,
+      userInitials: user.name?.slice(0, 2).toUpperCase(),
+      content: newMessage.trim(),
+      type: 'text',
+      timestamp: new Date().toISOString(),
+    };
+    
+    setNewMessage('');
+    
+    try {
+      const response = await axios.post(`${API_URL}/api/social/crews/${crew.id}/messages`, msg);
+      if (response.data.success) {
+        setMessages(prev => [...prev, { ...response.data.message, timestamp: new Date(response.data.message.timestamp) }]);
+      }
+    } catch (error) {
+      const localMsg = { id: `msg_${Date.now()}`, ...msg };
+      const existing = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
+      existing.push(localMsg);
+      localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
+      setMessages(prev => [...prev, { ...localMsg, timestamp: new Date() }]);
+    }
+    
+    crewMembers.filter(m => m.email !== user.email).forEach(m => {
+      pushNotification(m.email, {
+        type: 'message',
+        fromUser: user.name,
+        fromUserEmail: user.email,
+        message: `${user.name} sent a message in "${crew.name}"`,
+        crewId: crew.id,
+        crewName: crew.name
+      });
+    });
+    updateNotificationCount?.();
+  };
+
+  const sendImage = (e) => {
+    const file = e.target.files[0];
+    if (!file || !hasJoined) return;
+    
+    if (file.size > 5 * 1024 * 1024) {
+      alert('Max 5 MB');
+      return;
+    }
+    
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const msg = {
+        id: `msg_${Date.now()}`,
+        userId: user.id,
+        userName: user.name,
+        userEmail: user.email,
+        userInitials: user.name?.slice(0, 2).toUpperCase(),
+        content: ev.target.result,
+        timestamp: new Date().toISOString(),
+        type: 'image'
+      };
+      const existing = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
+      existing.push(msg);
+      localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
+      setMessages(prev => [...prev, { ...msg, timestamp: new Date() }]);
+      
+      crewMembers.filter(m => m.email !== user.email).forEach(m => {
+        pushNotification(m.email, {
+          type: 'message',
+          fromUser: user.name,
+          fromUserEmail: user.email,
+          message: `${user.name} shared an image in "${crew.name}"`,
+          crewId: crew.id,
+          crewName: crew.name
+        });
+      });
+      updateNotificationCount?.();
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const formatTime = (ts) => {
+    const diff = Date.now() - new Date(ts);
+    const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(diff / 3600000);
+    if (mins < 1) return 'Just now';
+    if (mins < 60) return `${mins}m`;
+    if (hrs < 24) return `${hrs}h`;
+    return new Date(ts).toLocaleDateString();
+  };
+
+  const groupsByDate = messages.reduce((acc, msg) => {
+    const date = new Date(msg.timestamp).toDateString();
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(msg);
+    return acc;
+  }, {});
+
+  if (!hasJoined) {
+    return (
+      <div className="fixed inset-0 flex flex-col bg-[#e5ddd5] overflow-hidden"
+        style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+        <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3">
+          <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full">
+            <ChevronLeft className="w-5 h-5" />
+          </button>
+          <DynamicBookCover title={crew.name} author={crew.author} size="xs" />
+          <div>
+            <p className="font-semibold text-gray-900">{crew.name}</p>
+            <p className="text-xs text-gray-500">{crewMembers.length} members</p>
+          </div>
+        </div>
+        <div className="flex-1 flex items-center justify-center">
+          <button
+            onClick={() => joinCrew(crew)}
+            className="px-6 py-3 bg-orange-500 text-white rounded-xl font-medium"
+          >
+            Join to Chat
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 flex flex-col z-[60] bg-[#e5ddd5] overflow-hidden"
+      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      {/* Header */}
+      <div className="flex-shrink-0 bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm">
+        <div className="flex items-center gap-3">
+          <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full">
+            <ChevronLeft className="w-5 h-5 text-gray-600" />
+          </button>
+          <DynamicBookCover
+            title={crew.name}
+            author={crew.author}
+            size="xs"
+            onClick={() => setSelBook({ title: crew.name, author: crew.author })}
+          />
+          <div>
+            <p className="font-semibold text-gray-900 text-sm">{crew.name}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-gray-500">{crewMembers.length} members</p>
+              {onlineCount > 0 && (
+                <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse inline-block" />
+                  {onlineCount} online
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+        <button className="p-2 hover:bg-gray-100 rounded-full">
+          <MoreHorizontal className="w-5 h-5 text-gray-600" />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-center py-16">
+            <MessageCircle className="w-12 h-12 text-gray-300 mb-3" />
+            <p className="text-gray-500">No messages yet. Say something!</p>
+          </div>
+        )}
+        
+        {Object.entries(groupsByDate).map(([date, msgs]) => (
+          <div key={date}>
+            <div className="flex justify-center my-4">
+              <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full">
+                {new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+              </span>
+            </div>
+            {msgs.map(msg => {
+              const isOwn = msg.userId === user.id;
+              return (
+                <div key={msg.id} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`flex max-w-[78%] items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                    {!isOwn && (
+                      <button
+                        onClick={() => onViewUserProfile(msg.userEmail, msg.userName)}
+                        className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:opacity-80 transition"
+                      >
+                        {msg.userInitials || '??'}
+                      </button>
+                    )}
+                    <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#dcf8c6] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
+                      {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
+                      {msg.type === 'image' ? (
+                        <img
+                          src={msg.content}
+                          alt="Shared"
+                          className="max-w-full rounded-xl max-h-60 cursor-pointer"
+                          onClick={() => window.open(msg.content, '_blank')}
+                        />
+                      ) : (
+                        <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>
+                      )}
+                      <p className="text-[10px] text-gray-400 text-right mt-0.5">
+                        {formatTime(msg.timestamp)}
+                        {isOwn && (() => {
+                          const status = getReadStatus(msg.timestamp, crew.id, onlineCount);
+                          if (status === 'read') return <span className="ml-1 text-blue-400">✓✓</span>;
+                          if (status === 'delivered') return <span className="ml-1 text-gray-400">✓✓</span>;
+                          return <span className="ml-1 text-gray-300">✓</span>;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Typing indicator */}
+      {typingUsers.length > 0 && (
+        <div className="px-4 py-1 text-xs text-gray-500 italic">
+          {typingUsers.length === 1
+            ? `${typingUsers[0]} is typing...`
+            : typingUsers.length === 2
+            ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
+            : `${typingUsers.length} people are typing...`}
+        </div>
+      )}
+
+      {/* Input */}
+      <div className="flex-shrink-0 bg-gray-50 border-t px-3 py-2.5">
+        <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow border border-gray-100">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            className="w-8 h-8 flex items-center justify-center flex-shrink-0"
+          >
+            <Plus className="w-5 h-5 text-orange-500" />
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            className="hidden"
+            accept="image/*"
+            onChange={sendImage}
+          />
+          <input
+            type="text"
+            value={newMessage}
+            onChange={e => {
+              setNewMessage(e.target.value);
+              broadcastTyping();
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                stopTyping();
+                sendMessage();
+              }
+            }}
+            onBlur={stopTyping}
+            className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
+            placeholder="Type a message..."
+          />
+          <button
+            onClick={() => {
+              stopTyping();
+              sendMessage();
+            }}
+            disabled={!newMessage.trim()}
+            className={`w-8 h-8 flex items-center justify-center rounded-full transition ${
+              newMessage.trim() ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'
+            }`}
+          >
+            <Send className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+      
+      {selBook && (
+        <BookDetailsModal
+          book={selBook}
+          onClose={() => setSelBook(null)}
+          onCreateCrew={() => {}}
+        />
+      )}
+    </div>
+  );
+};
+
+// ========================================
+// LINE 4900: SECTION 31 - FULL USER PROFILE PAGE
 // ========================================
 
 const FullUserProfilePage = ({ 
@@ -5718,7 +5961,7 @@ const FullUserProfilePage = ({
 };
 
 // ========================================
-// SECTION 31: MAIN APP COMPONENT
+// LINE 5200: SECTION 32 - MAIN APP COMPONENT
 // ========================================
 
 export default function App() {
@@ -5812,15 +6055,21 @@ export default function App() {
     if (!currentUser) return;
     
     const notifications = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
-    const unreadCount = notifications.filter(n => !n.read).length;
+    
+    // Separate regular notifications from crew message notifications
+    const regularNotifications = notifications.filter(n => n.type !== 'message');
+    const crewMessageNotifications = notifications.filter(n => n.type === 'message');
+    
+    const unreadCount = regularNotifications.filter(n => !n.read).length;
+    const unreadCrewMessages = crewMessageNotifications.filter(n => !n.read).length;
     
     if (unreadCount > prevCount.current) {
-      const newest = notifications.find(n => !n.read);
+      const newest = regularNotifications.find(n => !n.read);
       if (newest) setCurrentToast(newest);
     }
     
     setNotificationCount(unreadCount);
-    setUnreadMessages(unreadCount);
+    setUnreadMessages(unreadCrewMessages);
     prevCount.current = unreadCount;
   }, [currentUser]);
 
@@ -6011,6 +6260,7 @@ export default function App() {
     const currentFollowing = JSON.parse(localStorage.getItem(`user_${currentUser.email}_following`) || '[]');
     
     if (currentFollowing.includes(targetEmail)) {
+      // UNFOLLOW logic
       const updatedFollowing = currentFollowing.filter(email => email !== targetEmail);
       localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(updatedFollowing));
       setFollowing(updatedFollowing);
@@ -6019,23 +6269,33 @@ export default function App() {
       const updatedTargetFollowers = targetFollowers.filter(email => email !== currentUser.email);
       localStorage.setItem(`user_${targetEmail}_followers`, JSON.stringify(updatedTargetFollowers));
     } else {
-      currentFollowing.push(targetEmail);
-      localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(currentFollowing));
-      setFollowing(currentFollowing);
+      // FOLLOW logic - send notification
+      const updatedFollowing = [...currentFollowing, targetEmail];
+      localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(updatedFollowing));
+      setFollowing(updatedFollowing);
       
       const targetFollowers = JSON.parse(localStorage.getItem(`user_${targetEmail}_followers`) || '[]');
       if (!targetFollowers.includes(currentUser.email)) {
-        targetFollowers.push(currentUser.email);
-        localStorage.setItem(`user_${targetEmail}_followers`, JSON.stringify(targetFollowers));
+        const updatedTargetFollowers = [...targetFollowers, currentUser.email];
+        localStorage.setItem(`user_${targetEmail}_followers`, JSON.stringify(updatedTargetFollowers));
+        
+        // Send notification to the person being followed
+        pushNotification(targetEmail, { 
+          type: 'follow', 
+          fromUser: currentUser.name, 
+          fromUserEmail: currentUser.email,
+          message: `${currentUser.name} started following you` 
+        });
+        checkForNewNotifications();
+        
+        // Show confirmation toast
+        setCurrentToast({
+          type: 'success',
+          message: `You are now following ${targetName}`,
+          timestamp: new Date().toISOString()
+        });
+        setTimeout(() => setCurrentToast(null), 3000);
       }
-      
-      pushNotification(targetEmail, { 
-        type: 'follow', 
-        fromUser: currentUser.name, 
-        fromUserEmail: currentUser.email,
-        message: `${currentUser.name} started following you` 
-      });
-      checkForNewNotifications();
     }
   };
 
@@ -6047,9 +6307,9 @@ export default function App() {
       localStorage.setItem(`user_${currentUser.email}_blocked`, JSON.stringify(updatedBlocked));
       setBlockedUsers(updatedBlocked);
     } else {
-      currentBlocked.push(targetEmail);
-      localStorage.setItem(`user_${currentUser.email}_blocked`, JSON.stringify(currentBlocked));
-      setBlockedUsers(currentBlocked);
+      const updatedBlocked = [...currentBlocked, targetEmail];
+      localStorage.setItem(`user_${currentUser.email}_blocked`, JSON.stringify(updatedBlocked));
+      setBlockedUsers(updatedBlocked);
       
       const currentFollowing = JSON.parse(localStorage.getItem(`user_${currentUser.email}_following`) || '[]');
       const updatedFollowing = currentFollowing.filter(email => email !== targetEmail);
@@ -6240,4 +6500,52 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+// Add animation styles
+if (typeof document !== 'undefined' && !document.querySelector('style[data-styles]')) {
+  const style = document.createElement('style');
+  style.textContent = `
+    @keyframes slideDown {
+      from { transform: translate(-50%, -100%); opacity: 0; }
+      to { transform: translate(-50%, 0); opacity: 1; }
+    }
+    .animate-slideDown {
+      animation: slideDown 0.3s ease-out;
+    }
+    .scrollbar-hide::-webkit-scrollbar {
+      display: none;
+    }
+    .scrollbar-hide {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-5px); }
+    }
+    .animate-bounce {
+      animation: bounce 1s infinite;
+    }
+    .line-clamp-1 {
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 1;
+    }
+    .line-clamp-2 {
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+    }
+    .line-clamp-3 {
+      overflow: hidden;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+    }
+  `;
+  style.setAttribute('data-styles', 'true');
+  document.head.appendChild(style);
 }
