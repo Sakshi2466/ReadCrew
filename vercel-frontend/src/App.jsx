@@ -1,5 +1,5 @@
 // ========================================
-// LINE 1: App.jsx - Complete ReadCrew Application (7000+ lines)
+// LINE 1: App.jsx - Complete ReadCrew Application (8000+ lines)
 // All features working: Notifications, Crew Chat, Follow System, Reviews
 // ========================================
 
@@ -68,7 +68,7 @@ const socket = io(API_URL, {
 });
 
 // ========================================
-// LINE 85: SECTION 2 - CUSTOM NOTIFICATION SYSTEM
+// LINE 85: SECTION 2 - CUSTOM NOTIFICATION SYSTEM (FIXED)
 // ========================================
 
 const pushNotification = (targetEmail, notif) => {
@@ -92,6 +92,9 @@ const pushNotification = (targetEmail, notif) => {
     key: `user_${targetEmail}_notifications`,
     newValue: JSON.stringify(list)
   }));
+  
+  // Also emit via socket for real-time
+  socket.emit('send_notification', { toEmail: targetEmail, notification: full });
 };
 
 // ========================================
@@ -1240,13 +1243,12 @@ const TopBar = ({
 );
 
 // ========================================
-// LINE 1250: SECTION 16 - NOTIFICATIONS PAGE
+// LINE 1250: SECTION 16 - NOTIFICATIONS PAGE (FIXED)
 // ========================================
 
 const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState('all');
   
   useEffect(() => {
     loadNotifications();
@@ -1268,32 +1270,37 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
   
   const loadNotifications = () => {
     const notifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-    setNotifications(notifs);
+    // Filter out crew messages from main notifications
+    const filtered = notifs.filter(n => n.type !== 'message');
+    setNotifications(filtered);
     setLoading(false);
   };
   
   const markAsRead = (id) => {
-    const updated = notifications.map(n => 
+    const allNotifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    const updatedAll = allNotifs.map(n => 
       n.id === id ? { ...n, read: true } : n
     );
-    setNotifications(updated);
-    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
+    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updatedAll));
+    loadNotifications();
     window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
     updateNotificationCount?.();
   };
   
   const markAllAsRead = () => {
-    const updated = notifications.map(n => ({ ...n, read: true }));
-    setNotifications(updated);
-    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
+    const allNotifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    const updatedAll = allNotifs.map(n => ({ ...n, read: true }));
+    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updatedAll));
+    loadNotifications();
     window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
     updateNotificationCount?.();
   };
   
   const deleteNotification = (id) => {
-    const updated = notifications.filter(n => n.id !== id);
-    setNotifications(updated);
-    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
+    const allNotifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    const updatedAll = allNotifs.filter(n => n.id !== id);
+    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updatedAll));
+    loadNotifications();
     window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
     updateNotificationCount?.();
   };
@@ -1322,14 +1329,7 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     review: 'bg-yellow-100'
   };
   
-  // Filter out crew messages from main notifications
-  const filteredNotifications = notifications
-    .filter(n => n.type !== 'message')
-    .filter(n => {
-      if (filter === 'unread') return !n.read;
-      if (filter === 'read') return n.read;
-      return true;
-    });
+  const hasUnread = notifications.some(n => !n.read);
   
   return (
     <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden" 
@@ -1341,27 +1341,11 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
         <h2 className="font-semibold text-gray-900">Notifications</h2>
         <button 
           onClick={markAllAsRead} 
-          className="text-sm text-orange-500 font-medium hover:text-orange-600"
-          disabled={notifications.filter(n => !n.read).length === 0}
+          className="text-sm text-orange-500 font-medium hover:text-orange-600 disabled:opacity-40"
+          disabled={!hasUnread}
         >
           Mark all read
         </button>
-      </div>
-      
-      <div className="px-4 py-2 flex gap-2 border-b border-gray-100">
-        {['all', 'unread', 'read'].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition ${
-              filter === f
-                ? 'bg-orange-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {f}
-          </button>
-        ))}
       </div>
       
       <div className="flex-1 overflow-y-auto pb-4">
@@ -1369,22 +1353,14 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
           <div className="flex justify-center py-12">
             <LoadingSpinner />
           </div>
-        ) : filteredNotifications.length === 0 ? (
+        ) : notifications.length === 0 ? (
           <div className="text-center py-12">
             <Bell className="w-12 h-12 text-gray-300 mx-auto mb-3" />
             <p className="text-gray-500">No notifications</p>
-            {filter !== 'all' && (
-              <button 
-                onClick={() => setFilter('all')}
-                className="mt-2 text-orange-500 text-sm font-medium"
-              >
-                View all
-              </button>
-            )}
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
-            {filteredNotifications
+            {notifications
               .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
               .map((notif) => (
                 <div 
@@ -1826,7 +1802,7 @@ const PostOptionsModal = ({
 };
 
 // ========================================
-// LINE 1750: SECTION 20 - INLINE POST CARD (with Comments Toggle)
+// LINE 1750: SECTION 20 - INLINE POST CARD (with Global Comments/Likes)
 // ========================================
 
 const InlinePostCard = ({ 
@@ -1874,8 +1850,10 @@ const InlinePostCard = ({
 
   const loadComments = async () => {
     setLoadingComments(true);
-    const cached = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
-    setComments(cached);
+    // Get comments from global storage
+    const allComments = JSON.parse(localStorage.getItem('allComments') || '[]');
+    const postComments = allComments.filter(c => c.postId === post.id);
+    setComments(postComments);
     setLoadingComments(false);
   };
 
@@ -1888,6 +1866,13 @@ const InlinePostCard = ({
     const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
     likedPosts.push(post.id);
     localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
+    
+    // Update global post likes
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const updatedPosts = allPosts.map(p => 
+      p.id === post.id ? { ...p, likes: (p.likes || 0) + 1 } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
     
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, { 
@@ -1907,7 +1892,8 @@ const InlinePostCard = ({
     const mentions = extractMentions(newComment);
     
     const commentData = {
-      id: Date.now(),
+      id: generateId(),
+      postId: post.id,
       userName: user.name,
       userEmail: user.email,
       content: newComment.trim(),
@@ -1917,10 +1903,21 @@ const InlinePostCard = ({
       likes: 0
     };
     
+    // Save to global comments storage
+    const allComments = JSON.parse(localStorage.getItem('allComments') || '[]');
+    allComments.push(commentData);
+    localStorage.setItem('allComments', JSON.stringify(allComments));
+    
     setComments(prev => [...prev, commentData]);
-    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify([...comments, commentData]));
     setNewComment('');
     setReplyTo(null);
+    
+    // Update post comment count
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const updatedPosts = allPosts.map(p => 
+      p.id === post.id ? { ...p, comments: (p.comments || 0) + 1 } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
     
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, { 
@@ -1946,6 +1943,13 @@ const InlinePostCard = ({
     setLikedComments(newLiked);
     localStorage.setItem(`user_${user.email}_likedComments`, JSON.stringify([...newLiked]));
     
+    // Update global comment likes
+    const allComments = JSON.parse(localStorage.getItem('allComments') || '[]');
+    const updatedComments = allComments.map(c => 
+      c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c
+    );
+    localStorage.setItem('allComments', JSON.stringify(updatedComments));
+    
     if (commentUserId !== user.email) {
       pushNotification(commentUserId, { 
         type: 'like', 
@@ -1954,13 +1958,24 @@ const InlinePostCard = ({
         message: `${user.name} liked your comment`, 
         postId: post.id 
       });
+      updateNotificationCount?.();
     }
   };
 
   const handleDeleteComment = (commentId) => {
     const filtered = comments.filter(c => c.id !== commentId && c.parentId !== commentId);
     setComments(filtered);
-    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(filtered));
+    
+    const allComments = JSON.parse(localStorage.getItem('allComments') || '[]');
+    const updatedAll = allComments.filter(c => c.id !== commentId && c.parentId !== commentId);
+    localStorage.setItem('allComments', JSON.stringify(updatedAll));
+    
+    // Update post comment count
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const updatedPosts = allPosts.map(p => 
+      p.id === post.id ? { ...p, comments: Math.max(0, (p.comments || 0) - 1) } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
   };
 
   const topLevelComments = comments.filter(c => !c.parentId);
@@ -2224,7 +2239,7 @@ const InlinePostCard = ({
             }`}
           >
             <MessageCircle className="w-5 h-5" />
-            <span>{comments.length || post.comments || 0}</span>
+            <span>{post.comments || 0}</span>
           </button>
 
           <button
@@ -2457,7 +2472,7 @@ const LoginPage = ({ onLogin }) => {
     localStorage.setItem('currentUser', JSON.stringify(userData));
     
     // Initialize user data
-    ['followers', 'following', 'blocked', 'notifications', 'likedPosts', 'likedReviews', 'readingList', 'savedPosts'].forEach(key => {
+    ['followers', 'following', 'blocked', 'notifications', 'likedPosts', 'likedReviews', 'readingList', 'savedPosts', 'likedComments'].forEach(key => {
       if (!localStorage.getItem(`user_${userData.email}_${key}`)) {
         localStorage.setItem(`user_${userData.email}_${key}`, JSON.stringify([]));
       }
@@ -3215,11 +3230,13 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
     }
     
     const reviewData = { 
+      id: generateId(),
       ...newReview, 
       userName: user.name, 
       userEmail: user.email,
       userPhoto: user.profileImage,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      likes: 0
     };
 
     try {
@@ -3231,9 +3248,8 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
       }
     } catch (error) {
       console.error('Failed to create review:', error);
-      const review = { id: generateId(), ...reviewData, likes: 0 };
-      setReviews(prev => [review, ...prev]);
-      localStorage.setItem('reviews', JSON.stringify([review, ...reviews]));
+      setReviews(prev => [reviewData, ...prev]);
+      localStorage.setItem('reviews', JSON.stringify([reviewData, ...reviews]));
     }
 
     setShowCreateForm(false);
@@ -3711,7 +3727,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 };
 
 // ========================================
-// LINE 3450: SECTION 27 - HOME PAGE
+// LINE 3450: SECTION 27 - HOME PAGE (with global feed)
 // ========================================
 
 const HomePage = ({ 
@@ -3734,7 +3750,6 @@ const HomePage = ({
 }) => {
   const [trendingBooks, setTrendingBooks] = useState([]);
   const [loadingTrending, setLoadingTrending] = useState(true);
-  const [feedPosts, setFeedPosts] = useState([]);
   const [selectedBook, setSelectedBook] = useState(null);
   const [showShare, setShowShare] = useState(null);
   const [showReshare, setShowReshare] = useState(null);
@@ -3748,7 +3763,6 @@ const HomePage = ({
 
   useEffect(() => {
     loadTrendingBooks();
-    loadFeedPosts();
     
     const savedStats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     setStats(savedStats);
@@ -3760,16 +3774,23 @@ const HomePage = ({
 
     socket.on('new_post', (post) => {
       if (!blockedUsers.includes(post.userEmail)) {
-        setFeedPosts(prev => [post, ...prev]);
+        // Update global posts
+        const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+        allPosts.unshift(post);
+        localStorage.setItem('allPosts', JSON.stringify(allPosts));
       }
     });
     
     socket.on('post_deleted', ({ postId }) => {
-      setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId));
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      const filtered = allPosts.filter(p => p.id !== postId);
+      localStorage.setItem('allPosts', JSON.stringify(filtered));
     });
     
     socket.on('post_liked', ({ postId, likes }) => {
-      setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p));
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      const updated = allPosts.map(p => p.id === postId ? { ...p, likes } : p);
+      localStorage.setItem('allPosts', JSON.stringify(updated));
     });
 
     return () => {
@@ -3800,19 +3821,6 @@ const HomePage = ({
     }
   };
 
-  const loadFeedPosts = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`);
-      if (response.data.success) {
-        setFeedPosts(response.data.posts.filter(p => !blockedUsers.includes(p.userEmail)));
-      }
-    } catch (error) {
-      console.error('Failed to load feed:', error);
-      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-      setFeedPosts(allPosts.filter(p => !blockedUsers.includes(p.userEmail)).slice(0, 20));
-    }
-  };
-
   const handleReshareClick = (post) => {
     setShowReshare(post);
   };
@@ -3824,6 +3832,7 @@ const HomePage = ({
 
   const userCrews = crews.filter(c => user?.joinedCrews?.includes(c.id));
   const hasReadingGoal = user?.readingGoal?.yearly > 0;
+  const filteredPosts = posts.filter(p => !blockedUsers.includes(p.userEmail));
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
@@ -3832,7 +3841,7 @@ const HomePage = ({
         setPage={setPage}
         profileSrc={profileSrc}
         onNotificationClick={() => setPage('notifications')}
-        notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read).length}
+        notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => n.type !== 'message' && !n.read).length}
       />
 
       {selectedBook && (
@@ -4039,7 +4048,7 @@ const HomePage = ({
           </div>
           
           <div className="space-y-4">
-            {feedPosts.length === 0 ? (
+            {filteredPosts.length === 0 ? (
               <div className="bg-white rounded-xl p-8 text-center border border-gray-200">
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
                 <p className="text-gray-500">No posts yet. Be the first to share!</p>
@@ -4051,7 +4060,7 @@ const HomePage = ({
                 </button>
               </div>
             ) : (
-              feedPosts.map((post, idx) => (
+              filteredPosts.map((post, idx) => (
                 <InlinePostCard
                   key={post.id || idx}
                   post={post}
@@ -5363,6 +5372,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
     
     stopTyping();
     const msg = {
+      id: `msg_${Date.now()}`,
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
@@ -5380,11 +5390,10 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
         setMessages(prev => [...prev, { ...response.data.message, timestamp: new Date(response.data.message.timestamp) }]);
       }
     } catch (error) {
-      const localMsg = { id: `msg_${Date.now()}`, ...msg };
       const existing = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
-      existing.push(localMsg);
+      existing.push(msg);
       localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
-      setMessages(prev => [...prev, { ...localMsg, timestamp: new Date() }]);
+      setMessages(prev => [...prev, { ...msg, timestamp: new Date() }]);
     }
     
     crewMembers.filter(m => m.email !== user.email).forEach(m => {
@@ -6044,13 +6053,18 @@ export default function App() {
         localStorage.setItem('reportedPosts', JSON.stringify([]));
       }
       
+      // Initialize allComments if not exists
+      if (!localStorage.getItem('allComments')) {
+        localStorage.setItem('allComments', JSON.stringify([]));
+      }
+      
       setLoading(false);
     };
 
     loadInitialData();
   }, []);
 
-  // FIX 2: Notification system with CustomEvent + server polling
+  // Notification system with CustomEvent + server polling
   const checkForNewNotifications = useCallback(() => {
     if (!currentUser) return;
     
@@ -6128,7 +6142,7 @@ export default function App() {
     setIsLoggedIn(true);
     localStorage.setItem('currentUser', JSON.stringify(userData));
     
-    ['followers', 'following', 'blocked', 'notifications', 'likedPosts', 'likedReviews', 'readingList', 'savedPosts'].forEach(key => {
+    ['followers', 'following', 'blocked', 'notifications', 'likedPosts', 'likedReviews', 'readingList', 'savedPosts', 'likedComments'].forEach(key => {
       if (!localStorage.getItem(`user_${userData.email}_${key}`)) {
         localStorage.setItem(`user_${userData.email}_${key}`, JSON.stringify([]));
       }
@@ -6186,6 +6200,11 @@ export default function App() {
     const filtered = allPosts.filter(p => p.id !== post.id);
     localStorage.setItem('allPosts', JSON.stringify(filtered));
     setPosts(filtered);
+    
+    // Also delete all comments for this post
+    const allComments = JSON.parse(localStorage.getItem('allComments') || '[]');
+    const filteredComments = allComments.filter(c => c.postId !== post.id);
+    localStorage.setItem('allComments', JSON.stringify(filteredComments));
     
     const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
     stats.postsCreated = Math.max((stats.postsCreated || 0) - 1, 0);
