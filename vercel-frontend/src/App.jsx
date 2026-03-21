@@ -1,12 +1,11 @@
 // ========================================
-// LINE 1: App.jsx - Complete ReadCrew Application (7000+ lines)
-// All features working: Notifications, Crew Chat, Follow System, Reviews
+// LINE 1: App.jsx - Complete ReadCrew Application (8000+ lines)
+// All features: Global Comments, Likes, Notifications, Reshare, Crew Chat
 // ========================================
 
-// LINE 10: Imports
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  // LINE 15: Core Icons
+  // LINE 10: Core Icons
   BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
   Heart, MessageCircle, Bookmark, Share2, Star, Plus, ChevronRight,
   X, Send, Image as ImageIcon, ChevronLeft, LogOut, Camera, MoreHorizontal,
@@ -55,22 +54,21 @@ import axios from 'axios';
 import { io } from 'socket.io-client';
 
 // ========================================
-// LINE 75: SECTION 1 - CONFIGURATION
+// LINE 75: CONFIGURATION
 // ========================================
-
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 const socket = io(API_URL, { 
   transports: ['websocket', 'polling'],
   reconnection: true,
-  reconnectionAttempts: 5,
+  reconnectionAttempts: 10,
   reconnectionDelay: 1000,
-  reconnectionDelayMax: 5000
+  reconnectionDelayMax: 5000,
+  autoConnect: true
 });
 
 // ========================================
-// LINE 85: SECTION 2 - CUSTOM NOTIFICATION SYSTEM
+// LINE 85: CUSTOM NOTIFICATION SYSTEM
 // ========================================
-
 const pushNotification = (targetEmail, notif) => {
   const full = {
     id: Date.now() + Math.random(),
@@ -92,12 +90,14 @@ const pushNotification = (targetEmail, notif) => {
     key: `user_${targetEmail}_notifications`,
     newValue: JSON.stringify(list)
   }));
+  
+  // Socket notification for real-time
+  socket.emit('send_notification', { targetEmail, notification: full });
 };
 
 // ========================================
-// LINE 110: SECTION 3 - UTILITY FUNCTIONS
+// LINE 110: UTILITY FUNCTIONS
 // ========================================
-
 const formatTimeAgo = (timestamp) => {
   if (!timestamp) return '';
   const diff = Date.now() - new Date(timestamp).getTime();
@@ -166,9 +166,8 @@ const throttle = (func, limit) => {
 };
 
 // ========================================
-// LINE 180: SECTION 4 - NOTIFICATION TOAST COMPONENT
+// LINE 180: NOTIFICATION TOAST COMPONENT
 // ========================================
-
 const NotificationToast = ({ notification, onClose }) => {
   useEffect(() => {
     const timer = setTimeout(onClose, 5000);
@@ -242,9 +241,8 @@ const NotificationToast = ({ notification, onClose }) => {
 };
 
 // ========================================
-// LINE 260: SECTION 5 - DYNAMIC BOOK COVER COMPONENT
+// LINE 260: DYNAMIC BOOK COVER COMPONENT
 // ========================================
-
 const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
   const [coverUrl, setCoverUrl] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -387,9 +385,8 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
 };
 
 // ========================================
-// LINE 400: SECTION 6 - AVATAR COMPONENT
+// LINE 400: AVATAR COMPONENT
 // ========================================
-
 const Avatar = ({ initials, size = 'md', src, online, onClick }) => {
   const sizes = { 
     xs: 'w-7 h-7 text-xs', 
@@ -434,9 +431,8 @@ const Avatar = ({ initials, size = 'md', src, online, onClick }) => {
 };
 
 // ========================================
-// LINE 450: SECTION 7 - STAR RATING COMPONENT
+// LINE 450: STAR RATING COMPONENT
 // ========================================
-
 const StarRating = ({ rating = 0, onChange, size = 'sm', readonly = false }) => {
   const sizeClasses = {
     xs: 'w-3 h-3',
@@ -462,9 +458,8 @@ const StarRating = ({ rating = 0, onChange, size = 'sm', readonly = false }) => 
 };
 
 // ========================================
-// LINE 480: SECTION 8 - LOADING SPINNER COMPONENT
+// LINE 480: LOADING SPINNER COMPONENT
 // ========================================
-
 const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) => {
   const sizes = { 
     sm: 'w-4 h-4', 
@@ -492,9 +487,8 @@ const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) =
 };
 
 // ========================================
-// LINE 510: SECTION 9 - CREW PRESENCE HOOK
+// LINE 510: CREW PRESENCE HOOK
 // ========================================
-
 const useCrewPresence = (crewId, userId, userName) => {
   const [onlineCount, setOnlineCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -563,9 +557,8 @@ const useCrewPresence = (crewId, userId, userName) => {
 };
 
 // ========================================
-// LINE 590: SECTION 10 - TYPING INDICATOR HOOK
+// LINE 590: TYPING INDICATOR HOOK
 // ========================================
-
 const useTypingIndicator = (crewId, userId, userName) => {
   const [typingUsers, setTypingUsers] = useState([]);
   const typingTimeoutRef = useRef(null);
@@ -628,9 +621,8 @@ const useTypingIndicator = (crewId, userId, userName) => {
 };
 
 // ========================================
-// LINE 660: SECTION 11 - READ RECEIPT HELPERS
+// LINE 660: READ RECEIPT HELPERS
 // ========================================
-
 const markCrewMessagesRead = (crewId, userId) => {
   if (!crewId || !userId) return;
   localStorage.setItem(`crew_${crewId}_lastRead_${userId}`, Date.now().toString());
@@ -651,9 +643,8 @@ const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
 };
 
 // ========================================
-// LINE 685: SECTION 12 - BOOK DETAILS MODAL
+// LINE 685: BOOK DETAILS MODAL
 // ========================================
-
 const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -857,9 +848,8 @@ const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
 };
 
 // ========================================
-// LINE 880: SECTION 13 - USER PROFILE MODAL (Quick View)
+// LINE 880: USER PROFILE MODAL (Quick View)
 // ========================================
-
 const UserProfileModal = ({ 
   userEmail, 
   userName, 
@@ -1135,9 +1125,8 @@ const UserProfileModal = ({
 };
 
 // ========================================
-// LINE 1150: SECTION 14 - BOTTOM NAVIGATION COMPONENT
+// LINE 1150: BOTTOM NAVIGATION COMPONENT
 // ========================================
-
 const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
   if (!show) return null;
   
@@ -1183,9 +1172,8 @@ const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
 };
 
 // ========================================
-// LINE 1200: SECTION 15 - TOP BAR COMPONENT
+// LINE 1200: TOP BAR COMPONENT
 // ========================================
-
 const TopBar = ({ 
   user, 
   setPage, 
@@ -1240,9 +1228,8 @@ const TopBar = ({
 );
 
 // ========================================
-// LINE 1250: SECTION 16 - NOTIFICATIONS PAGE
+// LINE 1250: NOTIFICATIONS PAGE
 // ========================================
-
 const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1348,22 +1335,6 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
         </button>
       </div>
       
-      <div className="px-4 py-2 flex gap-2 border-b border-gray-100">
-        {['all', 'unread', 'read'].map(f => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize transition ${
-              filter === f
-                ? 'bg-orange-500 text-white'
-                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-            }`}
-          >
-            {f}
-          </button>
-        ))}
-      </div>
-      
       <div className="flex-1 overflow-y-auto pb-4">
         {loading ? (
           <div className="flex justify-center py-12">
@@ -1425,9 +1396,8 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
 };
 
 // ========================================
-// LINE 1400: SECTION 17 - SHARE MODAL
+// LINE 1400: SHARE MODAL
 // ========================================
-
 const ShareModal = ({ post, onClose }) => {
   const shareUrl = window.location.href;
   const shareText = `Check out this post by ${post.userName}: "${post.content?.substring(0, 50)}..."`;
@@ -1511,9 +1481,8 @@ const ShareModal = ({ post, onClose }) => {
 };
 
 // ========================================
-// LINE 1480: SECTION 18 - RESHARE MODAL
+// LINE 1480: RESHARE MODAL
 // ========================================
-
 const ReshareModal = ({ post, onClose, onReshare }) => {
   const [comment, setComment] = useState('');
   const [isPublic, setIsPublic] = useState(true);
@@ -1589,9 +1558,8 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
 };
 
 // ========================================
-// LINE 1550: SECTION 19 - POST OPTIONS MODAL (with Report)
+// LINE 1550: POST OPTIONS MODAL (with Report)
 // ========================================
-
 const PostOptionsModal = ({ 
   post, 
   user, 
@@ -1826,9 +1794,8 @@ const PostOptionsModal = ({
 };
 
 // ========================================
-// LINE 1750: SECTION 20 - INLINE POST CARD (with Comments Toggle)
+// LINE 1750: INLINE POST CARD (with Global Comments & Likes)
 // ========================================
-
 const InlinePostCard = ({ 
   post, 
   user, 
@@ -1844,7 +1811,9 @@ const InlinePostCard = ({
   onBlock, 
   isBlocked, 
   onViewUserProfile, 
-  onViewBookDetails 
+  onViewBookDetails,
+  allPosts,
+  setAllPosts
 }) => {
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
@@ -1859,42 +1828,51 @@ const InlinePostCard = ({
   const [loadingComments, setLoadingComments] = useState(false);
   const inputRef = useRef(null);
 
+  // Load global comments and likes
   useEffect(() => {
+    const globalComments = JSON.parse(localStorage.getItem('global_comments') || '{}');
+    setComments(globalComments[post.id] || []);
+    
     const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
     setIsLiked(likedPosts.includes(post.id));
-    
-    const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedComments`) || '[]');
-    setLikedComments(new Set(liked));
   }, [post.id, user.email]);
 
+  // Load comments when toggled
   useEffect(() => {
     if (!showComments) return;
-    loadComments();
-  }, [showComments]);
+    const globalComments = JSON.parse(localStorage.getItem('global_comments') || '{}');
+    setComments(globalComments[post.id] || []);
+  }, [showComments, post.id]);
 
-  const loadComments = async () => {
-    setLoadingComments(true);
-    const cached = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
-    setComments(cached);
-    setLoadingComments(false);
-  };
-
-  const handleLikePost = async () => {
+  const handleLikePost = () => {
     if (isLiked) return;
     
     setIsLiked(true);
-    setLikeCount(prev => prev + 1);
+    const newLikeCount = likeCount + 1;
+    setLikeCount(newLikeCount);
     
+    // Update global posts
+    const allPostsGlobal = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const updatedPosts = allPostsGlobal.map(p => 
+      p.id === post.id ? { ...p, likes: newLikeCount, likedBy: [...(p.likedBy || []), user.email] } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+    if (setAllPosts) setAllPosts(updatedPosts);
+    
+    // Update user liked posts
     const likedPosts = JSON.parse(localStorage.getItem(`user_${user.email}_likedPosts`) || '[]');
-    likedPosts.push(post.id);
-    localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
+    if (!likedPosts.includes(post.id)) {
+      likedPosts.push(post.id);
+      localStorage.setItem(`user_${user.email}_likedPosts`, JSON.stringify(likedPosts));
+    }
     
+    // Send notification
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, { 
         type: 'like', 
         fromUser: user.name, 
         fromUserEmail: user.email,
-        message: `${user.name} liked your post`, 
+        message: `${user.name} liked your post: "${post.content.substring(0, 50)}"`, 
         postId: post.id 
       });
       updateNotificationCount?.();
@@ -1904,68 +1882,119 @@ const InlinePostCard = ({
   const handlePostComment = () => {
     if (!newComment.trim()) return;
     
-    const mentions = extractMentions(newComment);
-    
-    const commentData = {
-      id: Date.now(),
-      userName: user.name,
+    const comment = {
+      id: generateId(),
       userEmail: user.email,
+      userName: user.name,
+      userPhoto: profileSrc,
       content: newComment.trim(),
-      mentions,
-      parentId: replyTo?.id || null,
       timestamp: new Date().toISOString(),
-      likes: 0
+      likes: 0,
+      parentId: replyTo?.id || null,
+      likedBy: []
     };
     
-    setComments(prev => [...prev, commentData]);
-    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify([...comments, commentData]));
+    // Update global comments
+    const globalComments = JSON.parse(localStorage.getItem('global_comments') || '{}');
+    const postComments = globalComments[post.id] || [];
+    const updatedComments = [...postComments, comment];
+    globalComments[post.id] = updatedComments;
+    localStorage.setItem('global_comments', JSON.stringify(globalComments));
+    setComments(updatedComments);
+    
+    // Update global post comment count
+    const allPostsGlobal = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const updatedPosts = allPostsGlobal.map(p => 
+      p.id === post.id ? { ...p, comments: (p.comments || 0) + 1 } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+    if (setAllPosts) setAllPosts(updatedPosts);
+    
     setNewComment('');
     setReplyTo(null);
     
+    // Send notification to post owner
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, { 
         type: 'comment', 
         fromUser: user.name, 
         fromUserEmail: user.email,
-        message: `${user.name} commented: "${newComment.substring(0, 50)}"`, 
+        message: `${user.name} commented on your post: "${newComment.substring(0, 50)}"`, 
         postId: post.id 
       });
       updateNotificationCount?.();
     }
+    
+    // Send notification to mentioned users
+    const mentions = newComment.match(/@(\w+)/g) || [];
+    mentions.forEach(mention => {
+      const username = mention.substring(1);
+      const users = JSON.parse(localStorage.getItem('users') || '[]');
+      const mentionedUser = users.find(u => 
+        u.name.toLowerCase().includes(username.toLowerCase()) || 
+        u.email.split('@')[0].toLowerCase() === username.toLowerCase()
+      );
+      if (mentionedUser && mentionedUser.email !== user.email && mentionedUser.email !== post.userEmail) {
+        pushNotification(mentionedUser.email, { 
+          type: 'mention', 
+          fromUser: user.name, 
+          fromUserEmail: user.email,
+          message: `${user.name} mentioned you in a comment: "${newComment.substring(0, 40)}"`, 
+          postId: post.id 
+        });
+        updateNotificationCount?.();
+      }
+    });
   };
 
   const handleLikeComment = (commentId, commentUserId) => {
     if (likedComments.has(commentId)) return;
     
-    setComments(prev => prev.map(c => 
-      c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c
-    ));
+    const globalComments = JSON.parse(localStorage.getItem('global_comments') || '{}');
+    const postComments = [...(globalComments[post.id] || [])];
+    const updatedPostComments = postComments.map(c => 
+      c.id === commentId ? { ...c, likes: (c.likes || 0) + 1, likedBy: [...(c.likedBy || []), user.email] } : c
+    );
+    globalComments[post.id] = updatedPostComments;
+    localStorage.setItem('global_comments', JSON.stringify(globalComments));
+    setComments(updatedPostComments);
     
     const newLiked = new Set(likedComments);
     newLiked.add(commentId);
     setLikedComments(newLiked);
     localStorage.setItem(`user_${user.email}_likedComments`, JSON.stringify([...newLiked]));
     
-    if (commentUserId !== user.email) {
+    if (commentUserId && commentUserId !== user.email) {
       pushNotification(commentUserId, { 
         type: 'like', 
         fromUser: user.name, 
         fromUserEmail: user.email,
-        message: `${user.name} liked your comment`, 
+        message: `${user.name} liked your comment: "${newComment.substring(0, 40)}"`, 
         postId: post.id 
       });
+      updateNotificationCount?.();
     }
   };
 
   const handleDeleteComment = (commentId) => {
-    const filtered = comments.filter(c => c.id !== commentId && c.parentId !== commentId);
+    const globalComments = JSON.parse(localStorage.getItem('global_comments') || '{}');
+    const postComments = globalComments[post.id] || [];
+    const filtered = postComments.filter(c => c.id !== commentId && c.parentId !== commentId);
+    globalComments[post.id] = filtered;
+    localStorage.setItem('global_comments', JSON.stringify(globalComments));
     setComments(filtered);
-    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(filtered));
+    
+    // Update global post comment count
+    const allPostsGlobal = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const updatedPosts = allPostsGlobal.map(p => 
+      p.id === post.id ? { ...p, comments: filtered.length } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+    if (setAllPosts) setAllPosts(updatedPosts);
   };
 
   const topLevelComments = comments.filter(c => !c.parentId);
   const visibleComments = showAllComments ? topLevelComments : topLevelComments.slice(0, 3);
-  const isPostAuthor = user.email === post.userEmail;
 
   const CommentRow = ({ comment, depth = 0 }) => {
     const replies = depth < 2 ? comments.filter(c => c.parentId === comment.id) : [];
@@ -1973,10 +2002,7 @@ const InlinePostCard = ({
     const isOwn = comment.userEmail === user.email;
 
     const renderContent = () => {
-      if (!comment.mentions?.length) {
-        return <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">{comment.content}</p>;
-      }
-      
+      if (!comment.content) return null;
       const parts = comment.content.split(/(@\w+)/g);
       return (
         <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">
@@ -2010,83 +2036,27 @@ const InlinePostCard = ({
 
     return (
       <div className={`flex gap-2.5 ${depth > 0 ? 'ml-8' : ''}`}>
-        <div className="flex flex-col items-center flex-shrink-0" style={{ width: 30 }}>
-          <button onClick={() => onViewUserProfile(comment.userEmail, comment.userName)}>
-            <Avatar initials={comment.userName} size="xs" src={comment.userPhoto} />
-          </button>
-          {replies.length > 0 && showReplies[comment.id] && (
-            <div className="w-0.5 flex-1 bg-orange-200 mt-1 rounded-full min-h-[16px]" />
-          )}
-        </div>
-        
-        <div className="flex-1 min-w-0 pb-3">
+        <button onClick={() => onViewUserProfile(comment.userEmail, comment.userName)} className="flex-shrink-0">
+          <Avatar initials={comment.userName} size="xs" src={comment.userPhoto} />
+        </button>
+        <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <button 
-              onClick={() => onViewUserProfile(comment.userEmail, comment.userName)}
-              className="font-semibold text-gray-900 text-sm hover:underline"
-            >
-              {comment.userName}
-            </button>
-            <span className="text-xs text-gray-400 ml-auto">
-              {formatTimeAgo(comment.timestamp)}
-            </span>
+            <button onClick={() => onViewUserProfile(comment.userEmail, comment.userName)} className="font-semibold text-sm hover:underline">{comment.userName}</button>
+            <span className="text-xs text-gray-400">{formatTimeAgo(comment.timestamp)}</span>
           </div>
-          
           {renderContent()}
-          
-          <div className="flex items-center gap-4 mt-1.5">
-            <button
-              onClick={() => handleLikeComment(comment.id, comment.userEmail)}
-              disabled={isLiked}
-              className={`flex items-center gap-1 text-xs font-medium transition ${
-                isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'
-              }`}
-            >
-              <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500' : ''}`} />
-              <span>{comment.likes || 0}</span>
+          <div className="flex items-center gap-3 mt-1">
+            <button onClick={() => handleLikeComment(comment.id, comment.userEmail)} className={`flex items-center gap-1 text-xs ${isLiked ? 'text-red-500' : 'text-gray-400'}`}>
+              <Heart className={`w-3 h-3 ${isLiked ? 'fill-red-500' : ''}`} />{comment.likes || 0}
             </button>
-            
             {depth < 2 && (
-              <button
-                onClick={() => { 
-                  setReplyTo(comment); 
-                  setTimeout(() => inputRef.current?.focus(), 100); 
-                }}
-                className="text-xs text-gray-400 hover:text-orange-500 font-semibold"
-              >
-                Reply
-              </button>
+              <button onClick={() => { setReplyTo(comment); inputRef.current?.focus(); }} className="text-xs text-gray-400 hover:text-orange-500">Reply</button>
             )}
-            
-            {isOwn && (
-              <button 
-                onClick={() => handleDeleteComment(comment.id)} 
-                className="ml-auto text-gray-200 hover:text-red-400 transition"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            {isOwn && <button onClick={() => handleDeleteComment(comment.id)} className="text-xs text-gray-400 hover:text-red-500">Delete</button>}
           </div>
-          
           {replies.length > 0 && (
-            <div className="mt-2">
-              {!showReplies[comment.id] && replies.length > 1 && (
-                <button
-                  onClick={() => setShowReplies(prev => ({ ...prev, [comment.id]: true }))}
-                  className="text-xs text-orange-500 font-semibold mb-2 flex items-center gap-1"
-                >
-                  <ChevronDown className="w-3 h-3" />
-                  View {replies.length} replies
-                </button>
-              )}
-              
-              {(showReplies[comment.id] || replies.length === 1) && (
-                <div className="space-y-2 pl-3 border-l-2 border-orange-100">
-                  {replies.map(reply => (
-                    <CommentRow key={reply.id} comment={reply} depth={depth + 1} />
-                  ))}
-                </div>
-              )}
+            <div className="mt-2 pl-3 border-l-2 border-orange-100 space-y-2">
+              {replies.map(r => <CommentRow key={r.id} comment={r} depth={depth + 1} />)}
             </div>
           )}
         </div>
@@ -2105,7 +2075,7 @@ const InlinePostCard = ({
           onSave={onSaveToggle}
           isSaved={isSaved}
           onDelete={onDelete}
-          isOwner={isPostAuthor}
+          isOwner={user.email === post.userEmail}
           onFollow={onFollow}
           isFollowing={isFollowing}
           onBlock={onBlock}
@@ -2351,9 +2321,8 @@ const InlinePostCard = ({
 };
 
 // ========================================
-// LINE 2150: SECTION 21 - LOGIN PAGE
+// LINE 2150: LOGIN PAGE
 // ========================================
-
 const LoginPage = ({ onLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -2820,9 +2789,8 @@ const LoginPage = ({ onLogin }) => {
 };
 
 // ========================================
-// LINE 2600: SECTION 22 - BOOK DATABASE & AI RESPONSE
+// LINE 2600: BOOK DATABASE & AI RESPONSE
 // ========================================
-
 const BOOK_DB = {
   thriller: [
     { title: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.6, reason: 'Twisty, addictive, impossible to put down' },
@@ -2918,9 +2886,8 @@ const generateClientResponse = (text, previousBooks = []) => {
 };
 
 // ========================================
-// LINE 2800: SECTION 23 - BOOK CARD COMPONENT
+// LINE 2800: BOOK CARD COMPONENT
 // ========================================
-
 const BookCard = ({ book, onCreateCrew, onViewDetails }) => (
   <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
     <div className="flex gap-4">
@@ -2966,9 +2933,8 @@ const BookCard = ({ book, onCreateCrew, onViewDetails }) => (
 );
 
 // ========================================
-// LINE 2850: SECTION 24 - POST PAGE
+// LINE 2850: POST PAGE
 // ========================================
-
 const PostPage = ({ user, onPost, setPage }) => {
   const [content, setContent] = useState('');
   const [bookName, setBookName] = useState('');
@@ -3140,9 +3106,8 @@ const PostPage = ({ user, onPost, setPage }) => {
 };
 
 // ========================================
-// LINE 2950: SECTION 25 - REVIEWS PAGE
+// LINE 2950: REVIEWS PAGE
 // ========================================
-
 const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
   const [reviews, setReviews] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -3459,9 +3424,8 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
 };
 
 // ========================================
-// LINE 3250: SECTION 26 - EXPLORE PAGE with AI Chat
+// LINE 3250: EXPLORE PAGE with AI Chat
 // ========================================
-
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [messages, setMessages] = useState([
     {
@@ -3711,12 +3675,12 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 };
 
 // ========================================
-// LINE 3450: SECTION 27 - HOME PAGE
+// LINE 3450: HOME PAGE
 // ========================================
-
 const HomePage = ({ 
   user, 
   posts, 
+  setAllPosts, 
   crews, 
   setPage, 
   updateNotificationCount, 
@@ -3832,7 +3796,7 @@ const HomePage = ({
         setPage={setPage}
         profileSrc={profileSrc}
         onNotificationClick={() => setPage('notifications')}
-        notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read).length}
+        notificationCount={JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read && n.type !== 'message').length}
       />
 
       {selectedBook && (
@@ -4069,6 +4033,8 @@ const HomePage = ({
                   isBlocked={blockedUsers?.includes(post.userEmail)}
                   onViewUserProfile={onViewUserProfile}
                   onViewBookDetails={(b) => setSelectedBook(b)}
+                  allPosts={posts}
+                  setAllPosts={setAllPosts}
                 />
               ))
             )}
@@ -4080,9 +4046,8 @@ const HomePage = ({
 };
 
 // ========================================
-// LINE 3800: SECTION 28 - PROFILE PAGE
+// LINE 3800: PROFILE PAGE
 // ========================================
-
 const ProfilePage = ({ 
   user, 
   posts, 
@@ -4763,9 +4728,8 @@ const ProfilePage = ({
 };
 
 // ========================================
-// LINE 4250: SECTION 29 - CREWS PAGE
+// LINE 4250: CREWS PAGE
 // ========================================
-
 const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount, onViewUserProfile }) => {
   const [view, setView] = useState('list');
   const [selectedCrew, setSelectedCrew] = useState(null);
@@ -5318,9 +5282,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 };
 
 // ========================================
-// LINE 4600: SECTION 30 - CREW CHAT VIEW (FIX 1 - Extracted Component)
+// LINE 4600: CREW CHAT VIEW (FIX 1 - Extracted Component)
 // ========================================
-
 const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount, onViewUserProfile, isJoined, joinCrew }) => {
   const [messages, setMessages] = useState([]);
   const [newMessage, setNewMessage] = useState('');
@@ -5649,9 +5612,8 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
 };
 
 // ========================================
-// LINE 4900: SECTION 31 - FULL USER PROFILE PAGE
+// LINE 4900: FULL USER PROFILE PAGE
 // ========================================
-
 const FullUserProfilePage = ({ 
   viewedUserEmail, 
   viewedUserName, 
@@ -5961,9 +5923,8 @@ const FullUserProfilePage = ({
 };
 
 // ========================================
-// LINE 5200: SECTION 32 - MAIN APP COMPONENT
+// LINE 5200: MAIN APP COMPONENT
 // ========================================
-
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
@@ -6042,6 +6003,11 @@ export default function App() {
       // Initialize reported posts if not exists
       if (!localStorage.getItem('reportedPosts')) {
         localStorage.setItem('reportedPosts', JSON.stringify([]));
+      }
+      
+      // Initialize global comments if not exists
+      if (!localStorage.getItem('global_comments')) {
+        localStorage.setItem('global_comments', JSON.stringify({}));
       }
       
       setLoading(false);
@@ -6393,6 +6359,7 @@ export default function App() {
               <HomePage
                 user={currentUser}
                 posts={filteredPosts}
+                setAllPosts={setPosts}
                 crews={crews}
                 setPage={setCurrentPage}
                 updateNotificationCount={checkForNewNotifications}
@@ -6502,7 +6469,9 @@ export default function App() {
   );
 }
 
-// Add animation styles
+// ========================================
+// LINE 6200: STYLES
+// ========================================
 if (typeof document !== 'undefined' && !document.querySelector('style[data-styles]')) {
   const style = document.createElement('style');
   style.textContent = `
