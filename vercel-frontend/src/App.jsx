@@ -57,6 +57,38 @@ const socket = io(API_URL, {
   timeout: 10000,
 });
 
+// ─── Unified API helper (never throws) ──────────────────────────────────────
+const api = {
+  get:  (url, cfg = {}) => axios.get(`${API_URL}${url}`,  { timeout: 8000, ...cfg }).catch(() => null),
+  post: (url, body, cfg = {}) => axios.post(`${API_URL}${url}`, body, { timeout: 8000, ...cfg }).catch(() => null),
+};
+
+// ─── Deep-link helpers ────────────────────────────────────────────────────────
+/**
+ * Generate a shareable deep-link URL that opens ReadCrew on the exact post/crew.
+ * Format:  https://yourapp.com/?rc_type=post&rc_id=<id>
+ *          https://yourapp.com/?rc_type=crew&rc_id=<id>
+ */
+const deepLink = (type, id) => {
+  const base = window.location.origin + window.location.pathname;
+  return `${base}?rc_type=${type}&rc_id=${encodeURIComponent(id)}`;
+};
+
+/**
+ * Parse deep-link on page load.
+ * Supports query params (?rc_type=post&rc_id=X) and hash (#post/X or #crew/X).
+ */
+const parseDeepLink = () => {
+  const p = new URLSearchParams(window.location.search);
+  const type = p.get('rc_type');
+  const id   = p.get('rc_id');
+  if (type && id) return { type, id };
+  const h = window.location.hash.replace('#', '');
+  if (h.startsWith('post/')) return { type: 'post', id: h.slice(5) };
+  if (h.startsWith('crew/')) return { type: 'crew', id: h.slice(5) };
+  return null;
+};
+
 // ========================================
 // SECTION 3: FEED ALGORITHM ENGINE
 // ========================================
@@ -303,27 +335,68 @@ const addGlobalLike = (postId, userEmail) => {
 };
 
 /**
- * Get comments for a post (global, not user-specific)
+ * Get comments for a post — local cache (used as fallback)
  */
 const getPostComments = (postId) => {
   return JSON.parse(localStorage.getItem(`post_${postId}_comments`) || '[]');
 };
 
 /**
- * Add a comment globally and update the post's comment count in allPosts
+ * CROSS-DEVICE: Fetch comments from server; fall back to localStorage cache.
+ */
+const fetchCommentsFromServer = async (postId) => {
+  const res = await api.get(`/api/social/posts/${postId}/comments`);
+  if (res?.data?.success) {
+    const cmts = res.data.comments || [];
+    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+    // Sync comment count in local cache
+    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    localStorage.setItem('allPosts', JSON.stringify(
+      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+    ));
+    return cmts;
+  }
+  // Offline fallback
+  return getPostComments(postId);
+};
+
+/**
+ * CROSS-DEVICE: Post comment to server; fall back to localStorage if offline.
+ */
+const postCommentToServer = async (postId, commentData) => {
+  const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
+  if (res?.data?.success) {
+    const cmts = res.data.comments || [];
+    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    localStorage.setItem('allPosts', JSON.stringify(
+      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+    ));
+    return cmts;
+  }
+  // Offline fallback — save locally
+  const cmts = getPostComments(postId);
+  cmts.push(commentData);
+  localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+  const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+  localStorage.setItem('allPosts', JSON.stringify(
+    all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+  ));
+  return cmts;
+};
+
+/**
+ * Add a comment locally (legacy helper kept for compatibility)
  */
 const addGlobalComment = (postId, commentData) => {
   const comments = getPostComments(postId);
   comments.push(commentData);
   localStorage.setItem(`post_${postId}_comments`, JSON.stringify(comments));
-
-  // Update comment count in allPosts
   const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
   const updatedPosts = allPosts.map(p =>
     p.id === postId ? { ...p, comments: comments.filter(c => !c.parentId).length } : p
   );
   localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-
   return comments;
 };
 
@@ -347,7 +420,7 @@ const incrementReshareCount = (postId) => {
 // Lives outside React so it persists across renders without causing re-renders.
 const _shownToastIds = new Set();
 
-const pushNotification = (targetEmail, notif) => {
+const pushNotification = async (targetEmail, notif) => {
   if (!targetEmail) return null;
 
   const full = {
@@ -362,9 +435,9 @@ const pushNotification = (targetEmail, notif) => {
   // ── DEDUP: skip if same type+from+postId was pushed in the last 30s ──
   const thirtySecsAgo = Date.now() - 30_000;
   const isDuplicate = list.some(n =>
-    n.type         === full.type &&
-    n.fromUserEmail=== full.fromUserEmail &&
-    n.postId       === full.postId &&
+    n.type          === full.type &&
+    n.fromUserEmail === full.fromUserEmail &&
+    n.postId        === full.postId &&
     new Date(n.timestamp).getTime() > thirtySecsAgo
   );
   if (isDuplicate) return null;
@@ -376,11 +449,8 @@ const pushNotification = (targetEmail, notif) => {
   // Fire CustomEvent for same-tab real-time update
   window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
 
-  // Fire StorageEvent for cross-tab sync
-  window.dispatchEvent(new StorageEvent('storage', {
-    key: `user_${targetEmail}_notifications`,
-    newValue: JSON.stringify(list),
-  }));
+  // Push to server so OTHER devices pick it up (cross-device notifications)
+  api.post('/api/social/notifications', { targetEmail, notification: full });
 
   return full;
 };
@@ -1450,7 +1520,12 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
 
 const ShareModal = ({ post, crewInvite, onClose }) => {
   const [copied, setCopied] = React.useState(false);
-  const shareUrl  = window.location.href;
+  // Deep link: URL opens the exact post or crew on any device
+  const shareUrl = post
+    ? deepLink('post', post.id || post._id)
+    : crewInvite
+    ? deepLink('crew', crewInvite.id)
+    : window.location.href;
   const shareText = crewInvite
     ? `Join the "${crewInvite.name}" reading crew on ReadCrew — reading "${crewInvite.name}" by ${crewInvite.author}!`
     : `Check out this post by ${post?.userName}: "${post?.content?.substring(0, 60)}..."`;
@@ -1802,11 +1877,13 @@ const InlinePostCard = ({
     loadComments();
   }, [showComments]);
 
-  const loadComments = () => {
+  const loadComments = async () => {
     setLoadingComments(true);
-    const cached = getPostComments(post.id);
-    setComments(cached);
-    setCommentCount(cached.filter(c => !c.parentId).length);
+    // CROSS-DEVICE: always fetch from server so friend's comments appear
+    const pid = post.id || post._id;
+    const cmts = await fetchCommentsFromServer(pid);
+    setComments(cmts);
+    setCommentCount(cmts.filter(c => !c.parentId).length);
     setLoadingComments(false);
   };
 
@@ -1836,7 +1913,7 @@ const InlinePostCard = ({
   };
 
   // ── FIXED: Global comment handler ───────────────────
-  const handlePostComment = () => {
+  const handlePostComment = async () => {
     if (!newComment.trim()) return;
 
     const mentions = extractMentions(newComment);
@@ -1852,12 +1929,13 @@ const InlinePostCard = ({
       likes:     0,
     };
 
-    // Save globally
-    const updated = addGlobalComment(post.id, commentData);
-    setComments(updated);
-    setCommentCount(updated.filter(c => !c.parentId).length);
     setNewComment('');
     setReplyTo(null);
+    // CROSS-DEVICE: post to server so any device sees it immediately
+    const pid = post.id || post._id;
+    const updated = await postCommentToServer(pid, commentData);
+    setComments(updated);
+    setCommentCount(updated.filter(c => !c.parentId).length);
 
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, {
@@ -2059,7 +2137,7 @@ const InlinePostCard = ({
         />
       )}
 
-      <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition">
+      <div id={`post-${post.id || post._id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition">
         {/* Header */}
         <div className="px-4 pt-4 pb-2">
           <div className="flex items-start gap-3">
@@ -3172,6 +3250,7 @@ const HomePage = ({
   profileSrc, savedPosts, onSavePost, onResharePost, onDeletePost,
   onFollow, following, onBlock, blockedUsers,
   onViewUserProfile, onViewBookDetails,
+  deepLinkPostId, onDeepLinkHandled,
 }) => {
   const [trendingBooks,  setTrendingBooks]  = useState([]);
   const [loadingTrending,setLoadingTrending]= useState(true);
@@ -3182,6 +3261,21 @@ const HomePage = ({
   const [stats,          setStats]          = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
   const [readingProgress,setReadingProgress]= useState(0);
   const [feedRefreshed,  setFeedRefreshed]  = useState(false);
+
+  // ── DEEP LINK: scroll to linked post once feed is loaded ────────────────
+  useEffect(() => {
+    if (!deepLinkPostId || feedPosts.length === 0) return;
+    // Give DOM a tick to render
+    setTimeout(() => {
+      const el = document.getElementById(`post-${deepLinkPostId}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.style.boxShadow = '0 0 0 3px #f97316';  // highlight ring
+        setTimeout(() => { el.style.boxShadow = ''; }, 2500);
+      }
+      onDeepLinkHandled?.();
+    }, 400);
+  }, [deepLinkPostId, feedPosts]);
 
   useEffect(() => {
     loadTrendingBooks();
@@ -4096,7 +4190,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
 // SECTION 33: CREWS PAGE
 // ========================================
 
-const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount, onViewUserProfile }) => {
+const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount, onViewUserProfile, deepLinkCrewId, onDeepLinkHandled }) => {
   const [view,           setView]          = useState('list');
   const [selectedCrew,   setSelectedCrew]  = useState(null);
   const [crews,          setCrews]         = useState([]);
@@ -4108,15 +4202,33 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const [searchQuery,    setSearchQuery]   = useState('');
   const [selectedBook,   setSelectedBook]  = useState(null);
   const [unreadMessages, setUnreadMessages]= useState({});
-  const [showShareModal, setShowShareModal]= useState(null); // crew to share/invite
+  const [showShareModal, setShowShareModal]= useState(null);
+  const [loadingCrews,   setLoadingCrews]  = useState(true);
+
+  // CROSS-DEVICE: fetch all crews from server so every phone sees the same list
+  const loadCrews = useCallback(async () => {
+    setLoadingCrews(true);
+    const res = await api.get('/api/social/crews');
+    let allCrews = [];
+    if (res?.data?.success) {
+      allCrews = res.data.crews || [];
+    } else {
+      // Fallback: merge localStorage + initialCrews (seed data)
+      const saved = JSON.parse(localStorage.getItem('crews') || '[]');
+      allCrews = [...saved];
+    }
+    // Always merge seed/initialCrews so "Becoming", "The Beach" etc. are always visible
+    initialCrews.forEach(ic => { if (!allCrews.find(c => String(c.id) === String(ic.id))) allCrews.push(ic); });
+    // Also pull any locally-created crews not yet synced
+    const local = JSON.parse(localStorage.getItem('crews') || '[]');
+    local.forEach(lc => { if (!allCrews.find(c => String(c.id) === String(lc.id))) allCrews.push(lc); });
+    localStorage.setItem('crews', JSON.stringify(allCrews));
+    setCrews(allCrews);
+    setLoadingCrews(false);
+  }, [user.email]);
 
   useEffect(() => {
-    // ── FIX: Always merge saved crews + initialCrews so default crews (Becoming etc) are always found ──
-    const saved = JSON.parse(localStorage.getItem('crews') || '[]');
-    const merged = [...saved];
-    initialCrews.forEach(ic => { if (!merged.find(c => String(c.id) === String(ic.id))) merged.push(ic); });
-    localStorage.setItem('crews', JSON.stringify(merged));
-    setCrews(merged);
+    loadCrews();
     const joined = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
     setJoinedCrews(joined);
     const notifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
@@ -4124,7 +4236,14 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     const counts = {};
     crewMsgs.forEach(n => { if (n.crewId) counts[n.crewId] = (counts[n.crewId] || 0) + 1; });
     setUnreadMessages(counts);
-  }, [user.email]);
+  }, [user.email, loadCrews]);
+
+  // Deep-link: auto-navigate to linked crew once list is loaded
+  useEffect(() => {
+    if (!deepLinkCrewId || crews.length === 0) return;
+    const target = crews.find(c => String(c.id) === String(deepLinkCrewId) || c.slug === deepLinkCrewId);
+    if (target) { setSelectedCrew(target); setView('detail'); onDeepLinkHandled?.(); }
+  }, [deepLinkCrewId, crews]);
 
   const isJoined = (crewId) => joinedCrews.includes(crewId) || joinedCrews.includes(String(crewId));
 
@@ -4160,7 +4279,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     showToast(`Left "${crew.name}"`);
   };
 
-  const createCrew = () => {
+  const createCrew = async () => {
     if (!newCrewData.name || !newCrewData.author) { alert('Please fill book name and author'); return; }
     // ── FIX: One-book-one-crew — redirect to existing crew rather than blocking ──
     const existing = crews.find(c =>
@@ -4178,10 +4297,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     }
 
     const newCrew = { id: generateId(), ...newCrewData, members: 1, chats: 0, createdBy: user.email, createdByName: user.name, createdAt: new Date().toISOString() };
-    const updatedCrews = [newCrew, ...crews];
+    // Save to server so ALL devices see this new crew immediately
+    const res = await api.post('/api/social/crews', newCrew);
+    const saved = res?.data?.success ? res.data.crew : newCrew;
+    const updatedCrews = [saved, ...crews];
     setCrews(updatedCrews);
     localStorage.setItem('crews', JSON.stringify(updatedCrews));
-    const updated = [...joinedCrews, newCrew.id];
+    const updated = [...joinedCrews, saved.id];
     setJoinedCrews(updated);
     localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updated));
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
@@ -4189,7 +4311,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
     setShowCreateForm(false);
     setNewCrewData({ name: '', author: '', genre: '' });
-    showToast(`🎉 Created "${newCrew.name}"!`);
+    showToast(`🎉 Created "${saved.name}"!`);
   };
 
   useEffect(() => {
@@ -4599,11 +4721,18 @@ export default function App() {
   const [showBottomNav,     setShowBottomNav]    = useState(true);
   const [posts,             setPosts]            = useState([]);
   const [crews,             setCrews]            = useState([
-    { id: 1, name: 'Atomic Habits',       author: 'James Clear',    genre: 'Self Improvement', members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
-    { id: 2, name: 'Tuesdays with Morrie', author: 'Mitch Albom',   genre: 'Inspiration',      members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
-    { id: 3, name: 'The Alchemist',        author: 'Paulo Coelho',  genre: 'Fiction',           members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
-    { id: 4, name: 'Project Hail Mary',    author: 'Andy Weir',     genre: 'Sci-Fi',            members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
-    { id: 5, name: 'Fourth Wing',          author: 'Rebecca Yarros', genre: 'Fantasy',          members: 1, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: new Date().toISOString() },
+    { id: 'crew_atomic',      name: 'Atomic Habits',          author: 'James Clear',       genre: 'Self-Help',    members: 24, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_tuesdays',    name: 'Tuesdays with Morrie',   author: 'Mitch Albom',       genre: 'Inspiration',  members: 12, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_alchemist',   name: 'The Alchemist',          author: 'Paulo Coelho',      genre: 'Fiction',      members: 31, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_hailmary',    name: 'Project Hail Mary',      author: 'Andy Weir',         genre: 'Sci-Fi',       members: 18, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_fourth',      name: 'Fourth Wing',            author: 'Rebecca Yarros',    genre: 'Fantasy',      members: 42, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_midnight',    name: 'The Midnight Library',   author: 'Matt Haig',         genre: 'Fiction',      members: 29, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_becoming',    name: 'Becoming',               author: 'Michelle Obama',    genre: 'Memoir',       members: 27, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_beach',       name: 'The Beach',              author: 'Alex Garland',      genre: 'Fiction',      members: 15, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_sapiens',     name: 'Sapiens',                author: 'Yuval Noah Harari', genre: 'History',      members: 22, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_psychology',  name: 'The Psychology of Money', author: 'Morgan Housel',   genre: 'Finance',      members: 19, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_silentpatient',name: 'The Silent Patient',    author: 'Alex Michaelides',  genre: 'Thriller',     members: 33, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_gonegirl',    name: 'Gone Girl',              author: 'Gillian Flynn',     genre: 'Thriller',     members: 21, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
   ]);
   const [savedPosts,        setSavedPosts]       = useState([]);
   const [following,         setFollowing]        = useState([]);
@@ -4618,6 +4747,11 @@ export default function App() {
   const [isOnline,          setIsOnline]         = useState(navigator.onLine);
   const [loading,           setLoading]          = useState(true);
   const prevCountRef = useRef(0);
+  const notifPollRef = useRef(null);
+
+  // Deep-link state — set when URL contains ?rc_type=post|crew&rc_id=X
+  const [deepLinkPostId, setDeepLinkPostId] = useState(null);
+  const [deepLinkCrewId, setDeepLinkCrewId] = useState(null);
 
   // Network status
   useEffect(() => {
@@ -4651,13 +4785,37 @@ export default function App() {
         if (pi) setProfileSrc(pi);
       }
 
-      const allPosts   = JSON.parse(localStorage.getItem('allPosts') || '[]');
-      setPosts(allPosts);
+      // CROSS-DEVICE: Fetch posts from server so friend posts appear
+      try {
+        const email = (JSON.parse(localStorage.getItem('currentUser') || '{}')).email;
+        const res = await api.get(`/api/social/posts?userEmail=${encodeURIComponent(email || '')}`);
+        if (res?.data?.success) {
+          const sp = res.data.posts || [];
+          const lp = JSON.parse(localStorage.getItem('allPosts') || '[]');
+          const merged = [...sp];
+          lp.forEach(lx => { if (!merged.find(sx => (sx.id||sx._id) === (lx.id||lx._id))) merged.push(lx); });
+          localStorage.setItem('allPosts', JSON.stringify(merged));
+          setPosts(merged);
+        } else {
+          setPosts(JSON.parse(localStorage.getItem('allPosts') || '[]'));
+        }
+      } catch (_) {
+        setPosts(JSON.parse(localStorage.getItem('allPosts') || '[]'));
+      }
 
       const storedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
       if (storedCrews.length > 0) setCrews(storedCrews);
 
       if (!localStorage.getItem('reportedPosts')) localStorage.setItem('reportedPosts', JSON.stringify([]));
+
+      // Handle deep links from shared URLs
+      const dl = parseDeepLink();
+      if (dl) {
+        if (dl.type === 'post') { setDeepLinkPostId(dl.id); setCurrentPage('home'); }
+        if (dl.type === 'crew') { setDeepLinkCrewId(dl.id); setCurrentPage('crews'); }
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+
       setLoading(false);
     };
     init();
@@ -4694,19 +4852,25 @@ export default function App() {
 
     checkForNewNotifications();
 
-    // Poll server for notifications every 8 seconds
+    // CROSS-DEVICE: Poll server for notifications every 15s — picks up notifs pushed by other devices
     const pollNotifications = async () => {
       try {
-        const res = await axios.get(`${API_URL}/api/social/notifications/${encodeURIComponent(currentUser.email)}`, { timeout: 6000 });
-        if (res.data.success) {
-          const fresh = res.data.notifications;
-          localStorage.setItem(`user_${currentUser.email}_notifications`, JSON.stringify(fresh));
+        const res = await api.get(`/api/social/notifications/${encodeURIComponent(currentUser.email)}`);
+        if (res?.data?.success) {
+          const fresh = res.data.notifications || [];
+          const old   = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
+          // Merge: server wins for read status, but keep any local-only notifs
+          const merged = [...fresh];
+          old.forEach(o => { if (!merged.find(f => f.id === o.id)) merged.push(o); });
+          merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          localStorage.setItem(`user_${currentUser.email}_notifications`, JSON.stringify(merged));
           checkForNewNotifications();
         }
-      } catch (_) { /* server offline, use localStorage */ }
+      } catch (_) { /* server offline — use localStorage */ }
     };
 
-    const interval = setInterval(pollNotifications, 8000);
+    const interval = setInterval(pollNotifications, 15000);
+    pollNotifications(); // Run immediately on mount
 
     // Listen for real-time custom events
     const handleCustom = (e) => {
@@ -4991,6 +5155,8 @@ export default function App() {
                 blockedUsers={blockedUsers}
                 onViewUserProfile={handleViewUserProfile}
                 onViewBookDetails={(book) => { /* handled inside HomePage */ }}
+                deepLinkPostId={deepLinkPostId}
+                onDeepLinkHandled={() => setDeepLinkPostId(null)}
               />
             )}
 
@@ -5028,6 +5194,8 @@ export default function App() {
                 setPage={setCurrentPage}
                 updateNotificationCount={checkForNewNotifications}
                 onViewUserProfile={handleViewUserProfile}
+                deepLinkCrewId={deepLinkCrewId}
+                onDeepLinkHandled={() => setDeepLinkCrewId(null)}
               />
             )}
 
