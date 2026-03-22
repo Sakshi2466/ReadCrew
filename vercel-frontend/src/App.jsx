@@ -343,7 +343,13 @@ const incrementReshareCount = (postId) => {
 // SECTION 5: NOTIFICATION HELPERS
 // ========================================
 
+// Module-level set — tracks which notification IDs have already been shown as a toast.
+// Lives outside React so it persists across renders without causing re-renders.
+const _shownToastIds = new Set();
+
 const pushNotification = (targetEmail, notif) => {
+  if (!targetEmail) return null;
+
   const full = {
     id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
     ...notif,
@@ -352,6 +358,17 @@ const pushNotification = (targetEmail, notif) => {
   };
 
   const list = JSON.parse(localStorage.getItem(`user_${targetEmail}_notifications`) || '[]');
+
+  // ── DEDUP: skip if same type+from+postId was pushed in the last 30s ──
+  const thirtySecsAgo = Date.now() - 30_000;
+  const isDuplicate = list.some(n =>
+    n.type         === full.type &&
+    n.fromUserEmail=== full.fromUserEmail &&
+    n.postId       === full.postId &&
+    new Date(n.timestamp).getTime() > thirtySecsAgo
+  );
+  if (isDuplicate) return null;
+
   list.unshift(full);
   if (list.length > 200) list.length = 200;
   localStorage.setItem(`user_${targetEmail}_notifications`, JSON.stringify(list));
@@ -364,6 +381,8 @@ const pushNotification = (targetEmail, notif) => {
     key: `user_${targetEmail}_notifications`,
     newValue: JSON.stringify(list),
   }));
+
+  return full;
 };
 
 // ========================================
@@ -1296,20 +1315,20 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     };
   }, [user.email, loadNotifications]);
 
-  // ── FIXED: Mark ALL as read ──────────────────────────
+  // ── FIXED: Mark ALL as read + suppress future toasts for these IDs ──
   const markAllAsRead = () => {
-    // Get the full list (including message type) so we don't lose them
     const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
     const updated = raw.map(n => ({ ...n, read: true }));
+    // Mark every ID as "already toasted" so they never pop up again
+    updated.forEach(n => _shownToastIds.add(n.id));
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
-    // Update local state (only social)
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
     updateNotificationCount?.();
-    // Fire event so bell count updates
     window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
   };
 
   const markOneAsRead = (id) => {
+    _shownToastIds.add(id);
     const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
     const updated = raw.map(n => n.id === id ? { ...n, read: true } : n);
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
@@ -1426,32 +1445,44 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
 
 // ========================================
 // SECTION 20: SHARE MODAL
+// ── FIXED: LinkedIn added, crewInvite support, copy feedback, used in crew chat ──
 // ========================================
 
-const ShareModal = ({ post, onClose }) => {
+const ShareModal = ({ post, crewInvite, onClose }) => {
+  const [copied, setCopied] = React.useState(false);
   const shareUrl  = window.location.href;
-  const shareText = `Check out this post by ${post.userName}: "${post.content?.substring(0, 50)}..."`;
+  const shareText = crewInvite
+    ? `Join the "${crewInvite.name}" reading crew on ReadCrew — reading "${crewInvite.name}" by ${crewInvite.author}!`
+    : `Check out this post by ${post?.userName}: "${post?.content?.substring(0, 60)}..."`;
 
   const shareHandlers = {
-    whatsapp: () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank'),
-    facebook: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank'),
-    twitter:  () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`, '_blank'),
-    telegram: () => window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank'),
-    email:    () => window.open(`mailto:?subject=Check out this post on ReadCrew&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`, '_blank'),
-    copyLink: () => {
-      navigator.clipboard.writeText(shareUrl).then(() => {
-        alert('Link copied to clipboard!');
-      }).catch(() => {
+    whatsapp:  () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank'),
+    facebook:  () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`, '_blank'),
+    twitter:   () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, '_blank'),
+    linkedin:  () => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodeURIComponent(shareText)}`, '_blank'),
+    telegram:  () => window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank'),
+    email:     () => window.open(`mailto:?subject=${encodeURIComponent(crewInvite ? `Join my reading crew: ${crewInvite.name}` : 'Check out this ReadCrew post')}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`, '_blank'),
+    copyLink:  () => {
+      navigator.clipboard.writeText(shareUrl).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = shareUrl;
         document.body.appendChild(ta);
         ta.select();
         document.execCommand('copy');
         document.body.removeChild(ta);
-        alert('Link copied!');
       });
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
     },
   };
+
+  const platforms = [
+    { key: 'whatsapp', color: '#25D366', letter: 'W',  label: 'WhatsApp' },
+    { key: 'facebook', color: '#1877F2', letter: 'f',  label: 'Facebook' },
+    { key: 'twitter',  color: '#1DA1F2', letter: '𝕏',  label: 'Twitter'  },
+    { key: 'linkedin', color: '#0A66C2', letter: 'in', label: 'LinkedIn' },
+    { key: 'telegram', color: '#0088cc', letter: '✈',  label: 'Telegram' },
+  ];
 
   return (
     <div
@@ -1460,36 +1491,44 @@ const ShareModal = ({ post, onClose }) => {
     >
       <div className="bg-white rounded-2xl w-full max-w-sm mx-auto">
         <div className="border-b border-gray-100 p-4 flex justify-between items-center">
-          <h3 className="font-semibold">Share Post</h3>
+          <h3 className="font-semibold">{crewInvite ? 'Invite to Crew' : 'Share Post'}</h3>
           <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
         </div>
         <div className="p-5">
-          <div className="grid grid-cols-4 gap-4 mb-6">
-            {[
-              ['whatsapp', '#25D366', 'W'],
-              ['facebook', '#1877F2', 'f'],
-              ['twitter',  '#1DA1F2', '𝕏'],
-              ['telegram', '#0088cc', '✈'],
-            ].map(([key, color, letter]) => (
-              <button key={key} onClick={shareHandlers[key]} className="flex flex-col items-center gap-2 group">
+          {crewInvite && (
+            <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 mb-4 flex items-center gap-3">
+              <BookOpen className="w-5 h-5 text-orange-500 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-gray-900">{crewInvite.name}</p>
+                <p className="text-xs text-gray-500">by {crewInvite.author}</p>
+              </div>
+            </div>
+          )}
+          <div className="grid grid-cols-5 gap-3 mb-5">
+            {platforms.map(({ key, color, letter, label }) => (
+              <button key={key} onClick={shareHandlers[key]} className="flex flex-col items-center gap-1.5 group">
                 <div
-                  className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg transition-transform group-hover:scale-110"
+                  className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm transition-transform group-hover:scale-110 shadow-sm"
                   style={{ backgroundColor: color }}
                 >
                   {letter}
                 </div>
-                <span className="text-xs text-gray-600 capitalize">{key}</span>
+                <span className="text-[10px] text-gray-500">{label}</span>
               </button>
             ))}
           </div>
-
-          <button onClick={shareHandlers.email} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition mb-3">
+          <button onClick={shareHandlers.email} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition mb-2">
             <Mail className="w-5 h-5 text-orange-500" />
-            <span className="font-medium">Email</span>
+            <span className="font-medium text-sm">Send via Email</span>
           </button>
-          <button onClick={shareHandlers.copyLink} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition">
-            <Link2 className="w-5 h-5 text-orange-500" />
-            <span className="font-medium">Copy Link</span>
+          <button
+            onClick={shareHandlers.copyLink}
+            className={`w-full py-3 border rounded-xl flex items-center justify-center gap-2 transition ${copied ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
+          >
+            {copied
+              ? <><CheckCircle className="w-5 h-5 text-green-500" /><span className="font-medium text-sm">Copied!</span></>
+              : <><Link2 className="w-5 h-5 text-orange-500" /><span className="font-medium text-sm">Copy Link</span></>
+            }
           </button>
         </div>
       </div>
@@ -1497,7 +1536,6 @@ const ShareModal = ({ post, onClose }) => {
   );
 };
 
-// ========================================
 // SECTION 21: RESHARE MODAL (FIXED)
 // ========================================
 
@@ -3825,6 +3863,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
   const [messages,   setMessages]  = useState([]);
   const [newMessage, setNewMessage]= useState('');
   const [selBook,    setSelBook]   = useState(null);
+  const [showShare,  setShowShare] = useState(false);
   const messagesEndRef = useRef(null);
   const fileInputRef   = useRef(null);
 
@@ -3958,7 +3997,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
             </div>
           </div>
         </div>
-        <button className="p-2 hover:bg-gray-100 rounded-full"><MoreHorizontal className="w-5 h-5 text-gray-600" /></button>
+        <button onClick={() => setShowShare(true)} className="p-2 hover:bg-gray-100 rounded-full" title="Invite friends"><Share2 className="w-5 h-5 text-gray-600" /></button>
       </div>
 
       {/* Messages */}
@@ -4048,6 +4087,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
       </div>
 
       {selBook && <BookDetailsModal book={selBook} onClose={() => setSelBook(null)} onCreateCrew={() => {}} />}
+      {showShare && <ShareModal crewInvite={crew} onClose={() => setShowShare(false)} />}
     </div>
   );
 };
@@ -4068,10 +4108,15 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const [searchQuery,    setSearchQuery]   = useState('');
   const [selectedBook,   setSelectedBook]  = useState(null);
   const [unreadMessages, setUnreadMessages]= useState({});
+  const [showShareModal, setShowShareModal]= useState(null); // crew to share/invite
 
   useEffect(() => {
+    // ── FIX: Always merge saved crews + initialCrews so default crews (Becoming etc) are always found ──
     const saved = JSON.parse(localStorage.getItem('crews') || '[]');
-    setCrews(saved.length > 0 ? saved : initialCrews);
+    const merged = [...saved];
+    initialCrews.forEach(ic => { if (!merged.find(c => String(c.id) === String(ic.id))) merged.push(ic); });
+    localStorage.setItem('crews', JSON.stringify(merged));
+    setCrews(merged);
     const joined = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
     setJoinedCrews(joined);
     const notifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
@@ -4117,8 +4162,20 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
   const createCrew = () => {
     if (!newCrewData.name || !newCrewData.author) { alert('Please fill book name and author'); return; }
-    const exists = crews.some(c => c.name.toLowerCase() === newCrewData.name.toLowerCase() && c.author.toLowerCase() === newCrewData.author.toLowerCase());
-    if (exists) { alert('A crew for this book already exists!'); return; }
+    // ── FIX: One-book-one-crew — redirect to existing crew rather than blocking ──
+    const existing = crews.find(c =>
+      c.name.trim().toLowerCase() === newCrewData.name.trim().toLowerCase() &&
+      c.author.trim().toLowerCase() === newCrewData.author.trim().toLowerCase()
+    );
+    if (existing) {
+      alert(`A crew for "${existing.name}" already exists! Taking you there now.`);
+      if (!isJoined(existing.id)) joinCrew(existing);
+      setShowCreateForm(false);
+      setNewCrewData({ name: '', author: '', genre: '' });
+      setSelectedCrew(existing);
+      setView('detail');
+      return;
+    }
 
     const newCrew = { id: generateId(), ...newCrewData, members: 1, chats: 0, createdBy: user.email, createdByName: user.name, createdAt: new Date().toISOString() };
     const updatedCrews = [newCrew, ...crews];
@@ -4190,10 +4247,10 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   </button>
                 )}
                 <button
-                  onClick={() => { const email = prompt("Friend's email to invite:"); if (email && isValidEmail(email)) { pushNotification(email, { type: 'invite', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} invited you to join "${selectedCrew.name}"!`, crewId: selectedCrew.id }); alert(`Invitation sent to ${email}!`); } else if (email) { alert('Invalid email'); } }}
-                  className="px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition"
+                  onClick={() => setShowShareModal(selectedCrew)}
+                  className="px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-1.5 text-gray-600 text-sm font-medium"
                 >
-                  <UserPlus className="w-5 h-5" />
+                  <Share2 className="w-4 h-4" /> Invite
                 </button>
               </div>
             </div>
@@ -4224,6 +4281,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         </div>
 
         {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
+        {showShareModal && <ShareModal crewInvite={showShareModal} onClose={() => setShowShareModal(null)} />}
       </div>
     );
   }
@@ -4289,6 +4347,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
                   <button onClick={e => { e.stopPropagation(); setSelectedCrew(crew); setView('chat'); }} className="px-3 py-1 bg-orange-100 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-200 transition flex items-center gap-1">
                     <MessageCircle className="w-3 h-3" />Open Chat
                   </button>
+                  <button onClick={e => { e.stopPropagation(); setShowShareModal(crew); }} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-200 transition flex items-center gap-1">
+                    <Share2 className="w-3 h-3" />Invite
+                  </button>
                 </div>
               </div>
             ))
@@ -4325,6 +4386,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       </div>
 
       {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
+      {showShareModal && <ShareModal crewInvite={showShareModal} onClose={() => setShowShareModal(null)} />}
     </div>
   );
 };
@@ -4612,10 +4674,11 @@ export default function App() {
     const unreadSocial = social.filter(n => !n.read).length;
     const unreadCrew   = crewMsgs.filter(n => !n.read).length;
 
-    // Show toast for new notifications
+    // ── FIX: Only show toast for brand-new notifs not yet toasted ──
     if (unreadSocial > prevCountRef.current) {
-      const newest = social.find(n => !n.read);
+      const newest = social.find(n => !n.read && !_shownToastIds.has(n.id));
       if (newest) {
+        _shownToastIds.add(newest.id);
         setCurrentToast(newest);
         setTimeout(() => setCurrentToast(null), 5000);
       }
