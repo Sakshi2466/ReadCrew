@@ -241,7 +241,7 @@ const hasUserLikedPost = (postId, userEmail) => {
   return likedBy.includes(userEmail);
 };
 
-const addGlobalLike = (postId, userEmail) => {
+const addGlobalLike = async (postId, userEmail, userName) => {
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
   if (likedBy.includes(userEmail)) return likedBy.length;
 
@@ -260,6 +260,13 @@ const addGlobalLike = (postId, userEmail) => {
     localStorage.setItem(`user_${userEmail}_likedPosts`, JSON.stringify(userLiked));
   }
 
+  // Send to server for cross-device sync
+  try {
+    await axios.post(`${API_URL}/api/social/posts/${postId}/like`, { userEmail, userName });
+  } catch (error) {
+    console.error('Failed to sync like to server:', error);
+  }
+
   return likedBy.length;
 };
 
@@ -268,30 +275,40 @@ const getPostComments = (postId) => {
 };
 
 const fetchCommentsFromServer = async (postId) => {
-  const res = await api.get(`/api/social/posts/${postId}/comments`);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
+  try {
+    const response = await axios.get(`${API_URL}/api/social/posts/${postId}/comments`);
+    if (response.data?.success) {
+      const cmts = response.data.comments || [];
+      localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+      const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      localStorage.setItem('allPosts', JSON.stringify(
+        all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+      ));
+      return cmts;
+    }
+  } catch (error) {
+    console.error('Failed to fetch comments from server:', error);
   }
   return getPostComments(postId);
 };
 
 const postCommentToServer = async (postId, commentData) => {
-  const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
+  try {
+    const response = await axios.post(`${API_URL}/api/social/posts/${postId}/comments`, commentData);
+    if (response.data?.success) {
+      const cmts = response.data.comments || [];
+      localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+      const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      localStorage.setItem('allPosts', JSON.stringify(
+        all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+      ));
+      return cmts;
+    }
+  } catch (error) {
+    console.error('Failed to post comment to server:', error);
   }
+  
+  // Fallback to local storage
   const cmts = getPostComments(postId);
   cmts.push(commentData);
   localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
@@ -344,7 +361,11 @@ const pushNotification = async (targetEmail, notif) => {
 
   window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
 
-  api.post('/api/social/notifications', { targetEmail, notification: full });
+  try {
+    await axios.post(`${API_URL}/api/social/notifications`, { targetEmail, notification: full });
+  } catch (error) {
+    console.error('Failed to sync notification to server:', error);
+  }
 
   return full;
 };
@@ -1725,7 +1746,7 @@ const InlinePostCard = React.memo(({
   const handleLikePost = async () => {
     if (isLiked) return;
 
-    const newCount = addGlobalLike(post.id, user.email);
+    const newCount = await addGlobalLike(post.id, user.email, user.name);
     setIsLiked(true);
     setLikeCount(newCount);
 
@@ -1739,10 +1760,6 @@ const InlinePostCard = React.memo(({
       });
       updateNotificationCount?.();
     }
-
-    try {
-      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { userEmail: user.email }, { timeout: 5000 });
-    } catch (_) { }
   };
 
   const handlePostComment = async () => {
@@ -2590,8 +2607,13 @@ const PostPage = ({ user, onPost, setPage }) => {
 
     try {
       const res = await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
-      onPost(res.data.success ? res.data.post : postData);
-    } catch (_) {
+      if (res.data.success) {
+        onPost(res.data.post);
+      } else {
+        onPost(postData);
+      }
+    } catch (error) {
+      console.error('Failed to post to server:', error);
       onPost(postData);
     }
 
@@ -4926,6 +4948,9 @@ export default function App() {
     const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
     stats.postsCreated = (stats.postsCreated || 0) + 1;
     localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(stats));
+
+    // Emit socket event for real-time updates
+    socket.emit('new_post', newPost);
   };
 
   const handleDeletePost = (post) => {
@@ -4936,6 +4961,9 @@ export default function App() {
     const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
     stats.postsCreated = Math.max((stats.postsCreated || 0) - 1, 0);
     localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(stats));
+    
+    // Emit socket event for real-time updates
+    socket.emit('post_deleted', { postId: post.id });
   };
 
   const handleSavePost = (post) => {
