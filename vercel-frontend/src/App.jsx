@@ -1860,122 +1860,83 @@ const InlinePostCard = React.memo(({
     }, 1500);
   };
 
-  // Update the handleLikePost function in InlinePostCard (SECTION 23)
-const handleLikePost = async () => {
-  if (isLiked) return;
+  const handleLikePost = async () => {
+    if (isLiked) return;
 
-  // Fire glitter animation
-  triggerGlitter();
+    // ✅ Fire glitter animation
+    triggerGlitter();
 
-  // Update locally first for instant UI feedback
-  const newCount = addGlobalLike(post.id, user.email);
-  setIsLiked(true);
-  setLikeCount(newCount);
+    const newCount = addGlobalLike(post.id, user.email);
+    setIsLiked(true);
+    setLikeCount(newCount);
 
-  // Send like to server for global sync
-  try {
-    await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { 
-      userEmail: user.email,
-      userName: user.name 
-    }, { timeout: 5000 });
-    
-    // Emit socket event for real-time update
-    socket.emit('like_post', {
-      postId: post.id,
-      userId: user.id,
-      userEmail: user.email,
-      userName: user.name
-    });
-  } catch (error) {
-    console.error('Failed to sync like with server:', error);
-  }
+    if (post.userEmail !== user.email) {
+      pushNotification(post.userEmail, {
+        type: 'like',
+        fromUser: user.name,
+        fromUserEmail: user.email,
+        message: `${user.name} liked your post`,
+        postId: post.id,
+      });
+      updateNotificationCount?.();
+    }
 
-  // Send notification to post author
-  if (post.userEmail !== user.email) {
-    pushNotification(post.userEmail, {
-      type: 'like',
-      fromUser: user.name,
-      fromUserEmail: user.email,
-      message: `${user.name} liked your post`,
-      postId: post.id,
-    });
-    updateNotificationCount?.();
-  }
-};
- 
- // Update the handlePostComment function in InlinePostCard
-const handlePostComment = async () => {
-  if (!newComment.trim()) return;
-
-  const mentions = extractMentions(newComment);
-  const commentData = {
-    id: `cmt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    userName: user.name,
-    userEmail: user.email,
-    userPhoto: user.profileImage,
-    content: newComment.trim(),
-    mentions,
-    parentId: replyTo?.id || null,
-    timestamp: new Date().toISOString(),
-    likes: 0,
+    try {
+      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { userEmail: user.email }, { timeout: 5000 });
+    } catch (_) { }
   };
 
-  setNewComment('');
-  setReplyTo(null);
-  const pid = post.id || post._id;
-  
-  // Send to server first
-  try {
-    const res = await axios.post(`${API_URL}/api/social/posts/${pid}/comments`, commentData, { timeout: 8000 });
-    if (res?.data?.success) {
-      const updatedComments = res.data.comments || [];
-      setComments(updatedComments);
-      setCommentCount(updatedComments.filter(c => !c.parentId).length);
-      
-      // Emit socket event for real-time update
-      socket.emit('comment_post', {
-        postId: pid,
-        commentCount: updatedComments.filter(c => !c.parentId).length
-      });
-    } else {
-      throw new Error('Server comment failed');
-    }
-  } catch (error) {
-    // Fallback to local storage if server fails
+  const handlePostComment = async () => {
+    if (!newComment.trim()) return;
+
+    const mentions = extractMentions(newComment);
+    const commentData = {
+      id: `cmt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userName: user.name,
+      userEmail: user.email,
+      userPhoto: user.profileImage,
+      content: newComment.trim(),
+      mentions,
+      parentId: replyTo?.id || null,
+      timestamp: new Date().toISOString(),
+      likes: 0,
+    };
+
+    setNewComment('');
+    setReplyTo(null);
+    const pid = post.id || post._id;
     const updated = await postCommentToServer(pid, commentData);
     setComments(updated);
     setCommentCount(updated.filter(c => !c.parentId).length);
-  }
 
-  // Send notifications
-  if (post.userEmail !== user.email) {
-    pushNotification(post.userEmail, {
-      type: 'comment',
-      fromUser: user.name,
-      fromUserEmail: user.email,
-      message: `${user.name} commented: "${newComment.trim().substring(0, 60)}"`,
-      postId: post.id,
-    });
-    updateNotificationCount?.();
-  }
-
-  mentions.forEach(mention => {
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const mentioned = allUsers.find(u =>
-      u.name.toLowerCase().replace(/\s/g, '') === mention.toLowerCase() ||
-      u.email.split('@')[0].toLowerCase() === mention.toLowerCase()
-    );
-    if (mentioned && mentioned.email !== user.email) {
-      pushNotification(mentioned.email, {
-        type: 'mention',
+    if (post.userEmail !== user.email) {
+      pushNotification(post.userEmail, {
+        type: 'comment',
         fromUser: user.name,
         fromUserEmail: user.email,
-        message: `${user.name} mentioned you in a comment`,
+        message: `${user.name} commented: "${newComment.trim().substring(0, 60)}"`,
         postId: post.id,
       });
+      updateNotificationCount?.();
     }
-  });
-};
+
+    mentions.forEach(mention => {
+      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+      const mentioned = allUsers.find(u =>
+        u.name.toLowerCase().replace(/\s/g, '') === mention.toLowerCase() ||
+        u.email.split('@')[0].toLowerCase() === mention.toLowerCase()
+      );
+      if (mentioned && mentioned.email !== user.email) {
+        pushNotification(mentioned.email, {
+          type: 'mention',
+          fromUser: user.name,
+          fromUserEmail: user.email,
+          message: `${user.name} mentioned you in a comment`,
+          postId: post.id,
+        });
+      }
+    });
+  };
 
   const handleLikeComment = (commentId, commentUserEmail) => {
     if (likedComments.has(commentId)) return;
@@ -2719,48 +2680,34 @@ const PostPage = ({ user, onPost, setPage }) => {
 
   const handleContentChange = (e) => { const t = e.target.value; setContent(t); setCharCount(t.length); };
 
-  // Update handleSubmit in PostPage (SECTION 27)
-const handleSubmit = async () => {
-  if (!content.trim()) return;
-  setUploading(true);
-  
-  const postData = {
-    id: generateId(),
-    content: sanitizeText(content.trim()),
-    bookName: bookName.trim() || undefined,
-    author: author.trim() || undefined,
-    image,
-    isPublic,
-    userName: user.name,
-    userEmail: user.email,
-    userPhoto: user.profileImage,
-    userInitials: user.name.slice(0, 2).toUpperCase(),
-    createdAt: new Date().toISOString(),
-    likes: 0,
-    comments: 0,
-    reshareCount: 0,
-  };
-  
-  try {
-    // Send to server first
-    const res = await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
-    if (res?.data?.success) {
-      const savedPost = res.data.post;
-      // Emit socket event for real-time update to all users
-      socket.emit('new_post', savedPost);
-      onPost(savedPost);
-    } else {
-      throw new Error('Server post failed');
+  const handleSubmit = async () => {
+    if (!content.trim()) return;
+    setUploading(true);
+    const postData = {
+      id: generateId(),
+      content: sanitizeText(content.trim()),
+      bookName: bookName.trim() || undefined,
+      author: author.trim() || undefined,
+      image,
+      isPublic,
+      userName: user.name,
+      userEmail: user.email,
+      userPhoto: user.profileImage,
+      userInitials: user.name.slice(0, 2).toUpperCase(),
+      createdAt: new Date().toISOString(),
+      likes: 0,
+      comments: 0,
+      reshareCount: 0,
+    };
+    try {
+      const res = await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
+      onPost(res.data.success ? res.data.post : postData);
+    } catch (_) {
+      onPost(postData);
     }
-  } catch (error) {
-    console.error('Failed to post to server, saving locally:', error);
-    // Fallback to local storage if server fails
-    onPost(postData);
-  }
-  
-  setUploading(false);
-  setPage('home');
-};
+    setUploading(false);
+    setPage('home');
+  };
 
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
@@ -3363,10 +3310,6 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 // SECTION 30: HOME PAGE
 // ========================================
 
-// ========================================
-// SECTION 30: HOME PAGE (UPDATED with server sync)
-// ========================================
-
 const HomePage = ({
   user, posts, crews, setPage, updateNotificationCount,
   profileSrc, savedPosts, onSavePost, onResharePost, onDeletePost,
@@ -3385,9 +3328,7 @@ const HomePage = ({
   const [readingProgress, setReadingProgress] = useState(0);
   const [showBookDate, setShowBookDate] = useState(false);
   const [visibleCount, setVisibleCount] = useState(10);
-  const [pollingInterval, setPollingInterval] = useState(null);
   const loaderRef = useRef(null);
-  const lastPostFetchRef = useRef(Date.now());
 
   useEffect(() => {
     if (!deepLinkPostId || feedPosts.length === 0) return;
@@ -3402,149 +3343,31 @@ const HomePage = ({
     }, 400);
   }, [deepLinkPostId, feedPosts]);
 
-  // Load posts from server with proper sync
-  const loadPostsFromServer = useCallback(async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/social/posts`, {
-        timeout: 8000,
-        params: { lastFetch: lastPostFetchRef.current }
-      });
-      if (res.data.success) {
-        const serverPosts = res.data.posts || [];
-        
-        // Update last fetch time
-        lastPostFetchRef.current = Date.now();
-        
-        // Merge with local posts (for offline created posts)
-        const localPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-        const merged = [...serverPosts];
-        
-        // Add local posts that aren't on server yet
-        localPosts.forEach(lp => {
-          if (!merged.find(sp => (sp.id || sp._id) === (lp.id || lp._id))) {
-            merged.push(lp);
-          }
-        });
-        
-        // Sort by createdAt
-        merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        
-        localStorage.setItem('allPosts', JSON.stringify(merged));
-        
-        // Generate personalized feed
-        const personalized = generatePersonalizedFeed(user.email, merged, blockedUsers);
-        setFeedPosts(personalized);
-        return true;
-      }
-    } catch (error) {
-      console.error('Failed to fetch posts from server:', error);
-    }
-    return false;
-  }, [user.email, blockedUsers]);
-
-  // Real-time socket listeners for new posts, likes, comments
-  useEffect(() => {
-    // Load initial posts
-    loadPostsFromServer();
-    
-    // Start polling for new posts every 10 seconds (fallback for socket issues)
-    const interval = setInterval(() => {
-      loadPostsFromServer();
-    }, 10000);
-    setPollingInterval(interval);
-    
-    // Socket event listeners
-    socket.on('new_post', (newPost) => {
-      console.log('New post received:', newPost);
-      if (!blockedUsers.includes(newPost.userEmail)) {
-        setFeedPosts(prev => {
-          // Check if post already exists to avoid duplicates
-          if (prev.some(p => (p.id || p._id) === (newPost.id || newPost._id))) return prev;
-          return [newPost, ...prev];
-        });
-        // Update localStorage
-        const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-        if (!allPosts.some(p => (p.id || p._id) === (newPost.id || newPost._id))) {
-          allPosts.unshift(newPost);
-          localStorage.setItem('allPosts', JSON.stringify(allPosts));
-        }
-      }
-    });
-    
-    socket.on('post_liked', ({ postId, likes, likedByUserEmail }) => {
-      console.log('Post liked:', postId, likes);
-      setFeedPosts(prev => prev.map(p => {
-        if ((p.id || p._id) === postId) {
-          return { ...p, likes };
-        }
-        return p;
-      }));
-      // Update localStorage
-      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-      const updated = allPosts.map(p => {
-        if ((p.id || p._id) === postId) {
-          return { ...p, likes };
-        }
-        return p;
-      });
-      localStorage.setItem('allPosts', JSON.stringify(updated));
-    });
-    
-    socket.on('post_commented', ({ postId, commentCount }) => {
-      console.log('Post commented:', postId, commentCount);
-      setFeedPosts(prev => prev.map(p => {
-        if ((p.id || p._id) === postId) {
-          return { ...p, comments: commentCount };
-        }
-        return p;
-      }));
-      // Update localStorage
-      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-      const updated = allPosts.map(p => {
-        if ((p.id || p._id) === postId) {
-          return { ...p, comments: commentCount };
-        }
-        return p;
-      });
-      localStorage.setItem('allPosts', JSON.stringify(updated));
-    });
-    
-    socket.on('post_deleted', ({ postId }) => {
-      console.log('Post deleted:', postId);
-      setFeedPosts(prev => prev.filter(p => (p.id || p._id) !== postId));
-      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-      localStorage.setItem('allPosts', JSON.stringify(allPosts.filter(p => (p.id || p._id) !== postId)));
-    });
-    
-    socket.on('new_notification', (notification) => {
-      if (notification.toEmail === user?.email) {
-        updateNotificationCount?.();
-      }
-    });
-    
-    return () => {
-      if (interval) clearInterval(interval);
-      socket.off('new_post');
-      socket.off('post_liked');
-      socket.off('post_commented');
-      socket.off('post_deleted');
-      socket.off('new_notification');
-    };
-  }, [user.email, blockedUsers, loadPostsFromServer, updateNotificationCount]);
-
   useEffect(() => {
     loadTrendingBooks();
+    loadPersonalizedFeed();
 
     const savedStats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     setStats(savedStats);
     if (user?.readingGoal?.yearly > 0) {
       setReadingProgress(Math.min((savedStats.booksRead || 0) / user.readingGoal.yearly * 100, 100));
     }
-  }, [user.email]);
+
+    socket.on('new_post', (post) => {
+      if (!blockedUsers.includes(post.userEmail)) {
+        setFeedPosts(prev => [post, ...prev]);
+      }
+    });
+    socket.on('post_deleted', ({ postId }) => setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId)));
+    socket.on('post_liked', ({ postId, likes }) => setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p)));
+
+    return () => { socket.off('new_post'); socket.off('post_deleted'); socket.off('post_liked'); };
+  }, [user.email, blockedUsers]);
 
   useEffect(() => {
+    loadPersonalizedFeed();
     setVisibleCount(10);
-  }, [feedPosts.length]);
+  }, [posts.length, following.length]);
 
   useEffect(() => {
     if (!loaderRef.current) return;
@@ -3555,8 +3378,30 @@ const HomePage = ({
     return () => observer.disconnect();
   }, [feedPosts.length]);
 
+  const loadPersonalizedFeed = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`, { timeout: 8000 });
+      if (res.data.success) {
+        const serverPosts = res.data.posts || [];
+        const allLocal = JSON.parse(localStorage.getItem('allPosts') || '[]');
+        const merged = [...serverPosts];
+        allLocal.forEach(lp => { if (!merged.find(sp => sp.id === lp.id)) merged.push(lp); });
+        localStorage.setItem('allPosts', JSON.stringify(merged));
+
+        const personalized = generatePersonalizedFeed(user.email, merged, blockedUsers);
+        setFeedPosts(personalized);
+        return;
+      }
+    } catch (_) { }
+
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const personalized = generatePersonalizedFeed(user.email, allPosts, blockedUsers);
+    setFeedPosts(personalized);
+  };
+
   const loadTrendingBooks = async () => {
     setLoadingTrending(true);
+    // ✅ Use daily-changing trending books
     const daily = await getDailyTrendingBooks();
     setTrendingBooks(daily.slice(0, 8));
     setLoadingTrending(false);
@@ -3633,7 +3478,7 @@ const HomePage = ({
             <p className="text-xs font-semibold text-blue-900">this feed is lowkey obsessed with u</p>
             <p className="text-xs text-blue-600">ranked by ur vibes, follows & book taste ✨</p>
           </div>
-          <button onClick={loadPostsFromServer} className="p-1.5 hover:bg-blue-100 rounded-lg transition">
+          <button onClick={loadPersonalizedFeed} className="p-1.5 hover:bg-blue-100 rounded-lg transition">
             <RefreshCw className="w-4 h-4 text-blue-400" />
           </button>
         </div>
@@ -3733,7 +3578,7 @@ const HomePage = ({
               <MessageSquare className="w-5 h-5 text-orange-500" />
               {following.length > 0 ? 'Your Feed' : 'Community Feed'}
             </h2>
-            <button onClick={loadPostsFromServer} className="text-xs text-gray-400 flex items-center gap-1 hover:text-orange-500 transition">
+            <button onClick={loadPersonalizedFeed} className="text-xs text-gray-400 flex items-center gap-1 hover:text-orange-500 transition">
               <RefreshCw className="w-3 h-3" />Refresh
             </button>
           </div>
@@ -3748,7 +3593,7 @@ const HomePage = ({
             ) : (
               feedPosts.slice(0, visibleCount).map((post, idx) => (
                 <InlinePostCard
-                  key={post.id || post._id || idx}
+                  key={post.id || idx}
                   post={post}
                   user={user}
                   profileSrc={profileSrc}
