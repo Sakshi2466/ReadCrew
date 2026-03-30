@@ -1,15 +1,7 @@
 // ========================================
 // App.jsx - READCREWW Social Platform
-// Version: 4.0 — All Features Integrated:
-// ✅ AI-Powered Daily Trending Books (changes daily)
-// ✅ Heart Glitter Animation on Like
-// ✅ Notification Click → Navigate to Post/Crew
-// ✅ Global Crews (One-Crew-Per-Book Policy)
-// ✅ Persistent Posts (always visible)
-// ✅ Global Reviews
-// ✅ Profile Privacy (Books/Saved hidden from others)
-// ✅ Followers/Following Instagram Loop
-// ✅ Crew Chat Block/Unblock Users
+// Complete Working Version with Full Server Sync
+// Version: 5.0 — Fully Functional
 // ========================================
 
 // ========================================
@@ -54,19 +46,18 @@ const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrend
 const socket = io(API_URL, {
   transports: ['websocket', 'polling'],
   reconnection: true,
-  reconnectionAttempts: 5,
+  reconnectionAttempts: 10,
   reconnectionDelay: 1000,
   reconnectionDelayMax: 5000,
   timeout: 10000,
+  autoConnect: true
 });
 
-// ─── Unified API helper (never throws) ──────────────────────────────────────
 const api = {
   get: (url, cfg = {}) => axios.get(`${API_URL}${url}`, { timeout: 8000, ...cfg }).catch(() => null),
   post: (url, body, cfg = {}) => axios.post(`${API_URL}${url}`, body, { timeout: 8000, ...cfg }).catch(() => null),
 };
 
-// ─── Deep-link helpers ────────────────────────────────────────────────────────
 const deepLink = (type, id) => {
   const base = window.location.origin + window.location.pathname;
   return `${base}?rc_type=${type}&rc_id=${encodeURIComponent(id)}`;
@@ -240,7 +231,7 @@ const hasUserLikedPost = (postId, userEmail) => {
   return likedBy.includes(userEmail);
 };
 
-const addGlobalLike = (postId, userEmail) => {
+const addGlobalLike = async (postId, userEmail, userName) => {
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
   if (likedBy.includes(userEmail)) return likedBy.length;
 
@@ -259,6 +250,13 @@ const addGlobalLike = (postId, userEmail) => {
     localStorage.setItem(`user_${userEmail}_likedPosts`, JSON.stringify(userLiked));
   }
 
+  try {
+    await axios.post(`${API_URL}/api/social/posts/${postId}/like`, { userEmail, userName }, { timeout: 5000 });
+    socket.emit('like_post', { postId, userId: userEmail, userEmail, userName });
+  } catch (error) {
+    console.error('Failed to sync like with server:', error);
+  }
+
   return likedBy.length;
 };
 
@@ -267,29 +265,38 @@ const getPostComments = (postId) => {
 };
 
 const fetchCommentsFromServer = async (postId) => {
-  const res = await api.get(`/api/social/posts/${postId}/comments`);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
+  try {
+    const res = await axios.get(`${API_URL}/api/social/posts/${postId}/comments`, { timeout: 5000 });
+    if (res?.data?.success) {
+      const cmts = res.data.comments || [];
+      localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+      const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      localStorage.setItem('allPosts', JSON.stringify(
+        all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+      ));
+      return cmts;
+    }
+  } catch (error) {
+    console.error('Failed to fetch comments from server:', error);
   }
   return getPostComments(postId);
 };
 
 const postCommentToServer = async (postId, commentData) => {
-  const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
+  try {
+    const res = await axios.post(`${API_URL}/api/social/posts/${postId}/comments`, commentData, { timeout: 5000 });
+    if (res?.data?.success) {
+      const cmts = res.data.comments || [];
+      localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+      const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      localStorage.setItem('allPosts', JSON.stringify(
+        all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+      ));
+      socket.emit('comment_post', { postId, commentCount: cmts.filter(c => !c.parentId).length });
+      return cmts;
+    }
+  } catch (error) {
+    console.error('Failed to post comment to server:', error);
   }
   const cmts = getPostComments(postId);
   cmts.push(commentData);
@@ -343,7 +350,12 @@ const pushNotification = async (targetEmail, notif) => {
 
   window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
 
-  api.post('/api/social/notifications', { targetEmail, notification: full });
+  try {
+    await axios.post(`${API_URL}/api/social/notifications`, { targetEmail, notification: full }, { timeout: 5000 });
+    socket.emit('new_notification', { toEmail: targetEmail, notification: full });
+  } catch (error) {
+    console.error('Failed to send notification to server:', error);
+  }
 
   return full;
 };
@@ -464,7 +476,6 @@ const NotificationToast = ({ notification, onClose }) => {
 
 // ========================================
 // SECTION 7B: HEART GLITTER EFFECT COMPONENT
-// ✅ Floating hearts + sparkles burst when liking a post
 // ========================================
 
 const HeartGlitterEffect = ({ x, y, onComplete }) => {
@@ -518,7 +529,6 @@ const HeartGlitterEffect = ({ x, y, onComplete }) => {
   );
 };
 
-// Add keyframes to document
 if (typeof document !== 'undefined') {
   const styleEl = document.createElement('style');
   styleEl.textContent = `
@@ -1035,7 +1045,6 @@ const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
 
 // ========================================
 // SECTION 16: USER PROFILE MODAL (Quick View)
-// ✅ Followers/Following are clickable → onViewFullProfile loop
 // ========================================
 
 const UserProfileModal = ({
@@ -1081,7 +1090,6 @@ const UserProfileModal = ({
     });
   };
 
-  // ✅ Clicking a user in the list goes to their full profile — creates the Instagram-style loop
   const UserListSheet = ({ title, users: list, onClose: closeList }) => (
     <div
       className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
@@ -1301,7 +1309,6 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, onNotification
 
 // ========================================
 // SECTION 19: NOTIFICATIONS PAGE
-// ✅ Clicking a notification navigates to that post or crew chat
 // ========================================
 
 const NotificationsPage = ({ user, onClose, updateNotificationCount, onNavigateToPost, onNavigateToCrew }) => {
@@ -1361,25 +1368,21 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount, onNavigateT
     updateNotificationCount?.();
   };
 
-  // ✅ Handle click: mark read + navigate to the source post or crew
   const handleNotificationClick = (notif) => {
     if (!notif.read) {
       markOneAsRead(notif.id);
     }
 
     if (notif.type === 'message' && notif.crewId) {
-      // Navigate to the crew chat this message came from
       onClose();
       onNavigateToCrew?.(notif.crewId);
     } else if (notif.postId && ['like', 'comment', 'mention', 'reshare'].includes(notif.type)) {
-      // Navigate to the post in the home feed
       onClose();
       onNavigateToPost?.(notif.postId);
     } else if (notif.type === 'join' && notif.crewId) {
       onClose();
       onNavigateToCrew?.(notif.crewId);
     }
-    // For follow notifications, just mark as read (no specific navigation needed)
   };
 
   const icons = {
@@ -1795,8 +1798,7 @@ const PostOptionsModal = ({
 };
 
 // ========================================
-// SECTION 23: INLINE POST CARD
-// ✅ Heart Glitter: burst of hearts+sparkles when you like a post
+// SECTION 23: INLINE POST CARD (UPDATED with server sync)
 // ========================================
 
 const InlinePostCard = React.memo(({
@@ -1817,7 +1819,6 @@ const InlinePostCard = React.memo(({
   const [showReplies, setShowReplies] = useState({});
   const [showOptions, setShowOptions] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
-  // ✅ Glitter effect state — stores position for burst animation
   const [glitterEffects, setGlitterEffects] = useState([]);
   const likeButtonRef = useRef(null);
   const inputRef = useRef(null);
@@ -1847,7 +1848,6 @@ const InlinePostCard = React.memo(({
     setLoadingComments(false);
   };
 
-  // ✅ Trigger the glitter burst at the exact screen position of the like button
   const triggerGlitter = () => {
     if (!likeButtonRef.current) return;
     const rect = likeButtonRef.current.getBoundingClientRect();
@@ -1863,10 +1863,9 @@ const InlinePostCard = React.memo(({
   const handleLikePost = async () => {
     if (isLiked) return;
 
-    // ✅ Fire glitter animation
     triggerGlitter();
 
-    const newCount = addGlobalLike(post.id, user.email);
+    const newCount = await addGlobalLike(post.id, user.email, user.name);
     setIsLiked(true);
     setLikeCount(newCount);
 
@@ -1880,10 +1879,6 @@ const InlinePostCard = React.memo(({
       });
       updateNotificationCount?.();
     }
-
-    try {
-      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { userEmail: user.email }, { timeout: 5000 });
-    } catch (_) { }
   };
 
   const handlePostComment = async () => {
@@ -2086,7 +2081,6 @@ const InlinePostCard = React.memo(({
 
   return (
     <>
-      {/* ✅ Render glitter burst effects */}
       {glitterEffects.map(effect => (
         <HeartGlitterEffect
           key={effect.id}
@@ -2195,7 +2189,6 @@ const InlinePostCard = React.memo(({
         </div>
 
         <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-5">
-          {/* ✅ Like button with ref for glitter position detection */}
           <button
             ref={likeButtonRef}
             onClick={handleLikePost}
@@ -2601,26 +2594,22 @@ const generateClientResponse = (text, previousBooks = []) => {
   return { reply: intros[cat] || "Here are 5 great picks for you! 📚", books: recs };
 };
 
-// ✅ AI-powered daily trending books — changes every day, cached per date
 const getDailyTrendingBooks = async () => {
-  const todayKey = `ai_trending_${new Date().toISOString().slice(0, 10)}`; // e.g. "ai_trending_2025-03-30"
+  const todayKey = `ai_trending_${new Date().toISOString().slice(0, 10)}`;
   const cached = localStorage.getItem(todayKey);
   if (cached) {
     try { return JSON.parse(cached); } catch (_) {}
   }
 
-  // Try server first
   try {
     const res = await axios.get(`${API_URL}/api/books/trending?limit=8&daily=true`, { timeout: 8000 });
     if (res?.data?.success && res.data.books?.length) {
       localStorage.setItem(todayKey, JSON.stringify(res.data.books));
-      // Clean up old cache keys
       Object.keys(localStorage).filter(k => k.startsWith('ai_trending_') && k !== todayKey).forEach(k => localStorage.removeItem(k));
       return res.data.books;
     }
   } catch (_) {}
 
-  // Fallback: rotate through local book DB deterministically based on day of year
   const allBooks = Object.values(BOOK_DB).flat();
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86_400_000);
   const startIdx = (dayOfYear * 8) % allBooks.length;
@@ -2628,7 +2617,6 @@ const getDailyTrendingBooks = async () => {
   for (let i = 0; i < 8; i++) {
     dailyPicks.push(allBooks[(startIdx + i * 5) % allBooks.length]);
   }
-  // Deduplicate by title
   const seen = new Set();
   const unique = dailyPicks.filter(b => { if (seen.has(b.title)) return false; seen.add(b.title); return true; });
 
@@ -2665,7 +2653,7 @@ const BookCard = React.memo(({ book, onCreateCrew, onViewDetails }) => (
 ));
 
 // ========================================
-// SECTION 27: POST PAGE
+// SECTION 27: POST PAGE (UPDATED with server sync)
 // ========================================
 
 const PostPage = ({ user, onPost, setPage }) => {
@@ -2683,6 +2671,7 @@ const PostPage = ({ user, onPost, setPage }) => {
   const handleSubmit = async () => {
     if (!content.trim()) return;
     setUploading(true);
+    
     const postData = {
       id: generateId(),
       content: sanitizeText(content.trim()),
@@ -2699,12 +2688,28 @@ const PostPage = ({ user, onPost, setPage }) => {
       comments: 0,
       reshareCount: 0,
     };
+    
     try {
       const res = await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
-      onPost(res.data.success ? res.data.post : postData);
-    } catch (_) {
+      if (res?.data?.success) {
+        const savedPost = res.data.post;
+        socket.emit('new_post', savedPost);
+        onPost(savedPost);
+      } else {
+        throw new Error('Server post failed');
+      }
+    } catch (error) {
+      console.error('Failed to post to server, saving locally:', error);
       onPost(postData);
+      setTimeout(async () => {
+        try {
+          await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
+        } catch (e) {
+          console.error('Retry failed:', e);
+        }
+      }, 5000);
     }
+    
     setUploading(false);
     setPage('home');
   };
@@ -2780,8 +2785,6 @@ const PostPage = ({ user, onPost, setPage }) => {
 
 // ========================================
 // SECTION 28: REVIEWS PAGE
-// ✅ Reviews are global — all users see all reviews
-//    Server + localStorage merge ensures nothing is lost
 // ========================================
 
 const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
@@ -2806,7 +2809,6 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
       const res = await axios.get(`${API_URL}/api/social/reviews`, { timeout: 8000 });
       if (res?.data?.success) {
         const serverReviews = res.data.reviews || [];
-        // ✅ Merge with localStorage so reviews posted offline are also visible
         const localReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
         const merged = [...serverReviews];
         localReviews.forEach(lr => {
@@ -2819,7 +2821,6 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
         return;
       }
     } catch (_) {}
-    // Fallback to local
     const local = JSON.parse(localStorage.getItem('reviews') || '[]');
     setReviews(local);
     setLoading(false);
@@ -3307,7 +3308,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 };
 
 // ========================================
-// SECTION 30: HOME PAGE
+// SECTION 30: HOME PAGE (UPDATED with server sync)
 // ========================================
 
 const HomePage = ({
@@ -3329,6 +3330,7 @@ const HomePage = ({
   const [showBookDate, setShowBookDate] = useState(false);
   const [visibleCount, setVisibleCount] = useState(10);
   const loaderRef = useRef(null);
+  const lastPostFetchRef = useRef(Date.now());
 
   useEffect(() => {
     if (!deepLinkPostId || feedPosts.length === 0) return;
@@ -3343,31 +3345,117 @@ const HomePage = ({
     }, 400);
   }, [deepLinkPostId, feedPosts]);
 
+  const loadPostsFromServer = useCallback(async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/social/posts`, {
+        timeout: 8000,
+        params: { lastFetch: lastPostFetchRef.current }
+      });
+      if (res.data.success) {
+        const serverPosts = res.data.posts || [];
+        lastPostFetchRef.current = Date.now();
+        const localPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+        const merged = [...serverPosts];
+        localPosts.forEach(lp => {
+          if (!merged.find(sp => (sp.id || sp._id) === (lp.id || lp._id))) {
+            merged.push(lp);
+          }
+        });
+        merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        localStorage.setItem('allPosts', JSON.stringify(merged));
+        const personalized = generatePersonalizedFeed(user.email, merged, blockedUsers);
+        setFeedPosts(personalized);
+        return true;
+      }
+    } catch (error) {
+      console.error('Failed to fetch posts from server:', error);
+    }
+    return false;
+  }, [user.email, blockedUsers]);
+
+  useEffect(() => {
+    loadPostsFromServer();
+    
+    const interval = setInterval(() => {
+      loadPostsFromServer();
+    }, 10000);
+    
+    socket.on('new_post', (newPost) => {
+      console.log('New post received:', newPost);
+      if (!blockedUsers.includes(newPost.userEmail)) {
+        setFeedPosts(prev => {
+          if (prev.some(p => (p.id || p._id) === (newPost.id || newPost._id))) return prev;
+          return [newPost, ...prev];
+        });
+        const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+        if (!allPosts.some(p => (p.id || p._id) === (newPost.id || newPost._id))) {
+          allPosts.unshift(newPost);
+          localStorage.setItem('allPosts', JSON.stringify(allPosts));
+        }
+      }
+    });
+    
+    socket.on('post_liked', ({ postId, likes }) => {
+      setFeedPosts(prev => prev.map(p => {
+        if ((p.id || p._id) === postId) {
+          return { ...p, likes };
+        }
+        return p;
+      }));
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      const updated = allPosts.map(p => {
+        if ((p.id || p._id) === postId) {
+          return { ...p, likes };
+        }
+        return p;
+      });
+      localStorage.setItem('allPosts', JSON.stringify(updated));
+    });
+    
+    socket.on('post_commented', ({ postId, commentCount }) => {
+      setFeedPosts(prev => prev.map(p => {
+        if ((p.id || p._id) === postId) {
+          return { ...p, comments: commentCount };
+        }
+        return p;
+      }));
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      const updated = allPosts.map(p => {
+        if ((p.id || p._id) === postId) {
+          return { ...p, comments: commentCount };
+        }
+        return p;
+      });
+      localStorage.setItem('allPosts', JSON.stringify(updated));
+    });
+    
+    socket.on('post_deleted', ({ postId }) => {
+      setFeedPosts(prev => prev.filter(p => (p.id || p._id) !== postId));
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      localStorage.setItem('allPosts', JSON.stringify(allPosts.filter(p => (p.id || p._id) !== postId)));
+    });
+    
+    return () => {
+      clearInterval(interval);
+      socket.off('new_post');
+      socket.off('post_liked');
+      socket.off('post_commented');
+      socket.off('post_deleted');
+    };
+  }, [user.email, blockedUsers, loadPostsFromServer]);
+
   useEffect(() => {
     loadTrendingBooks();
-    loadPersonalizedFeed();
-
     const savedStats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     setStats(savedStats);
     if (user?.readingGoal?.yearly > 0) {
       setReadingProgress(Math.min((savedStats.booksRead || 0) / user.readingGoal.yearly * 100, 100));
     }
-
-    socket.on('new_post', (post) => {
-      if (!blockedUsers.includes(post.userEmail)) {
-        setFeedPosts(prev => [post, ...prev]);
-      }
-    });
-    socket.on('post_deleted', ({ postId }) => setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId)));
-    socket.on('post_liked', ({ postId, likes }) => setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p)));
-
-    return () => { socket.off('new_post'); socket.off('post_deleted'); socket.off('post_liked'); };
-  }, [user.email, blockedUsers]);
+  }, [user.email]);
 
   useEffect(() => {
-    loadPersonalizedFeed();
     setVisibleCount(10);
-  }, [posts.length, following.length]);
+  }, [feedPosts.length]);
 
   useEffect(() => {
     if (!loaderRef.current) return;
@@ -3378,30 +3466,8 @@ const HomePage = ({
     return () => observer.disconnect();
   }, [feedPosts.length]);
 
-  const loadPersonalizedFeed = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`, { timeout: 8000 });
-      if (res.data.success) {
-        const serverPosts = res.data.posts || [];
-        const allLocal = JSON.parse(localStorage.getItem('allPosts') || '[]');
-        const merged = [...serverPosts];
-        allLocal.forEach(lp => { if (!merged.find(sp => sp.id === lp.id)) merged.push(lp); });
-        localStorage.setItem('allPosts', JSON.stringify(merged));
-
-        const personalized = generatePersonalizedFeed(user.email, merged, blockedUsers);
-        setFeedPosts(personalized);
-        return;
-      }
-    } catch (_) { }
-
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const personalized = generatePersonalizedFeed(user.email, allPosts, blockedUsers);
-    setFeedPosts(personalized);
-  };
-
   const loadTrendingBooks = async () => {
     setLoadingTrending(true);
-    // ✅ Use daily-changing trending books
     const daily = await getDailyTrendingBooks();
     setTrendingBooks(daily.slice(0, 8));
     setLoadingTrending(false);
@@ -3478,7 +3544,7 @@ const HomePage = ({
             <p className="text-xs font-semibold text-blue-900">this feed is lowkey obsessed with u</p>
             <p className="text-xs text-blue-600">ranked by ur vibes, follows & book taste ✨</p>
           </div>
-          <button onClick={loadPersonalizedFeed} className="p-1.5 hover:bg-blue-100 rounded-lg transition">
+          <button onClick={loadPostsFromServer} className="p-1.5 hover:bg-blue-100 rounded-lg transition">
             <RefreshCw className="w-4 h-4 text-blue-400" />
           </button>
         </div>
@@ -3578,7 +3644,7 @@ const HomePage = ({
               <MessageSquare className="w-5 h-5 text-orange-500" />
               {following.length > 0 ? 'Your Feed' : 'Community Feed'}
             </h2>
-            <button onClick={loadPersonalizedFeed} className="text-xs text-gray-400 flex items-center gap-1 hover:text-orange-500 transition">
+            <button onClick={loadPostsFromServer} className="text-xs text-gray-400 flex items-center gap-1 hover:text-orange-500 transition">
               <RefreshCw className="w-3 h-3" />Refresh
             </button>
           </div>
@@ -3593,7 +3659,7 @@ const HomePage = ({
             ) : (
               feedPosts.slice(0, visibleCount).map((post, idx) => (
                 <InlinePostCard
-                  key={post.id || idx}
+                  key={post.id || post._id || idx}
                   post={post}
                   user={user}
                   profileSrc={profileSrc}
@@ -4030,7 +4096,6 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
   const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(crew.id, user.id, user.name);
   const hasJoined = isJoined(crew.id);
 
-  // ✅ Load blocked users for this chat (per-user, per-crew)
   useEffect(() => {
     const blockedKey = `crew_${crew.id}_blocked_${user.email}`;
     const saved = localStorage.getItem(blockedKey);
@@ -4127,7 +4192,6 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
     return new Date(ts).toLocaleDateString();
   };
 
-  // ✅ Filter messages to hide blocked users' messages
   const filteredMessages = messages.filter(msg => !blockedInChat.includes(msg.userEmail));
   const groupsByDate = filteredMessages.reduce((acc, msg) => {
     const date = new Date(msg.timestamp).toDateString();
@@ -4136,7 +4200,6 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
     return acc;
   }, {});
 
-  // ✅ Members list with block/unblock actions
   const MembersSheet = () => (
     <div
       className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
@@ -4237,7 +4300,6 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
             </div>
             {msgs.map(msg => {
               const isOwn = msg.userId === user.id || msg.userEmail === user.email;
-              // Skip if the message author is blocked by current user
               if (blockedInChat.includes(msg.userEmail) && !isOwn) return null;
               return (
                 <div key={msg.id || msg.timestamp} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
@@ -4378,7 +4440,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     if (target) { setSelectedCrew(target); setView('detail'); onDeepLinkHandled?.(); }
   }, [deepLinkCrewId, crews]);
 
-  // ✅ Global crew policy: check for existing crew before creating
   const findExistingCrew = (bookName, author) => {
     return crews.find(c =>
       c.name.trim().toLowerCase() === bookName.trim().toLowerCase() &&
@@ -4423,7 +4484,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const createCrew = async () => {
     if (!newCrewData.name || !newCrewData.author) { alert('bestie fill in the book name and author first 👀'); return; }
 
-    // ✅ Check if a crew for this book/author already exists globally
     const existing = findExistingCrew(newCrewData.name, newCrewData.author);
     if (existing) {
       alert(`A crew for "${existing.name}" already exists! Taking you there now.`);
@@ -4653,7 +4713,6 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
 // ========================================
 // SECTION 34: FULL USER PROFILE PAGE
-// ✅ Privacy: Books Read & Saved tabs are hidden from other users
 // ========================================
 
 const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onBack, onFollow, isFollowing, onBlock, isBlocked }) => {
@@ -4695,11 +4754,10 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
     setStats({ booksRead: st.booksRead || 0, reviewsGiven: st.reviewsGiven || 0, postsCreated: st.postsCreated || 0, crewsJoined: st.crewsJoined || 0 });
   };
 
-  // ✅ Privacy: When viewing someone else's profile, don't show "Books Read" or "Saved" tabs
   const isOwnProfile = currentUser.email === viewedUserEmail;
   const tabs = isOwnProfile
     ? ['Posts', 'Reviews', 'Books Read', 'Crews', 'Saved']
-    : ['Posts', 'Reviews', 'Crews']; // Books Read and Saved hidden for other users
+    : ['Posts', 'Reviews', 'Crews'];
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 overflow-y-auto">
@@ -4803,7 +4861,6 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           </div>
         )}
 
-        {/* ✅ Books Read tab only shows if viewing own profile */}
         {activeTab === 'Books Read' && isOwnProfile && (
           <div className="space-y-3">
             {userBooks.length === 0
@@ -4847,7 +4904,6 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           </div>
         )}
 
-        {/* ✅ Saved tab only shows if viewing own profile */}
         {activeTab === 'Saved' && isOwnProfile && (
           <div className="space-y-4">
             <div className="text-center py-8">
@@ -5090,13 +5146,11 @@ export default function App() {
     setShowBottomNav(currentPage !== 'post' && !viewingFullProfile);
   }, [currentPage, viewingFullProfile]);
 
-  // ✅ Navigate to a specific post in the home feed (from notification click)
   const handleNavigateToPost = useCallback((postId) => {
     setDeepLinkPostId(postId);
     setCurrentPage('home');
   }, []);
 
-  // ✅ Navigate to a specific crew chat (from notification click)
   const handleNavigateToCrew = useCallback((crewId) => {
     setDeepLinkCrewId(crewId);
     setCurrentPage('crews');
@@ -5468,7 +5522,6 @@ export default function App() {
                 onViewUserProfile={handleViewUserProfile}
                 onViewBookDetails={(book) => { }}
                 onCreateCrew={(book) => {
-                  // Check for existing crew before creating
                   const existing = crews.find(c =>
                     c.name.trim().toLowerCase() === book.title.trim().toLowerCase() &&
                     c.author.trim().toLowerCase() === (book.author || '').trim().toLowerCase()
@@ -5506,7 +5559,6 @@ export default function App() {
                 user={currentUser}
                 setPage={setCurrentPage}
                 onCreateCrew={(book) => {
-                  // Check for existing crew before creating
                   const existing = crews.find(c =>
                     c.name.trim().toLowerCase() === book.title.trim().toLowerCase() &&
                     c.author.trim().toLowerCase() === (book.author || '').trim().toLowerCase()
