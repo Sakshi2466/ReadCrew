@@ -1714,6 +1714,7 @@ const PostOptionsModal = ({
             <h3 className="font-semibold text-lg">Report Post</h3>
             <button onClick={() => setShowReportForm(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
           </div>
+
           {reportSent ? (
             <div className="text-center py-8">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
@@ -1722,6 +1723,10 @@ const PostOptionsModal = ({
             </div>
           ) : (
             <>
+              <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                <p className="text-xs text-gray-500 mb-1">Post by <span className="font-semibold">{post.userName}</span>:</p>
+                <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
+              </div>
               <p className="text-sm text-gray-700 mb-3 font-medium">Why are you reporting this?</p>
               <div className="space-y-2 mb-4">
                 {reportReasons.map(reason => (
@@ -1793,6 +1798,7 @@ const PostOptionsModal = ({
     </div>
   );
 };
+
 
 // ========================================
 // SECTION 23: INLINE POST CARD
@@ -2683,6 +2689,7 @@ const PostPage = ({ user, onPost, setPage }) => {
   const handleSubmit = async () => {
     if (!content.trim()) return;
     setUploading(true);
+
     const postData = {
       id: generateId(),
       content: sanitizeText(content.trim()),
@@ -2699,12 +2706,14 @@ const PostPage = ({ user, onPost, setPage }) => {
       comments: 0,
       reshareCount: 0,
     };
+
     try {
       const res = await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
       onPost(res.data.success ? res.data.post : postData);
     } catch (_) {
       onPost(postData);
     }
+
     setUploading(false);
     setPage('home');
   };
