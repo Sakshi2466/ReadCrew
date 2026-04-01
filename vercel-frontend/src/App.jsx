@@ -1,10 +1,15 @@
 // ========================================
 // App.jsx - READCREWW Social Platform
-// Complete Working Version with Cross-Tab Sync
-// ✅ Posts, Likes, Comments work across all users/tabs
-// ✅ Real-time notifications with storage events
-// ✅ No server required - fully local with cross-tab sync
-// Version: 6.0 — Fully Functional
+// Version: 4.0 — All Features Integrated:
+// ✅ AI-Powered Daily Trending Books (changes daily)
+// ✅ Heart Glitter Animation on Like
+// ✅ Notification Click → Navigate to Post/Crew
+// ✅ Global Crews (One-Crew-Per-Book Policy)
+// ✅ Persistent Posts (always visible)
+// ✅ Global Reviews
+// ✅ Profile Privacy (Books/Saved hidden from others)
+// ✅ Followers/Following Instagram Loop
+// ✅ Crew Chat Block/Unblock Users
 // ========================================
 
 // ========================================
@@ -38,6 +43,7 @@ import {
 } from 'lucide-react';
 
 import axios from 'axios';
+import { io } from 'socket.io-client';
 
 // ========================================
 // SECTION 2: CONFIGURATION
@@ -45,51 +51,36 @@ import axios from 'axios';
 
 const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 
-// Global event bus for cross-tab communication
-const globalEventBus = {
-  listeners: new Map(),
-  
-  on(event, callback) {
-    if (!this.listeners.has(event)) {
-      this.listeners.set(event, []);
-    }
-    this.listeners.get(event).push(callback);
-    
-    // Also listen to storage events for cross-tab sync
-    if (event === 'new_post' || event === 'post_liked' || event === 'post_commented') {
-      const storageHandler = (e) => {
-        if (e.key === event) {
-          try {
-            const data = JSON.parse(e.newValue);
-            callback(data);
-          } catch (err) {}
-        }
-      };
-      window.addEventListener('storage', storageHandler);
-      this.listeners.get(event).push({ callback, storageHandler });
-    }
-  },
-  
-  off(event, callback) {
-    if (this.listeners.has(event)) {
-      this.listeners.set(event, this.listeners.get(event).filter(cb => cb !== callback));
-    }
-  },
-  
-  emit(event, data) {
-    // Notify local listeners
-    if (this.listeners.has(event)) {
-      this.listeners.get(event).forEach(cb => {
-        if (typeof cb === 'function') {
-          cb(data);
-        }
-      });
-    }
-    // Broadcast to other tabs via localStorage
-    localStorage.setItem(event, JSON.stringify({ ...data, _timestamp: Date.now() }));
-    // Clean up after a short delay
-    setTimeout(() => localStorage.removeItem(event), 100);
-  }
+const socket = io(API_URL, {
+  transports: ['websocket', 'polling'],
+  reconnection: true,
+  reconnectionAttempts: 5,
+  reconnectionDelay: 1000,
+  reconnectionDelayMax: 5000,
+  timeout: 10000,
+});
+
+// ─── Unified API helper (never throws) ──────────────────────────────────────
+const api = {
+  get: (url, cfg = {}) => axios.get(`${API_URL}${url}`, { timeout: 8000, ...cfg }).catch(() => null),
+  post: (url, body, cfg = {}) => axios.post(`${API_URL}${url}`, body, { timeout: 8000, ...cfg }).catch(() => null),
+};
+
+// ─── Deep-link helpers ────────────────────────────────────────────────────────
+const deepLink = (type, id) => {
+  const base = window.location.origin + window.location.pathname;
+  return `${base}?rc_type=${type}&rc_id=${encodeURIComponent(id)}`;
+};
+
+const parseDeepLink = () => {
+  const p = new URLSearchParams(window.location.search);
+  const type = p.get('rc_type');
+  const id = p.get('rc_id');
+  if (type && id) return { type, id };
+  const h = window.location.hash.replace('#', '');
+  if (h.startsWith('post/')) return { type: 'post', id: h.slice(5) };
+  if (h.startsWith('crew/')) return { type: 'crew', id: h.slice(5) };
+  return null;
 };
 
 // ========================================
@@ -249,7 +240,7 @@ const hasUserLikedPost = (postId, userEmail) => {
   return likedBy.includes(userEmail);
 };
 
-const addGlobalLike = (postId, userEmail, userName) => {
+const addGlobalLike = (postId, userEmail) => {
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
   if (likedBy.includes(userEmail)) return likedBy.length;
 
@@ -261,17 +252,13 @@ const addGlobalLike = (postId, userEmail, userName) => {
     p.id === postId ? { ...p, likes: likedBy.length } : p
   );
   localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-  
-  // Update user's liked posts
+
   const userLiked = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
   if (!userLiked.includes(postId)) {
     userLiked.push(postId);
     localStorage.setItem(`user_${userEmail}_likedPosts`, JSON.stringify(userLiked));
   }
-  
-  // Broadcast to other tabs
-  globalEventBus.emit('post_liked', { postId, likes: likedBy.length, userEmail, userName });
-  
+
   return likedBy.length;
 };
 
@@ -280,24 +267,37 @@ const getPostComments = (postId) => {
 };
 
 const fetchCommentsFromServer = async (postId) => {
-  // In local mode, just return from localStorage
+  const res = await api.get(`/api/social/posts/${postId}/comments`);
+  if (res?.data?.success) {
+    const cmts = res.data.comments || [];
+    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    localStorage.setItem('allPosts', JSON.stringify(
+      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+    ));
+    return cmts;
+  }
   return getPostComments(postId);
 };
 
 const postCommentToServer = async (postId, commentData) => {
+  const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
+  if (res?.data?.success) {
+    const cmts = res.data.comments || [];
+    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    localStorage.setItem('allPosts', JSON.stringify(
+      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
+    ));
+    return cmts;
+  }
   const cmts = getPostComments(postId);
   cmts.push(commentData);
   localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-  
-  // Update post comment count
   const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
   localStorage.setItem('allPosts', JSON.stringify(
     all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
   ));
-  
-  // Broadcast to other tabs
-  globalEventBus.emit('post_commented', { postId, commentCount: cmts.filter(c => !c.parentId).length });
-  
   return cmts;
 };
 
@@ -307,10 +307,6 @@ const incrementReshareCount = (postId) => {
     p.id === postId ? { ...p, reshareCount: (p.reshareCount || 0) + 1 } : p
   );
   localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-  
-  // Broadcast to other tabs
-  globalEventBus.emit('post_reshared', { postId, reshareCount: updatedPosts.find(p => p.id === postId)?.reshareCount });
-  
   return (updatedPosts.find(p => p.id === postId)?.reshareCount) || 0;
 };
 
@@ -320,7 +316,7 @@ const incrementReshareCount = (postId) => {
 
 const _shownToastIds = new Set();
 
-const pushNotification = (targetEmail, notif) => {
+const pushNotification = async (targetEmail, notif) => {
   if (!targetEmail) return null;
 
   const full = {
@@ -346,9 +342,8 @@ const pushNotification = (targetEmail, notif) => {
   localStorage.setItem(`user_${targetEmail}_notifications`, JSON.stringify(list));
 
   window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
-  
-  // Broadcast to other tabs
-  globalEventBus.emit('new_notification', { targetEmail, notification: full });
+
+  api.post('/api/social/notifications', { targetEmail, notification: full });
 
   return full;
 };
@@ -469,6 +464,7 @@ const NotificationToast = ({ notification, onClose }) => {
 
 // ========================================
 // SECTION 7B: HEART GLITTER EFFECT COMPONENT
+// ✅ Floating hearts + sparkles burst when liking a post
 // ========================================
 
 const HeartGlitterEffect = ({ x, y, onComplete }) => {
@@ -522,6 +518,7 @@ const HeartGlitterEffect = ({ x, y, onComplete }) => {
   );
 };
 
+// Add keyframes to document
 if (typeof document !== 'undefined') {
   const styleEl = document.createElement('style');
   styleEl.textContent = `
@@ -736,32 +733,142 @@ const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) =
 };
 
 // ========================================
-// SECTION 12-14: CREW PRESENCE, TYPING, READ RECEIPTS (simplified)
+// SECTION 12: CREW PRESENCE HOOK
 // ========================================
 
 const useCrewPresence = (crewId, userId, userName) => {
   const [onlineCount, setOnlineCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState([]);
-  
-  useEffect(() => {
-    setOnlineCount(1);
-    setOnlineUsers([{ userId, userName }]);
+  const heartbeatRef = useRef(null);
+  const PRESENCE_TTL = 30_000;
+  const HEARTBEAT_INTV = 15_000;
+
+  const markPresent = useCallback(() => {
+    if (!crewId || !userId) return;
+    localStorage.setItem(
+      `crew_${crewId}_presence_${userId}`,
+      JSON.stringify({ userId, userName, ts: Date.now() })
+    );
   }, [crewId, userId, userName]);
-  
+
+  const markAbsent = useCallback(() => {
+    if (!crewId || !userId) return;
+    localStorage.removeItem(`crew_${crewId}_presence_${userId}`);
+  }, [crewId, userId]);
+
+  const getOnlineUsers = useCallback(() => {
+    if (!crewId) return [];
+    const now = Date.now();
+    const online = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith(`crew_${crewId}_presence_`)) {
+        try {
+          const data = JSON.parse(localStorage.getItem(key));
+          if (data && now - data.ts < PRESENCE_TTL) {
+            online.push(data);
+          } else {
+            localStorage.removeItem(key);
+          }
+        } catch (_) { localStorage.removeItem(key); }
+      }
+    }
+    return online;
+  }, [crewId]);
+
+  useEffect(() => {
+    if (!crewId || !userId) return;
+    markPresent();
+    const online = getOnlineUsers();
+    setOnlineUsers(online);
+    setOnlineCount(online.length);
+
+    heartbeatRef.current = setInterval(() => {
+      markPresent();
+      const updated = getOnlineUsers();
+      setOnlineUsers(updated);
+      setOnlineCount(updated.length);
+    }, HEARTBEAT_INTV);
+
+    return () => { clearInterval(heartbeatRef.current); markAbsent(); };
+  }, [crewId, userId, markPresent, markAbsent, getOnlineUsers]);
+
   return { onlineUsers, onlineCount };
 };
 
+// ========================================
+// SECTION 13: TYPING INDICATOR HOOK
+// ========================================
+
 const useTypingIndicator = (crewId, userId, userName) => {
   const [typingUsers, setTypingUsers] = useState([]);
-  
-  const broadcastTyping = useCallback(() => {}, []);
-  const stopTyping = useCallback(() => {}, []);
-  
+  const typingTimeoutRef = useRef(null);
+  const TYPING_TTL = 3000;
+
+  const broadcastTyping = useCallback(() => {
+    if (!crewId || !userId) return;
+    localStorage.setItem(
+      `crew_${crewId}_typing_${userId}`,
+      JSON.stringify({ userId, userName, ts: Date.now() })
+    );
+    clearTimeout(typingTimeoutRef.current);
+    typingTimeoutRef.current = setTimeout(() => {
+      localStorage.removeItem(`crew_${crewId}_typing_${userId}`);
+    }, TYPING_TTL);
+  }, [crewId, userId, userName]);
+
+  const stopTyping = useCallback(() => {
+    if (!crewId || !userId) return;
+    clearTimeout(typingTimeoutRef.current);
+    localStorage.removeItem(`crew_${crewId}_typing_${userId}`);
+  }, [crewId, userId]);
+
+  useEffect(() => {
+    if (!crewId) return;
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const typing = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key?.startsWith(`crew_${crewId}_typing_`) && !key.includes(`_${userId}`)) {
+          try {
+            const data = JSON.parse(localStorage.getItem(key));
+            if (data && now - data.ts < TYPING_TTL) {
+              typing.push(data.userName);
+            } else {
+              localStorage.removeItem(key);
+            }
+          } catch (_) { localStorage.removeItem(key); }
+        }
+      }
+      setTypingUsers(typing);
+    }, 1500);
+    return () => { clearInterval(interval); stopTyping(); };
+  }, [crewId, userId, stopTyping]);
+
   return { typingUsers, broadcastTyping, stopTyping };
 };
 
-const markCrewMessagesRead = (crewId, userId) => {};
-const getReadStatus = (msgTimestamp, crewId, onlineCount) => 'delivered';
+// ========================================
+// SECTION 14: READ RECEIPT HELPERS
+// ========================================
+
+const markCrewMessagesRead = (crewId, userId) => {
+  if (!crewId || !userId) return;
+  localStorage.setItem(`crew_${crewId}_lastRead_${userId}`, Date.now().toString());
+};
+
+const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
+  const msgTime = new Date(msgTimestamp).getTime();
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key?.startsWith(`crew_${crewId}_lastRead_`)) {
+      const lastRead = parseInt(localStorage.getItem(key) || '0');
+      if (lastRead >= msgTime) return 'read';
+    }
+  }
+  return onlineCount > 1 ? 'delivered' : 'sent';
+};
 
 // ========================================
 // SECTION 15: BOOK DETAILS MODAL
@@ -928,6 +1035,7 @@ const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
 
 // ========================================
 // SECTION 16: USER PROFILE MODAL (Quick View)
+// ✅ Followers/Following are clickable → onViewFullProfile loop
 // ========================================
 
 const UserProfileModal = ({
@@ -973,6 +1081,7 @@ const UserProfileModal = ({
     });
   };
 
+  // ✅ Clicking a user in the list goes to their full profile — creates the Instagram-style loop
   const UserListSheet = ({ title, users: list, onClose: closeList }) => (
     <div
       className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
@@ -1192,6 +1301,7 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, onNotification
 
 // ========================================
 // SECTION 19: NOTIFICATIONS PAGE
+// ✅ Clicking a notification navigates to that post or crew chat
 // ========================================
 
 const NotificationsPage = ({ user, onClose, updateNotificationCount, onNavigateToPost, onNavigateToCrew }) => {
@@ -1251,21 +1361,25 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount, onNavigateT
     updateNotificationCount?.();
   };
 
+  // ✅ Handle click: mark read + navigate to the source post or crew
   const handleNotificationClick = (notif) => {
     if (!notif.read) {
       markOneAsRead(notif.id);
     }
 
     if (notif.type === 'message' && notif.crewId) {
+      // Navigate to the crew chat this message came from
       onClose();
       onNavigateToCrew?.(notif.crewId);
     } else if (notif.postId && ['like', 'comment', 'mention', 'reshare'].includes(notif.type)) {
+      // Navigate to the post in the home feed
       onClose();
       onNavigateToPost?.(notif.postId);
     } else if (notif.type === 'join' && notif.crewId) {
       onClose();
       onNavigateToCrew?.(notif.crewId);
     }
+    // For follow notifications, just mark as read (no specific navigation needed)
   };
 
   const icons = {
@@ -1377,7 +1491,11 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount, onNavigateT
 
 const ShareModal = ({ post, crewInvite, onClose }) => {
   const [copied, setCopied] = React.useState(false);
-  const shareUrl = window.location.href;
+  const shareUrl = post
+    ? deepLink('post', post.id || post._id)
+    : crewInvite
+      ? deepLink('crew', crewInvite.id)
+      : window.location.href;
   const shareText = crewInvite
     ? `Join the "${crewInvite.name}" reading crew on READCREWW — reading "${crewInvite.name}" by ${crewInvite.author}!`
     : `Check out this post by ${post?.userName}: "${post?.content?.substring(0, 60)}..."`;
@@ -1678,6 +1796,7 @@ const PostOptionsModal = ({
 
 // ========================================
 // SECTION 23: INLINE POST CARD
+// ✅ Heart Glitter: burst of hearts+sparkles when you like a post
 // ========================================
 
 const InlinePostCard = React.memo(({
@@ -1698,6 +1817,7 @@ const InlinePostCard = React.memo(({
   const [showReplies, setShowReplies] = useState({});
   const [showOptions, setShowOptions] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
+  // ✅ Glitter effect state — stores position for burst animation
   const [glitterEffects, setGlitterEffects] = useState([]);
   const likeButtonRef = useRef(null);
   const inputRef = useRef(null);
@@ -1706,20 +1826,6 @@ const InlinePostCard = React.memo(({
     const realLikes = getPostLikes(post.id);
     if (realLikes !== likeCount) setLikeCount(realLikes);
     setIsLiked(hasUserLikedPost(post.id, user.email));
-    
-    // Listen for cross-tab like updates
-    const handleStorageLike = (e) => {
-      if (e.key === 'post_liked') {
-        try {
-          const data = JSON.parse(e.newValue);
-          if (data.postId === post.id) {
-            setLikeCount(data.likes);
-          }
-        } catch (err) {}
-      }
-    };
-    window.addEventListener('storage', handleStorageLike);
-    return () => window.removeEventListener('storage', handleStorageLike);
   }, [post.id]);
 
   useEffect(() => {
@@ -1741,6 +1847,7 @@ const InlinePostCard = React.memo(({
     setLoadingComments(false);
   };
 
+  // ✅ Trigger the glitter burst at the exact screen position of the like button
   const triggerGlitter = () => {
     if (!likeButtonRef.current) return;
     const rect = likeButtonRef.current.getBoundingClientRect();
@@ -1753,16 +1860,16 @@ const InlinePostCard = React.memo(({
     }, 1500);
   };
 
-  const handleLikePost = () => {
+  const handleLikePost = async () => {
     if (isLiked) return;
 
+    // ✅ Fire glitter animation
     triggerGlitter();
 
-    const newCount = addGlobalLike(post.id, user.email, user.name);
+    const newCount = addGlobalLike(post.id, user.email);
     setIsLiked(true);
     setLikeCount(newCount);
 
-    // Send notification to post author
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, {
         type: 'like',
@@ -1773,6 +1880,10 @@ const InlinePostCard = React.memo(({
       });
       updateNotificationCount?.();
     }
+
+    try {
+      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { userEmail: user.email }, { timeout: 5000 });
+    } catch (_) { }
   };
 
   const handlePostComment = async () => {
@@ -1798,7 +1909,6 @@ const InlinePostCard = React.memo(({
     setComments(updated);
     setCommentCount(updated.filter(c => !c.parentId).length);
 
-    // Send notification to post author
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, {
         type: 'comment',
@@ -1976,6 +2086,7 @@ const InlinePostCard = React.memo(({
 
   return (
     <>
+      {/* ✅ Render glitter burst effects */}
       {glitterEffects.map(effect => (
         <HeartGlitterEffect
           key={effect.id}
@@ -2084,6 +2195,7 @@ const InlinePostCard = React.memo(({
         </div>
 
         <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-5">
+          {/* ✅ Like button with ref for glitter position detection */}
           <button
             ref={likeButtonRef}
             onClick={handleLikePost}
@@ -2489,13 +2601,26 @@ const generateClientResponse = (text, previousBooks = []) => {
   return { reply: intros[cat] || "Here are 5 great picks for you! 📚", books: recs };
 };
 
+// ✅ AI-powered daily trending books — changes every day, cached per date
 const getDailyTrendingBooks = async () => {
-  const todayKey = `ai_trending_${new Date().toISOString().slice(0, 10)}`;
+  const todayKey = `ai_trending_${new Date().toISOString().slice(0, 10)}`; // e.g. "ai_trending_2025-03-30"
   const cached = localStorage.getItem(todayKey);
   if (cached) {
     try { return JSON.parse(cached); } catch (_) {}
   }
 
+  // Try server first
+  try {
+    const res = await axios.get(`${API_URL}/api/books/trending?limit=8&daily=true`, { timeout: 8000 });
+    if (res?.data?.success && res.data.books?.length) {
+      localStorage.setItem(todayKey, JSON.stringify(res.data.books));
+      // Clean up old cache keys
+      Object.keys(localStorage).filter(k => k.startsWith('ai_trending_') && k !== todayKey).forEach(k => localStorage.removeItem(k));
+      return res.data.books;
+    }
+  } catch (_) {}
+
+  // Fallback: rotate through local book DB deterministically based on day of year
   const allBooks = Object.values(BOOK_DB).flat();
   const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86_400_000);
   const startIdx = (dayOfYear * 8) % allBooks.length;
@@ -2503,6 +2628,7 @@ const getDailyTrendingBooks = async () => {
   for (let i = 0; i < 8; i++) {
     dailyPicks.push(allBooks[(startIdx + i * 5) % allBooks.length]);
   }
+  // Deduplicate by title
   const seen = new Set();
   const unique = dailyPicks.filter(b => { if (seen.has(b.title)) return false; seen.add(b.title); return true; });
 
@@ -2554,10 +2680,9 @@ const PostPage = ({ user, onPost, setPage }) => {
 
   const handleContentChange = (e) => { const t = e.target.value; setContent(t); setCharCount(t.length); };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!content.trim()) return;
     setUploading(true);
-    
     const postData = {
       id: generateId(),
       content: sanitizeText(content.trim()),
@@ -2574,18 +2699,12 @@ const PostPage = ({ user, onPost, setPage }) => {
       comments: 0,
       reshareCount: 0,
     };
-    
-    // Save to localStorage first
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    allPosts.unshift(postData);
-    localStorage.setItem('allPosts', JSON.stringify(allPosts));
-    
-    // Call parent handler
-    onPost(postData);
-    
-    // Broadcast to other tabs
-    globalEventBus.emit('new_post', postData);
-    
+    try {
+      const res = await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
+      onPost(res.data.success ? res.data.post : postData);
+    } catch (_) {
+      onPost(postData);
+    }
     setUploading(false);
     setPage('home');
   };
@@ -2661,6 +2780,8 @@ const PostPage = ({ user, onPost, setPage }) => {
 
 // ========================================
 // SECTION 28: REVIEWS PAGE
+// ✅ Reviews are global — all users see all reviews
+//    Server + localStorage merge ensures nothing is lost
 // ========================================
 
 const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
@@ -2679,8 +2800,26 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
     setLikedReviews(liked);
   }, [user.email]);
 
-  const loadReviews = () => {
+  const loadReviews = async () => {
     setLoading(true);
+    try {
+      const res = await axios.get(`${API_URL}/api/social/reviews`, { timeout: 8000 });
+      if (res?.data?.success) {
+        const serverReviews = res.data.reviews || [];
+        // ✅ Merge with localStorage so reviews posted offline are also visible
+        const localReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
+        const merged = [...serverReviews];
+        localReviews.forEach(lr => {
+          if (!merged.find(sr => sr.id === lr.id)) merged.push(lr);
+        });
+        merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+        setReviews(merged);
+        localStorage.setItem('reviews', JSON.stringify(merged));
+        setLoading(false);
+        return;
+      }
+    } catch (_) {}
+    // Fallback to local
     const local = JSON.parse(localStorage.getItem('reviews') || '[]');
     setReviews(local);
     setLoading(false);
@@ -2700,12 +2839,22 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
     }
   };
 
-  const handleCreateReview = () => {
+  const handleCreateReview = async () => {
     if (!newReview.bookName || !newReview.author || !newReview.review) { alert('Please fill all required fields'); return; }
     const reviewData = { ...newReview, id: generateId(), userName: user.name, userEmail: user.email, userPhoto: user.profileImage, likes: 0, createdAt: new Date().toISOString() };
-    const updatedReviews = [reviewData, ...reviews];
-    setReviews(updatedReviews);
-    localStorage.setItem('reviews', JSON.stringify(updatedReviews));
+    try {
+      const res = await axios.post(`${API_URL}/api/social/reviews`, reviewData, { timeout: 8000 });
+      if (res?.data?.success) {
+        const saved = res.data.review;
+        const updatedReviews = [saved, ...reviews];
+        setReviews(updatedReviews);
+        localStorage.setItem('reviews', JSON.stringify(updatedReviews));
+      } else throw new Error('server fail');
+    } catch (_) {
+      const updatedReviews = [reviewData, ...reviews];
+      setReviews(updatedReviews);
+      localStorage.setItem('reviews', JSON.stringify(updatedReviews));
+    }
     setShowCreateForm(false);
     setNewReview({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
@@ -2851,9 +3000,29 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     const text = input.trim(); setInput('');
     setMessages(p => [...p, { role: 'user', content: text, timestamp: new Date() }]);
     setLoading(true);
-    const { reply, books: recs } = generateClientResponse(text, books);
-    setMessages(p => [...p, { role: 'assistant', content: reply, timestamp: new Date() }]);
-    if (recs.length) setBooks(recs);
+    let used = false;
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 25000);
+      const res = await fetch(`${API_URL}/api/books/chat`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, sessionId }), signal: ctrl.signal,
+      });
+      clearTimeout(tid);
+      if (res.ok) {
+        const d = await res.json();
+        if (d.success && d.reply) {
+          setMessages(p => [...p, { role: 'assistant', content: d.reply, timestamp: new Date() }]);
+          if (d.recommendations?.length) setBooks(d.recommendations);
+          used = true;
+        }
+      }
+    } catch (_) { }
+    if (!used) {
+      const { reply, books: recs } = generateClientResponse(text, books);
+      setMessages(p => [...p, { role: 'assistant', content: reply, timestamp: new Date() }]);
+      if (recs.length) setBooks(recs);
+    }
     setLoading(false);
   };
 
@@ -3161,66 +3330,6 @@ const HomePage = ({
   const [visibleCount, setVisibleCount] = useState(10);
   const loaderRef = useRef(null);
 
-  // Load initial posts and set up cross-tab listeners
-  useEffect(() => {
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const personalized = generatePersonalizedFeed(user.email, allPosts, blockedUsers);
-    setFeedPosts(personalized);
-    
-    // Listen for new posts from other tabs
-    const handleNewPost = (e) => {
-      if (e.key === 'new_post') {
-        try {
-          const newPost = JSON.parse(e.newValue);
-          if (newPost && !blockedUsers.includes(newPost.userEmail)) {
-            setFeedPosts(prev => {
-              if (prev.some(p => p.id === newPost.id)) return prev;
-              return [newPost, ...prev];
-            });
-          }
-        } catch (err) {}
-      }
-    };
-    
-    const handlePostLiked = (e) => {
-      if (e.key === 'post_liked') {
-        try {
-          const data = JSON.parse(e.newValue);
-          setFeedPosts(prev => prev.map(p => {
-            if (p.id === data.postId) {
-              return { ...p, likes: data.likes };
-            }
-            return p;
-          }));
-        } catch (err) {}
-      }
-    };
-    
-    const handlePostCommented = (e) => {
-      if (e.key === 'post_commented') {
-        try {
-          const data = JSON.parse(e.newValue);
-          setFeedPosts(prev => prev.map(p => {
-            if (p.id === data.postId) {
-              return { ...p, comments: data.commentCount };
-            }
-            return p;
-          }));
-        } catch (err) {}
-      }
-    };
-    
-    window.addEventListener('storage', handleNewPost);
-    window.addEventListener('storage', handlePostLiked);
-    window.addEventListener('storage', handlePostCommented);
-    
-    return () => {
-      window.removeEventListener('storage', handleNewPost);
-      window.removeEventListener('storage', handlePostLiked);
-      window.removeEventListener('storage', handlePostCommented);
-    };
-  }, [user.email, blockedUsers]);
-
   useEffect(() => {
     if (!deepLinkPostId || feedPosts.length === 0) return;
     setTimeout(() => {
@@ -3236,16 +3345,29 @@ const HomePage = ({
 
   useEffect(() => {
     loadTrendingBooks();
+    loadPersonalizedFeed();
+
     const savedStats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     setStats(savedStats);
     if (user?.readingGoal?.yearly > 0) {
       setReadingProgress(Math.min((savedStats.booksRead || 0) / user.readingGoal.yearly * 100, 100));
     }
-  }, [user.email]);
+
+    socket.on('new_post', (post) => {
+      if (!blockedUsers.includes(post.userEmail)) {
+        setFeedPosts(prev => [post, ...prev]);
+      }
+    });
+    socket.on('post_deleted', ({ postId }) => setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId)));
+    socket.on('post_liked', ({ postId, likes }) => setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p)));
+
+    return () => { socket.off('new_post'); socket.off('post_deleted'); socket.off('post_liked'); };
+  }, [user.email, blockedUsers]);
 
   useEffect(() => {
+    loadPersonalizedFeed();
     setVisibleCount(10);
-  }, [feedPosts.length]);
+  }, [posts.length, following.length]);
 
   useEffect(() => {
     if (!loaderRef.current) return;
@@ -3256,8 +3378,30 @@ const HomePage = ({
     return () => observer.disconnect();
   }, [feedPosts.length]);
 
+  const loadPersonalizedFeed = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`, { timeout: 8000 });
+      if (res.data.success) {
+        const serverPosts = res.data.posts || [];
+        const allLocal = JSON.parse(localStorage.getItem('allPosts') || '[]');
+        const merged = [...serverPosts];
+        allLocal.forEach(lp => { if (!merged.find(sp => sp.id === lp.id)) merged.push(lp); });
+        localStorage.setItem('allPosts', JSON.stringify(merged));
+
+        const personalized = generatePersonalizedFeed(user.email, merged, blockedUsers);
+        setFeedPosts(personalized);
+        return;
+      }
+    } catch (_) { }
+
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const personalized = generatePersonalizedFeed(user.email, allPosts, blockedUsers);
+    setFeedPosts(personalized);
+  };
+
   const loadTrendingBooks = async () => {
     setLoadingTrending(true);
+    // ✅ Use daily-changing trending books
     const daily = await getDailyTrendingBooks();
     setTrendingBooks(daily.slice(0, 8));
     setLoadingTrending(false);
@@ -3334,6 +3478,9 @@ const HomePage = ({
             <p className="text-xs font-semibold text-blue-900">this feed is lowkey obsessed with u</p>
             <p className="text-xs text-blue-600">ranked by ur vibes, follows & book taste ✨</p>
           </div>
+          <button onClick={loadPersonalizedFeed} className="p-1.5 hover:bg-blue-100 rounded-lg transition">
+            <RefreshCw className="w-4 h-4 text-blue-400" />
+          </button>
         </div>
 
         <div className="grid grid-cols-4 gap-2">
@@ -3431,6 +3578,9 @@ const HomePage = ({
               <MessageSquare className="w-5 h-5 text-orange-500" />
               {following.length > 0 ? 'Your Feed' : 'Community Feed'}
             </h2>
+            <button onClick={loadPersonalizedFeed} className="text-xs text-gray-400 flex items-center gap-1 hover:text-orange-500 transition">
+              <RefreshCw className="w-3 h-3" />Refresh
+            </button>
           </div>
 
           <div className="space-y-4">
@@ -3443,7 +3593,7 @@ const HomePage = ({
             ) : (
               feedPosts.slice(0, visibleCount).map((post, idx) => (
                 <InlinePostCard
-                  key={post.id || post._id || idx}
+                  key={post.id || idx}
                   post={post}
                   user={user}
                   profileSrc={profileSrc}
@@ -3863,7 +4013,7 @@ const ProfilePage = ({
 };
 
 // ========================================
-// SECTION 32: CREW CHAT VIEW (simplified)
+// SECTION 32: CREW CHAT VIEW
 // ========================================
 
 const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount, onViewUserProfile, isJoined, joinCrew }) => {
@@ -3871,22 +4021,54 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
   const [newMessage, setNewMessage] = useState('');
   const [selBook, setSelBook] = useState(null);
   const [showShare, setShowShare] = useState(false);
+  const [showMemberSheet, setShowMemberSheet] = useState(false);
+  const [blockedInChat, setBlockedInChat] = useState([]);
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
 
+  const { onlineCount } = useCrewPresence(crew.id, user.id, user.name);
+  const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(crew.id, user.id, user.name);
   const hasJoined = isJoined(crew.id);
+
+  // ✅ Load blocked users for this chat (per-user, per-crew)
+  useEffect(() => {
+    const blockedKey = `crew_${crew.id}_blocked_${user.email}`;
+    const saved = localStorage.getItem(blockedKey);
+    if (saved) setBlockedInChat(JSON.parse(saved));
+  }, [crew.id, user.email]);
+
+  const blockUserInChat = (targetEmail) => {
+    const updated = [...blockedInChat, targetEmail];
+    setBlockedInChat(updated);
+    localStorage.setItem(`crew_${crew.id}_blocked_${user.email}`, JSON.stringify(updated));
+  };
+
+  const unblockUserInChat = (targetEmail) => {
+    const updated = blockedInChat.filter(e => e !== targetEmail);
+    setBlockedInChat(updated);
+    localStorage.setItem(`crew_${crew.id}_blocked_${user.email}`, JSON.stringify(updated));
+  };
 
   useEffect(() => {
     const cached = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
     setMessages(cached.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
+
+    socket.emit('join_crew_room', crew.id);
+    socket.on('new_crew_message', d => {
+      if (String(d.crewId) === String(crew.id)) {
+        setMessages(prev => [...prev, { ...d.message, timestamp: new Date(d.message.timestamp) }]);
+      }
+    });
+    return () => { socket.emit('leave_crew_room', crew.id); socket.off('new_crew_message'); };
   }, [crew.id]);
 
   useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => { markCrewMessagesRead(crew.id, user.id); }, [messages.length]);
 
-  const sendMessage = () => {
+  const sendMessage = async () => {
     if (!newMessage.trim() || !hasJoined) return;
+    stopTyping();
     const msg = {
-      id: `msg_${Date.now()}`,
       userId: user.id,
       userName: user.name,
       userEmail: user.email,
@@ -3895,11 +4077,25 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
       type: 'text',
       timestamp: new Date().toISOString(),
     };
-    const existing = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
-    existing.push(msg);
-    localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
-    setMessages(prev => [...prev, { ...msg, timestamp: new Date() }]);
     setNewMessage('');
+
+    try {
+      const res = await axios.post(`${API_URL}/api/social/crews/${crew.id}/messages`, msg, { timeout: 8000 });
+      if (res.data.success) {
+        setMessages(prev => [...prev, { ...res.data.message, timestamp: new Date(res.data.message.timestamp) }]);
+      }
+    } catch (_) {
+      const localMsg = { id: `msg_${Date.now()}`, ...msg };
+      const existing = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
+      existing.push(localMsg);
+      localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
+      setMessages(prev => [...prev, { ...localMsg, timestamp: new Date() }]);
+    }
+
+    crewMembers.filter(m => m.email !== user.email && !blockedInChat.includes(m.email)).forEach(m => {
+      pushNotification(m.email, { type: 'message', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} sent a message in "${crew.name}"`, crewId: crew.id, crewName: crew.name });
+    });
+    updateNotificationCount?.();
   };
 
   const sendImage = (e) => {
@@ -3913,6 +4109,10 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
       existing.push(msg);
       localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
       setMessages(prev => [...prev, { ...msg, timestamp: new Date() }]);
+      crewMembers.filter(m => m.email !== user.email && !blockedInChat.includes(m.email)).forEach(m => {
+        pushNotification(m.email, { type: 'message', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} shared an image in "${crew.name}"`, crewId: crew.id, crewName: crew.name });
+      });
+      updateNotificationCount?.();
     };
     reader.readAsDataURL(file);
   };
@@ -3920,10 +4120,61 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
   const formatMsgTime = (ts) => {
     const diff = Date.now() - new Date(ts);
     const mins = Math.floor(diff / 60000);
+    const hrs = Math.floor(diff / 3600000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m`;
+    if (hrs < 24) return `${hrs}h`;
     return new Date(ts).toLocaleDateString();
   };
+
+  // ✅ Filter messages to hide blocked users' messages
+  const filteredMessages = messages.filter(msg => !blockedInChat.includes(msg.userEmail));
+  const groupsByDate = filteredMessages.reduce((acc, msg) => {
+    const date = new Date(msg.timestamp).toDateString();
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(msg);
+    return acc;
+  }, {});
+
+  // ✅ Members list with block/unblock actions
+  const MembersSheet = () => (
+    <div
+      className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
+      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
+    >
+      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+          <h3 className="font-bold">Members ({crewMembers.length})</h3>
+          <button onClick={() => setShowMemberSheet(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+        </div>
+        <div className="p-4 space-y-2">
+          {crewMembers.map(member => {
+            const isBlocked = blockedInChat.includes(member.email);
+            const isSelf = member.email === user.email;
+            return (
+              <div key={member.email} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <Avatar initials={member.initials} size="sm" src={member.src} />
+                  <div>
+                    <p className="font-semibold text-gray-900">{member.name}</p>
+                    <p className="text-xs text-gray-500">{member.isCreator ? '👑 Creator' : 'Member'}</p>
+                  </div>
+                </div>
+                {!isSelf && (
+                  <button
+                    onClick={() => isBlocked ? unblockUserInChat(member.email) : blockUserInChat(member.email)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${isBlocked ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
+                  >
+                    {isBlocked ? 'Unblock' : 'Block'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
 
   if (!hasJoined) {
     return (
@@ -3954,14 +4205,22 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
           <DynamicBookCover title={crew.name} author={crew.author} size="xs" onClick={() => setSelBook({ title: crew.name, author: crew.author })} />
           <div>
             <p className="font-semibold text-gray-900 text-sm">{crew.name}</p>
-            <p className="text-xs text-gray-500">{crewMembers.length} members</p>
+            <button onClick={() => setShowMemberSheet(true)} className="flex items-center gap-2">
+              <p className="text-xs text-gray-500">{crewMembers.length} members</p>
+              {onlineCount > 0 && (
+                <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse inline-block" />
+                  {onlineCount} online
+                </span>
+              )}
+            </button>
           </div>
         </div>
         <button onClick={() => setShowShare(true)} className="p-2 hover:bg-gray-100 rounded-full" title="Invite friends"><Share2 className="w-5 h-5 text-gray-600" /></button>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-        {messages.length === 0 && (
+        {filteredMessages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-16">
             <MessageCircle className="w-12 h-12 text-gray-300 mb-3" />
             <p className="text-gray-500 font-medium">No messages yet</p>
@@ -3969,33 +4228,56 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
           </div>
         )}
 
-        {messages.map(msg => {
-          const isOwn = msg.userId === user.id || msg.userEmail === user.email;
-          return (
-            <div key={msg.id || msg.timestamp} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-              <div className={`flex max-w-[78%] items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                {!isOwn && (
-                  <button onClick={() => onViewUserProfile(msg.userEmail, msg.userName)} className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:opacity-80 transition">
-                    {msg.userInitials || '??'}
-                  </button>
-                )}
-                <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#dcf8c6] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
-                  {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
-                  {msg.type === 'image' ? (
-                    <img src={msg.content} alt="Shared" className="max-w-full rounded-xl max-h-60 cursor-pointer" onClick={() => window.open(msg.content, '_blank')} />
-                  ) : (
-                    <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>
-                  )}
-                  <p className="text-[10px] text-gray-400 text-right mt-0.5">
-                    {formatMsgTime(msg.timestamp)}
-                  </p>
-                </div>
-              </div>
+        {Object.entries(groupsByDate).map(([date, msgs]) => (
+          <div key={date}>
+            <div className="flex justify-center my-4">
+              <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full">
+                {new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+              </span>
             </div>
-          );
-        })}
+            {msgs.map(msg => {
+              const isOwn = msg.userId === user.id || msg.userEmail === user.email;
+              // Skip if the message author is blocked by current user
+              if (blockedInChat.includes(msg.userEmail) && !isOwn) return null;
+              return (
+                <div key={msg.id || msg.timestamp} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`flex max-w-[78%] items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
+                    {!isOwn && (
+                      <button onClick={() => onViewUserProfile(msg.userEmail, msg.userName)} className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:opacity-80 transition">
+                        {msg.userInitials || '??'}
+                      </button>
+                    )}
+                    <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#dcf8c6] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
+                      {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
+                      {msg.type === 'image' ? (
+                        <img src={msg.content} alt="Shared" className="max-w-full rounded-xl max-h-60 cursor-pointer" onClick={() => window.open(msg.content, '_blank')} />
+                      ) : (
+                        <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>
+                      )}
+                      <p className="text-[10px] text-gray-400 text-right mt-0.5">
+                        {formatMsgTime(msg.timestamp)}
+                        {isOwn && (() => {
+                          const s = getReadStatus(msg.timestamp, crew.id, onlineCount);
+                          if (s === 'read') return <span className="ml-1 text-blue-400">✓✓</span>;
+                          if (s === 'delivered') return <span className="ml-1 text-gray-400">✓✓</span>;
+                          return <span className="ml-1 text-gray-300">✓</span>;
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ))}
         <div ref={messagesEndRef} />
       </div>
+
+      {typingUsers.length > 0 && (
+        <div className="px-4 py-1 text-xs text-gray-500 italic bg-transparent">
+          {typingUsers.length === 1 ? `${typingUsers[0]} is typing...` : typingUsers.length === 2 ? `${typingUsers[0]} and ${typingUsers[1]} are typing...` : `${typingUsers.length} people are typing...`}
+        </div>
+      )}
 
       <div className="flex-shrink-0 bg-gray-50 border-t px-3 py-2.5">
         <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow border border-gray-100">
@@ -4006,13 +4288,14 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
           <input
             type="text"
             value={newMessage}
-            onChange={e => setNewMessage(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+            onChange={e => { setNewMessage(e.target.value); broadcastTyping(); }}
+            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stopTyping(); sendMessage(); } }}
+            onBlur={stopTyping}
             className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
             placeholder="say something bestie... 💬"
           />
           <button
-            onClick={sendMessage}
+            onClick={() => { stopTyping(); sendMessage(); }}
             disabled={!newMessage.trim()}
             className={`w-8 h-8 flex items-center justify-center rounded-full transition ${newMessage.trim() ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}
           >
@@ -4021,6 +4304,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
         </div>
       </div>
 
+      {showMemberSheet && <MembersSheet />}
       {selBook && <BookDetailsModal book={selBook} onClose={() => setSelBook(null)} onCreateCrew={() => { }} />}
       {showShare && <ShareModal crewInvite={crew} onClose={() => setShowShare(false)} />}
     </div>
@@ -4059,13 +4343,34 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   const [showShareModal, setShowShareModal] = useState(null);
   const [loadingCrews, setLoadingCrews] = useState(true);
 
-  useEffect(() => {
-    const saved = JSON.parse(localStorage.getItem('crews') || '[]');
-    setCrews(saved.length > 0 ? saved : initialCrews);
-    const joined = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
-    setJoinedCrews(joined);
+  const loadCrews = useCallback(async () => {
+    setLoadingCrews(true);
+    const res = await api.get('/api/social/crews');
+    let allCrews = [];
+    if (res?.data?.success) {
+      allCrews = res.data.crews || [];
+    } else {
+      const saved = JSON.parse(localStorage.getItem('crews') || '[]');
+      allCrews = [...saved];
+    }
+    initialCrews.forEach(ic => { if (!allCrews.find(c => String(c.id) === String(ic.id))) allCrews.push(ic); });
+    const local = JSON.parse(localStorage.getItem('crews') || '[]');
+    local.forEach(lc => { if (!allCrews.find(c => String(c.id) === String(lc.id))) allCrews.push(lc); });
+    localStorage.setItem('crews', JSON.stringify(allCrews));
+    setCrews(allCrews);
     setLoadingCrews(false);
   }, [user.email]);
+
+  useEffect(() => {
+    loadCrews();
+    const joined = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
+    setJoinedCrews(joined);
+    const notifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    const crewMsgs = notifs.filter(n => n.type === 'message' && !n.read);
+    const counts = {};
+    crewMsgs.forEach(n => { if (n.crewId) counts[n.crewId] = (counts[n.crewId] || 0) + 1; });
+    setUnreadMessages(counts);
+  }, [user.email, loadCrews]);
 
   useEffect(() => {
     if (!deepLinkCrewId || crews.length === 0) return;
@@ -4073,6 +4378,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     if (target) { setSelectedCrew(target); setView('detail'); onDeepLinkHandled?.(); }
   }, [deepLinkCrewId, crews]);
 
+  // ✅ Global crew policy: check for existing crew before creating
   const findExistingCrew = (bookName, author) => {
     return crews.find(c =>
       c.name.trim().toLowerCase() === bookName.trim().toLowerCase() &&
@@ -4114,9 +4420,10 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     showToast(`Left "${crew.name}"`);
   };
 
-  const createCrew = () => {
+  const createCrew = async () => {
     if (!newCrewData.name || !newCrewData.author) { alert('bestie fill in the book name and author first 👀'); return; }
 
+    // ✅ Check if a crew for this book/author already exists globally
     const existing = findExistingCrew(newCrewData.name, newCrewData.author);
     if (existing) {
       alert(`A crew for "${existing.name}" already exists! Taking you there now.`);
@@ -4129,10 +4436,12 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     }
 
     const newCrew = { id: generateId(), ...newCrewData, members: 1, chats: 0, createdBy: user.email, createdByName: user.name, createdAt: new Date().toISOString() };
-    const updatedCrews = [newCrew, ...crews];
+    const res = await api.post('/api/social/crews', newCrew);
+    const saved = res?.data?.success ? res.data.crew : newCrew;
+    const updatedCrews = [saved, ...crews];
     setCrews(updatedCrews);
     localStorage.setItem('crews', JSON.stringify(updatedCrews));
-    const updated = [...joinedCrews, newCrew.id];
+    const updated = [...joinedCrews, saved.id];
     setJoinedCrews(updated);
     localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updated));
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
@@ -4140,7 +4449,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
     setShowCreateForm(false);
     setNewCrewData({ name: '', author: '', genre: '' });
-    showToast(`🎉 Created "${newCrew.name}"!`);
+    showToast(`🎉 Created "${saved.name}"!`);
   };
 
   useEffect(() => {
@@ -4344,6 +4653,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 
 // ========================================
 // SECTION 34: FULL USER PROFILE PAGE
+// ✅ Privacy: Books Read & Saved tabs are hidden from other users
 // ========================================
 
 const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onBack, onFollow, isFollowing, onBlock, isBlocked }) => {
@@ -4385,10 +4695,11 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
     setStats({ booksRead: st.booksRead || 0, reviewsGiven: st.reviewsGiven || 0, postsCreated: st.postsCreated || 0, crewsJoined: st.crewsJoined || 0 });
   };
 
+  // ✅ Privacy: When viewing someone else's profile, don't show "Books Read" or "Saved" tabs
   const isOwnProfile = currentUser.email === viewedUserEmail;
   const tabs = isOwnProfile
     ? ['Posts', 'Reviews', 'Books Read', 'Crews', 'Saved']
-    : ['Posts', 'Reviews', 'Crews'];
+    : ['Posts', 'Reviews', 'Crews']; // Books Read and Saved hidden for other users
 
   return (
     <div className="min-h-screen bg-gray-50 pb-24 overflow-y-auto">
@@ -4492,6 +4803,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           </div>
         )}
 
+        {/* ✅ Books Read tab only shows if viewing own profile */}
         {activeTab === 'Books Read' && isOwnProfile && (
           <div className="space-y-3">
             {userBooks.length === 0
@@ -4535,6 +4847,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           </div>
         )}
 
+        {/* ✅ Saved tab only shows if viewing own profile */}
         {activeTab === 'Saved' && isOwnProfile && (
           <div className="space-y-4">
             <div className="text-center py-8">
@@ -4777,11 +5090,13 @@ export default function App() {
     setShowBottomNav(currentPage !== 'post' && !viewingFullProfile);
   }, [currentPage, viewingFullProfile]);
 
+  // ✅ Navigate to a specific post in the home feed (from notification click)
   const handleNavigateToPost = useCallback((postId) => {
     setDeepLinkPostId(postId);
     setCurrentPage('home');
   }, []);
 
+  // ✅ Navigate to a specific crew chat (from notification click)
   const handleNavigateToCrew = useCallback((crewId) => {
     setDeepLinkCrewId(crewId);
     setCurrentPage('crews');
@@ -4804,8 +5119,22 @@ export default function App() {
         if (pi) setProfileSrc(pi);
       }
 
-      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-      setPosts(allPosts);
+      try {
+        const email = (JSON.parse(localStorage.getItem('currentUser') || '{}')).email;
+        const res = await api.get(`/api/social/posts?userEmail=${encodeURIComponent(email || '')}`);
+        if (res?.data?.success) {
+          const sp = res.data.posts || [];
+          const lp = JSON.parse(localStorage.getItem('allPosts') || '[]');
+          const merged = [...sp];
+          lp.forEach(lx => { if (!merged.find(sx => (sx.id || sx._id) === (lx.id || lx._id))) merged.push(lx); });
+          localStorage.setItem('allPosts', JSON.stringify(merged));
+          setPosts(merged);
+        } else {
+          setPosts(JSON.parse(localStorage.getItem('allPosts') || '[]'));
+        }
+      } catch (_) {
+        setPosts(JSON.parse(localStorage.getItem('allPosts') || '[]'));
+      }
 
       const storedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
       if (storedCrews.length > 0) setCrews(storedCrews);
@@ -4853,6 +5182,24 @@ export default function App() {
 
     checkForNewNotifications();
 
+    const pollNotifications = async () => {
+      try {
+        const res = await api.get(`/api/social/notifications/${encodeURIComponent(currentUser.email)}`);
+        if (res?.data?.success) {
+          const fresh = res.data.notifications || [];
+          const old = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
+          const merged = [...fresh];
+          old.forEach(o => { if (!merged.find(f => f.id === o.id)) merged.push(o); });
+          merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+          localStorage.setItem(`user_${currentUser.email}_notifications`, JSON.stringify(merged));
+          checkForNewNotifications();
+        }
+      } catch (_) { }
+    };
+
+    const interval = setInterval(pollNotifications, 15000);
+    pollNotifications();
+
     const handleCustom = (e) => {
       if (e.detail?.targetEmail === currentUser.email) checkForNewNotifications();
     };
@@ -4863,9 +5210,19 @@ export default function App() {
     window.addEventListener('rc:notif', handleCustom);
     window.addEventListener('storage', handleStorage);
 
+    socket.emit('join_user_room', currentUser.email);
+    socket.on('new_notification', (notification) => {
+      if (notification.toEmail === currentUser?.email) {
+        pushNotification(currentUser.email, notification);
+        checkForNewNotifications();
+      }
+    });
+
     return () => {
+      clearInterval(interval);
       window.removeEventListener('rc:notif', handleCustom);
       window.removeEventListener('storage', handleStorage);
+      socket.off('new_notification');
     };
   }, [currentUser, checkForNewNotifications]);
 
@@ -5111,6 +5468,7 @@ export default function App() {
                 onViewUserProfile={handleViewUserProfile}
                 onViewBookDetails={(book) => { }}
                 onCreateCrew={(book) => {
+                  // Check for existing crew before creating
                   const existing = crews.find(c =>
                     c.name.trim().toLowerCase() === book.title.trim().toLowerCase() &&
                     c.author.trim().toLowerCase() === (book.author || '').trim().toLowerCase()
@@ -5148,6 +5506,7 @@ export default function App() {
                 user={currentUser}
                 setPage={setCurrentPage}
                 onCreateCrew={(book) => {
+                  // Check for existing crew before creating
                   const existing = crews.find(c =>
                     c.name.trim().toLowerCase() === book.title.trim().toLowerCase() &&
                     c.author.trim().toLowerCase() === (book.author || '').trim().toLowerCase()
