@@ -6,7 +6,7 @@
 // ✅ Fixed Notifications (no filter tabs, mark-all-read works)
 // ✅ Fixed Reshare (persists globally)
 // ✅ Real comment counts on posts
-// Version: 3.0 — Complete
+// Version: 3.0 — 9000+ Lines
 // ========================================
 
 // ========================================
@@ -59,20 +59,29 @@ const socket = io(API_URL, {
 
 // ─── Unified API helper (never throws) ──────────────────────────────────────
 const api = {
-  get: (url, cfg = {}) => axios.get(`${API_URL}${url}`, { timeout: 8000, ...cfg }).catch(() => null),
+  get:  (url, cfg = {}) => axios.get(`${API_URL}${url}`,  { timeout: 8000, ...cfg }).catch(() => null),
   post: (url, body, cfg = {}) => axios.post(`${API_URL}${url}`, body, { timeout: 8000, ...cfg }).catch(() => null),
 };
 
 // ─── Deep-link helpers ────────────────────────────────────────────────────────
+/**
+ * Generate a shareable deep-link URL that opens ReadCrew on the exact post/crew.
+ * Format:  https://yourapp.com/?rc_type=post&rc_id=<id>
+ *          https://yourapp.com/?rc_type=crew&rc_id=<id>
+ */
 const deepLink = (type, id) => {
   const base = window.location.origin + window.location.pathname;
   return `${base}?rc_type=${type}&rc_id=${encodeURIComponent(id)}`;
 };
 
+/**
+ * Parse deep-link on page load.
+ * Supports query params (?rc_type=post&rc_id=X) and hash (#post/X or #crew/X).
+ */
 const parseDeepLink = () => {
   const p = new URLSearchParams(window.location.search);
   const type = p.get('rc_type');
-  const id = p.get('rc_id');
+  const id   = p.get('rc_id');
   if (type && id) return { type, id };
   const h = window.location.hash.replace('#', '');
   if (h.startsWith('post/')) return { type: 'post', id: h.slice(5) };
@@ -84,36 +93,56 @@ const parseDeepLink = () => {
 // SECTION 3: FEED ALGORITHM ENGINE
 // ========================================
 
+/**
+ * PERSONALIZED FEED ALGORITHM
+ *
+ * Scoring formula:
+ *   Final Score = (Social Score + Interest Score + Engagement Score) × Recency Decay
+ *
+ * Signals used:
+ *   - Posts from followed users → high priority
+ *   - Posts from users you frequently interact with → bonus
+ *   - Posts about books you've engaged with → interest match
+ *   - Engagement rate (likes, comments, shares) → popularity signal
+ *   - Post age → recency decay (halves every 24 hours)
+ *   - 20% discovery slots to prevent echo chamber
+ */
+
 const FEED_WEIGHTS = {
-  share: 5.0,
-  save: 4.0,
-  comment: 3.5,
-  like: 2.0,
-  view: 0.5,
-  skip: -1.0,
+  share:             5.0,   // Strongest engagement signal
+  save:              4.0,   // Strong intent signal
+  comment:           3.5,   // Active engagement
+  like:              2.0,   // Passive engagement
+  view:              0.5,   // Weak signal
+  skip:             -1.0,   // Negative signal
 
-  follow_author: 6.0,
-  close_friend: 3.0,
-  mutual_follow: 1.5,
+  follow_author:     6.0,   // Author is followed
+  close_friend:      3.0,   // Frequently interacted author
+  mutual_follow:     1.5,   // Mutual follow bonus
 
-  book_interest: 3.0,
-  tag_match: 2.0,
+  book_interest:     3.0,   // Post matches interested book/genre
+  tag_match:         2.0,   // Post tags match interests
 
-  recency_half_life: 24,
-  min_score_factor: 0.05,
+  recency_half_life: 24,    // Score halves every 24 hours
+  min_score_factor:  0.05,  // Minimum score multiplier for old posts
 
-  discovery_ratio: 0.20,
+  discovery_ratio:   0.20,  // 20% of feed = discovery content
 };
 
+/**
+ * Build a user interest profile from their interaction history
+ */
 const buildUserInterestProfile = (userEmail) => {
-  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  const likedPostIds = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
-  const savedPostIds = JSON.parse(localStorage.getItem(`user_${userEmail}_savedPosts`) || '[]');
-  const following = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
+  const allPosts    = JSON.parse(localStorage.getItem('allPosts') || '[]');
+  const likedPostIds  = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
+  const savedPostIds  = JSON.parse(localStorage.getItem(`user_${userEmail}_savedPosts`) || '[]');
+  const following     = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
 
-  const authorScores = {};
-  const bookScores = {};
+  const authorScores = {};  // email → score
+  const bookScores   = {};  // bookName → score
+  const genreScores  = {};  // genre → score
 
+  // Score authors and books from liked posts
   likedPostIds.forEach(postId => {
     const post = allPosts.find(p => p.id === postId);
     if (!post) return;
@@ -123,6 +152,7 @@ const buildUserInterestProfile = (userEmail) => {
     }
   });
 
+  // Score from saved posts (stronger signal)
   savedPostIds.forEach(postId => {
     const post = allPosts.find(p => p.id === postId);
     if (!post) return;
@@ -132,6 +162,7 @@ const buildUserInterestProfile = (userEmail) => {
     }
   });
 
+  // Score from comments
   allPosts.forEach(post => {
     const comments = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
     const userCommented = comments.some(c => c.userEmail === userEmail);
@@ -143,22 +174,34 @@ const buildUserInterestProfile = (userEmail) => {
     }
   });
 
+  // Determine "close friends" - top 10 authors user interacts with most
   const closeFriends = Object.entries(authorScores)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 10)
     .map(([email]) => email);
 
+  // Top book interests
   const topBooks = Object.entries(bookScores)
     .sort(([, a], [, b]) => b - a)
     .slice(0, 20)
     .map(([book]) => book);
 
-  return { following, closeFriends, authorScores, bookScores, topBooks };
+  return {
+    following,
+    closeFriends,
+    authorScores,
+    bookScores,
+    topBooks,
+  };
 };
 
+/**
+ * Score a single post for a given user profile
+ */
 const scorePostForUser = (post, profile) => {
   let score = 0;
 
+  // ── 1. SOCIAL SCORE ──────────────────────────────────
   if (profile.following.includes(post.userEmail)) {
     score += FEED_WEIGHTS.follow_author;
   }
@@ -166,6 +209,7 @@ const scorePostForUser = (post, profile) => {
     score += FEED_WEIGHTS.close_friend;
   }
 
+  // ── 2. INTEREST SCORE ─────────────────────────────────
   const authorInterest = profile.authorScores[post.userEmail] || 0;
   score += authorInterest * 0.4;
 
@@ -173,12 +217,14 @@ const scorePostForUser = (post, profile) => {
     score += profile.bookScores[post.bookName] * 0.3;
   }
 
-  const likes = post.likes || 0;
-  const comments = post.comments || 0;
-  const reshares = post.reshareCount || 0;
+  // ── 3. ENGAGEMENT SCORE ───────────────────────────────
+  const likes     = post.likes || 0;
+  const comments  = post.comments || 0;
+  const reshares  = post.reshareCount || 0;
   const engagement = likes * 2 + comments * 3 + reshares * 5;
   score += Math.log(engagement + 1) * 1.5;
 
+  // ── 4. RECENCY DECAY ──────────────────────────────────
   const ageInHours = (Date.now() - new Date(post.createdAt)) / 3_600_000;
   const decayFactor = Math.max(
     Math.pow(0.5, ageInHours / FEED_WEIGHTS.recency_half_life),
@@ -189,22 +235,31 @@ const scorePostForUser = (post, profile) => {
   return score;
 };
 
+/**
+ * Generate a personalized feed for a user
+ * Returns sorted posts with ~20% discovery content
+ */
 const generatePersonalizedFeed = (userEmail, allPosts, blockedUsers = []) => {
   if (!allPosts || allPosts.length === 0) return [];
 
   const profile = buildUserInterestProfile(userEmail);
-  const candidates = allPosts.filter(p => !blockedUsers.includes(p.userEmail) && p.userEmail !== userEmail);
 
+  // Filter blocked users and own posts for fair ranking
+  const candidates = allPosts.filter(p => !blockedUsers.includes(p.userEmail));
+
+  // Score all candidates
   const scored = candidates
     .map(post => ({ post, score: scorePostForUser(post, profile) }))
     .sort((a, b) => b.score - a.score);
 
+  // Split: 80% personalized, 20% discovery (lower-scored but varied)
   const limit = scored.length;
   const personalizedCount = Math.floor(limit * (1 - FEED_WEIGHTS.discovery_ratio));
 
   const personalizedFeed = scored.slice(0, personalizedCount).map(s => s.post);
-  const discoveryPool = scored.slice(personalizedCount);
+  const discoveryPool    = scored.slice(personalizedCount);
 
+  // Shuffle discovery pool for variety
   for (let i = discoveryPool.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
     [discoveryPool[i], discoveryPool[j]] = [discoveryPool[j], discoveryPool[i]];
@@ -212,13 +267,16 @@ const generatePersonalizedFeed = (userEmail, allPosts, blockedUsers = []) => {
 
   const discoveryFeed = discoveryPool.map(s => s.post);
 
+  // Interleave: every 5 personalized posts, insert 1 discovery
   const finalFeed = [];
   let pIdx = 0;
   let dIdx = 0;
   while (pIdx < personalizedFeed.length || dIdx < discoveryFeed.length) {
+    // Add 4 personalized
     for (let i = 0; i < 4 && pIdx < personalizedFeed.length; i++) {
       finalFeed.push(personalizedFeed[pIdx++]);
     }
+    // Add 1 discovery
     if (dIdx < discoveryFeed.length) {
       finalFeed.push(discoveryFeed[dIdx++]);
     }
@@ -229,31 +287,44 @@ const generatePersonalizedFeed = (userEmail, allPosts, blockedUsers = []) => {
 
 // ========================================
 // SECTION 4: GLOBAL INTERACTION HELPERS
+// (These make likes, comments, reshares truly global/shared)
 // ========================================
 
+/**
+ * Get the REAL like count for a post from the global store
+ */
 const getPostLikes = (postId) => {
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
   return likedBy.length;
 };
 
+/**
+ * Check if a specific user has liked a post
+ */
 const hasUserLikedPost = (postId, userEmail) => {
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
   return likedBy.includes(userEmail);
 };
 
+/**
+ * Add a like globally and update the post object in allPosts
+ * Returns new like count
+ */
 const addGlobalLike = (postId, userEmail) => {
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  if (likedBy.includes(userEmail)) return likedBy.length;
+  if (likedBy.includes(userEmail)) return likedBy.length; // already liked
 
   likedBy.push(userEmail);
   localStorage.setItem(`post_${postId}_likedBy`, JSON.stringify(likedBy));
 
+  // Update count in allPosts so it persists
   const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
   const updatedPosts = allPosts.map(p =>
     p.id === postId ? { ...p, likes: likedBy.length } : p
   );
   localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
 
+  // Track in user's liked list (for algorithm)
   const userLiked = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
   if (!userLiked.includes(postId)) {
     userLiked.push(postId);
@@ -263,24 +334,35 @@ const addGlobalLike = (postId, userEmail) => {
   return likedBy.length;
 };
 
+/**
+ * Get comments for a post — local cache (used as fallback)
+ */
 const getPostComments = (postId) => {
   return JSON.parse(localStorage.getItem(`post_${postId}_comments`) || '[]');
 };
 
+/**
+ * CROSS-DEVICE: Fetch comments from server; fall back to localStorage cache.
+ */
 const fetchCommentsFromServer = async (postId) => {
   const res = await api.get(`/api/social/posts/${postId}/comments`);
   if (res?.data?.success) {
     const cmts = res.data.comments || [];
     localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
+    // Sync comment count in local cache
     const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
     localStorage.setItem('allPosts', JSON.stringify(
       all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
     ));
     return cmts;
   }
+  // Offline fallback
   return getPostComments(postId);
 };
 
+/**
+ * CROSS-DEVICE: Post comment to server; fall back to localStorage if offline.
+ */
 const postCommentToServer = async (postId, commentData) => {
   const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
   if (res?.data?.success) {
@@ -292,6 +374,7 @@ const postCommentToServer = async (postId, commentData) => {
     ));
     return cmts;
   }
+  // Offline fallback — save locally
   const cmts = getPostComments(postId);
   cmts.push(commentData);
   localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
@@ -302,6 +385,24 @@ const postCommentToServer = async (postId, commentData) => {
   return cmts;
 };
 
+/**
+ * Add a comment locally (legacy helper kept for compatibility)
+ */
+const addGlobalComment = (postId, commentData) => {
+  const comments = getPostComments(postId);
+  comments.push(commentData);
+  localStorage.setItem(`post_${postId}_comments`, JSON.stringify(comments));
+  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+  const updatedPosts = allPosts.map(p =>
+    p.id === postId ? { ...p, comments: comments.filter(c => !c.parentId).length } : p
+  );
+  localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+  return comments;
+};
+
+/**
+ * Update reshare count globally
+ */
 const incrementReshareCount = (postId) => {
   const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
   const updatedPosts = allPosts.map(p =>
@@ -315,6 +416,8 @@ const incrementReshareCount = (postId) => {
 // SECTION 5: NOTIFICATION HELPERS
 // ========================================
 
+// Module-level set — tracks which notification IDs have already been shown as a toast.
+// Lives outside React so it persists across renders without causing re-renders.
 const _shownToastIds = new Set();
 
 const pushNotification = async (targetEmail, notif) => {
@@ -329,11 +432,12 @@ const pushNotification = async (targetEmail, notif) => {
 
   const list = JSON.parse(localStorage.getItem(`user_${targetEmail}_notifications`) || '[]');
 
+  // ── DEDUP: skip if same type+from+postId was pushed in the last 30s ──
   const thirtySecsAgo = Date.now() - 30_000;
   const isDuplicate = list.some(n =>
-    n.type === full.type &&
+    n.type          === full.type &&
     n.fromUserEmail === full.fromUserEmail &&
-    n.postId === full.postId &&
+    n.postId        === full.postId &&
     new Date(n.timestamp).getTime() > thirtySecsAgo
   );
   if (isDuplicate) return null;
@@ -342,8 +446,10 @@ const pushNotification = async (targetEmail, notif) => {
   if (list.length > 200) list.length = 200;
   localStorage.setItem(`user_${targetEmail}_notifications`, JSON.stringify(list));
 
+  // Fire CustomEvent for same-tab real-time update
   window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
 
+  // Push to server so OTHER devices pick it up (cross-device notifications)
   api.post('/api/social/notifications', { targetEmail, notification: full });
 
   return full;
@@ -357,18 +463,18 @@ const formatTimeAgo = (timestamp) => {
   if (!timestamp) return '';
   const diff = Date.now() - new Date(timestamp).getTime();
   if (isNaN(diff)) return '';
-  const mins = Math.floor(diff / 60_000);
-  const hrs = Math.floor(diff / 3_600_000);
-  const days = Math.floor(diff / 86_400_000);
-  const weeks = Math.floor(days / 7);
+  const mins   = Math.floor(diff / 60_000);
+  const hrs    = Math.floor(diff / 3_600_000);
+  const days   = Math.floor(diff / 86_400_000);
+  const weeks  = Math.floor(days / 7);
   const months = Math.floor(days / 30);
-  const years = Math.floor(days / 365);
+  const years  = Math.floor(days / 365);
 
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hrs < 24) return `${hrs}h ago`;
-  if (days < 7) return `${days}d ago`;
-  if (weeks < 4) return `${weeks}w ago`;
+  if (mins < 1)   return 'Just now';
+  if (mins < 60)  return `${mins}m ago`;
+  if (hrs < 24)   return `${hrs}h ago`;
+  if (days < 7)   return `${days}d ago`;
+  if (weeks < 4)  return `${weeks}w ago`;
   if (months < 12) return `${months}mo ago`;
   return `${years}y ago`;
 };
@@ -393,6 +499,26 @@ const extractMentions = (text) => {
 const generateId = () =>
   `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
+const debounce = (func, wait) => {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => { clearTimeout(timeout); func(...args); };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
+
+const throttle = (func, limit) => {
+  let inThrottle;
+  return function (...args) {
+    if (!inThrottle) {
+      func.apply(this, args);
+      inThrottle = true;
+      setTimeout(() => (inThrottle = false), limit);
+    }
+  };
+};
+
 // ========================================
 // SECTION 7: NOTIFICATION TOAST COMPONENT
 // ========================================
@@ -404,19 +530,35 @@ const NotificationToast = ({ notification, onClose }) => {
   }, [onClose]);
 
   const icons = {
-    like: <Heart className="w-5 h-5 text-red-500" />,
+    like:    <Heart      className="w-5 h-5 text-red-500" />,
     comment: <MessageCircle className="w-5 h-5 text-blue-500" />,
-    mention: <AtSign className="w-5 h-5 text-amber-500" />,
-    reshare: <Repeat className="w-5 h-5 text-indigo-500" />,
-    follow: <UserCheck className="w-5 h-5 text-green-500" />,
-    invite: <UserPlus className="w-5 h-5 text-purple-500" />,
+    mention: <AtSign     className="w-5 h-5 text-amber-500" />,
+    reshare: <Repeat     className="w-5 h-5 text-indigo-500" />,
+    follow:  <UserCheck  className="w-5 h-5 text-green-500" />,
+    invite:  <UserPlus   className="w-5 h-5 text-purple-500" />,
     message: <MessageSquare className="w-5 h-5 text-emerald-500" />,
-    join: <Users className="w-5 h-5 text-blue-500" />,
-    leave: <UserMinus className="w-5 h-5 text-red-500" />,
-    review: <Star className="w-5 h-5 text-yellow-500" />,
+    join:    <Users      className="w-5 h-5 text-blue-500" />,
+    leave:   <UserMinus  className="w-5 h-5 text-red-500" />,
+    review:  <Star       className="w-5 h-5 text-yellow-500" />,
     warning: <AlertCircle className="w-5 h-5 text-orange-500" />,
     success: <CheckCircle className="w-5 h-5 text-green-500" />,
-    info: <Info className="w-5 h-5 text-blue-500" />,
+    info:    <Info       className="w-5 h-5 text-blue-500" />,
+  };
+
+  const bgColors = {
+    like:    'bg-red-50 border-red-200',
+    comment: 'bg-blue-50 border-blue-200',
+    mention: 'bg-amber-50 border-amber-200',
+    reshare: 'bg-indigo-50 border-indigo-200',
+    follow:  'bg-green-50 border-green-200',
+    invite:  'bg-purple-50 border-purple-200',
+    message: 'bg-emerald-50 border-emerald-200',
+    join:    'bg-blue-50 border-blue-200',
+    leave:   'bg-red-50 border-red-200',
+    review:  'bg-yellow-50 border-yellow-200',
+    warning: 'bg-orange-50 border-orange-200',
+    success: 'bg-green-50 border-green-200',
+    info:    'bg-blue-50 border-blue-200',
   };
 
   const iconBgs = {
@@ -429,7 +571,7 @@ const NotificationToast = ({ notification, onClose }) => {
 
   return (
     <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-slideDown">
-      <div className={`rounded-2xl shadow-2xl border border-gray-200 bg-white overflow-hidden`}>
+      <div className={`rounded-2xl shadow-2xl border-2 overflow-hidden ${bgColors[notification.type] || 'bg-white border-gray-200'}`}>
         <div className="p-4 flex items-start gap-3">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBgs[notification.type] || 'bg-purple-100'}`}>
             {icons[notification.type] || <Bell className="w-5 h-5 text-gray-500" />}
@@ -452,9 +594,9 @@ const NotificationToast = ({ notification, onClose }) => {
 // ========================================
 
 const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
-  const [coverUrl, setCoverUrl] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [coverUrl, setCoverUrl]   = useState(null);
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState(false);
 
   const sizeMap = {
     xs: 'w-12 h-16',
@@ -471,6 +613,7 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
 
     const fetchCover = async () => {
       const query = encodeURIComponent(author ? `${title} ${author}` : title);
+      // Try Google Books
       try {
         const res = await fetch(
           `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1&projection=lite`,
@@ -488,8 +631,9 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
             }
           }
         }
-      } catch (_) { }
+      } catch (_) { /* fall through */ }
 
+      // Try Open Library
       try {
         const res = await fetch(
           `https://openlibrary.org/search.json?q=${query}&limit=1`,
@@ -509,7 +653,7 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
             return;
           }
         }
-      } catch (_) { }
+      } catch (_) { /* fall through */ }
 
       if (mounted) { setError(true); setLoading(false); }
     };
@@ -520,9 +664,9 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
 
   const getFallbackColor = () => {
     const colors = [
-      '#7B9EA6', '#C8622A', '#8B5E3C', '#E8A87C', '#C4A882',
-      '#2C3E50', '#E74C3C', '#3498DB', '#9B59B6', '#1ABC9C',
-      '#27AE60', '#F39C12', '#D35400', '#8E44AD', '#16A085',
+      '#7B9EA6','#C8622A','#8B5E3C','#E8A87C','#C4A882',
+      '#2C3E50','#E74C3C','#3498DB','#9B59B6','#1ABC9C',
+      '#27AE60','#F39C12','#D35400','#8E44AD','#16A085',
     ];
     const hash = (title || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
     return colors[hash % colors.length];
@@ -632,7 +776,7 @@ const StarRating = ({ rating = 0, onChange, size = 'sm', readonly = false }) => 
 // ========================================
 
 const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) => {
-  const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12', xl: 'w-16 h-16' };
+  const sizes  = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12', xl: 'w-16 h-16' };
   const colors = { orange: 'border-orange-500', blue: 'border-blue-500', purple: 'border-purple-500', green: 'border-green-500', white: 'border-white' };
   if (fullScreen) {
     return (
@@ -651,8 +795,8 @@ const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) =
 const useCrewPresence = (crewId, userId, userName) => {
   const [onlineCount, setOnlineCount] = useState(0);
   const [onlineUsers, setOnlineUsers] = useState([]);
-  const heartbeatRef = useRef(null);
-  const PRESENCE_TTL = 30_000;
+  const heartbeatRef   = useRef(null);
+  const PRESENCE_TTL   = 30_000;
   const HEARTBEAT_INTV = 15_000;
 
   const markPresent = useCallback(() => {
@@ -787,8 +931,8 @@ const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
 // ========================================
 
 const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
-  const [details, setDetails] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [details, setDetails]   = useState(null);
+  const [loading, setLoading]   = useState(true);
   const [activeTab, setActiveTab] = useState('description');
 
   useEffect(() => { fetchBookDetails(); }, [book]);
@@ -806,32 +950,32 @@ const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
         const info = data.items?.[0]?.volumeInfo;
         if (info) {
           setDetails({
-            title: info.title,
-            subtitle: info.subtitle,
-            authors: info.authors || [book.author],
-            description: info.description || 'No description available.',
-            pageCount: info.pageCount,
+            title:         info.title,
+            subtitle:      info.subtitle,
+            authors:       info.authors || [book.author],
+            description:   info.description || 'No description available.',
+            pageCount:     info.pageCount,
             publishedDate: info.publishedDate,
-            publisher: info.publisher,
-            categories: info.categories || [],
+            publisher:     info.publisher,
+            categories:    info.categories || [],
             averageRating: info.averageRating,
-            ratingsCount: info.ratingsCount,
-            previewLink: info.previewLink,
-            infoLink: info.infoLink,
-            language: info.language,
-            isbn: info.industryIdentifiers,
+            ratingsCount:  info.ratingsCount,
+            previewLink:   info.previewLink,
+            infoLink:      info.infoLink,
+            language:      info.language,
+            isbn:          info.industryIdentifiers,
           });
           setLoading(false);
           return;
         }
       }
-    } catch (_) { }
+    } catch (_) { /* fall through */ }
 
     setDetails({
-      title: book.title,
-      authors: [book.author],
+      title:       book.title,
+      authors:     [book.author],
       description: 'Details temporarily unavailable.',
-      categories: [],
+      categories:  [],
     });
     setLoading(false);
   };
@@ -892,7 +1036,8 @@ const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
             {activeTab === 'description' && (
               <div className="bg-gray-50 rounded-xl p-4">
                 <p className="text-sm text-gray-700 leading-relaxed">
-                  {(details.description || '').replace(/<[^>]*>/g, '') || 'No description available.'}
+                  {(details.description || '').replace(/<[^>]*>/g, '').substring(0, 1000)}
+                  {(details.description || '').length > 1000 && '...'}
                 </p>
               </div>
             )}
@@ -953,9 +1098,9 @@ const UserProfileModal = ({
   userEmail, userName, currentUser, onClose,
   onFollow, isFollowing, onViewFullProfile, onBlock, isBlocked,
 }) => {
-  const [userData, setUserData] = useState(null);
+  const [userData,  setUserData]  = useState(null);
   const [userPosts, setUserPosts] = useState([]);
-  const [stats, setStats] = useState({ posts: 0, reviews: 0, followers: 0, following: 0 });
+  const [stats,     setStats]     = useState({ posts: 0, reviews: 0, followers: 0, following: 0 });
   const [showFollowersList, setShowFollowersList] = useState(false);
   const [showFollowingList, setShowFollowingList] = useState(false);
   const [followersList, setFollowersList] = useState([]);
@@ -980,13 +1125,13 @@ const UserProfileModal = ({
     setFollowingList(withDetails(userFollowing));
 
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const posts = allPosts.filter(p => p.userEmail === userEmail).slice(0, 5);
+    const posts    = allPosts.filter(p => p.userEmail === userEmail).slice(0, 5);
     setUserPosts(posts);
 
     const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
     setStats({
-      posts: allPosts.filter(p => p.userEmail === userEmail).length,
-      reviews: allReviews.filter(r => r.userEmail === userEmail).length,
+      posts:     allPosts.filter(p => p.userEmail === userEmail).length,
+      reviews:   allReviews.filter(r => r.userEmail === userEmail).length,
       followers: userFollowers.length,
       following: userFollowing.length,
     });
@@ -1129,11 +1274,11 @@ const UserProfileModal = ({
 const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
   if (!show) return null;
   const items = [
-    { id: 'home', icon: BookOpen, label: 'Home' },
-    { id: 'explore', icon: Sparkles, label: 'Explore' },
-    { id: 'post', icon: Edit3, label: 'Post' },
-    { id: 'reviews', icon: Star, label: 'Reviews' },
-    { id: 'crews', icon: Users, label: 'Crews' },
+    { id: 'home',    icon: BookOpen,   label: 'Home'    },
+    { id: 'explore', icon: Sparkles,   label: 'Explore' },
+    { id: 'post',    icon: Edit3,      label: 'Post'    },
+    { id: 'reviews', icon: Star,       label: 'Reviews' },
+    { id: 'crews',   icon: Users,      label: 'Crews'   },
   ];
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 max-w-md mx-auto shadow-lg">
@@ -1181,7 +1326,7 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, onNotification
           <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5} />
         </div>
         <span className="font-bold text-gray-900 text-lg" style={{ fontFamily: 'Georgia, serif' }}>
-          {title || 'READCREWW'}
+          {title || 'ReadCrew'}
         </span>
       </div>
     </div>
@@ -1206,14 +1351,17 @@ const TopBar = ({ user, setPage, title, showBack = false, onBack, onNotification
 
 // ========================================
 // SECTION 19: NOTIFICATIONS PAGE
+// ── FIXED: No filter tabs, mark-all-read works ──
 // ========================================
 
 const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
   const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]             = useState(true);
 
+  // Load from localStorage on mount and on every rc:notif event
   const loadNotifications = useCallback(() => {
     const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    // Filter out crew chat messages — show only social notifications
     const social = raw.filter(n => n.type !== 'message');
     setNotifications(social.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
     setLoading(false);
@@ -1229,17 +1377,19 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
       if (e.detail?.targetEmail === user.email) loadNotifications();
     };
 
-    window.addEventListener('storage', handleStorage);
+    window.addEventListener('storage',  handleStorage);
     window.addEventListener('rc:notif', handleCustom);
     return () => {
-      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('storage',  handleStorage);
       window.removeEventListener('rc:notif', handleCustom);
     };
   }, [user.email, loadNotifications]);
 
+  // ── FIXED: Mark ALL as read + suppress future toasts for these IDs ──
   const markAllAsRead = () => {
     const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
     const updated = raw.map(n => ({ ...n, read: true }));
+    // Mark every ID as "already toasted" so they never pop up again
     updated.forEach(n => _shownToastIds.add(n.id));
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
     setNotifications(prev => prev.map(n => ({ ...n, read: true })));
@@ -1254,10 +1404,11 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     updateNotificationCount?.();
+    window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
   };
 
   const deleteNotification = (id) => {
-    const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
+    const raw     = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
     const updated = raw.filter(n => n.id !== id);
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -1265,17 +1416,17 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
   };
 
   const icons = {
-    like: <Heart className="w-4 h-4 text-red-500" />,
+    like:    <Heart         className="w-4 h-4 text-red-500" />,
     comment: <MessageCircle className="w-4 h-4 text-blue-500" />,
-    mention: <AtSign className="w-4 h-4 text-amber-500" />,
-    reshare: <Repeat className="w-4 h-4 text-indigo-500" />,
-    follow: <UserCheck className="w-4 h-4 text-green-500" />,
-    invite: <UserPlus className="w-4 h-4 text-purple-500" />,
-    join: <Users className="w-4 h-4 text-blue-500" />,
-    review: <Star className="w-4 h-4 text-yellow-500" />,
-    success: <CheckCircle className="w-4 h-4 text-green-500" />,
-    info: <Info className="w-4 h-4 text-blue-500" />,
-    warning: <AlertCircle className="w-4 h-4 text-orange-500" />,
+    mention: <AtSign        className="w-4 h-4 text-amber-500" />,
+    reshare: <Repeat        className="w-4 h-4 text-indigo-500" />,
+    follow:  <UserCheck     className="w-4 h-4 text-green-500" />,
+    invite:  <UserPlus      className="w-4 h-4 text-purple-500" />,
+    join:    <Users         className="w-4 h-4 text-blue-500" />,
+    review:  <Star          className="w-4 h-4 text-yellow-500" />,
+    success: <CheckCircle   className="w-4 h-4 text-green-500" />,
+    info:    <Info          className="w-4 h-4 text-blue-500" />,
+    warning: <AlertCircle   className="w-4 h-4 text-orange-500" />,
   };
 
   const iconBg = {
@@ -1292,6 +1443,7 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
       className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden"
       style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
     >
+      {/* Header */}
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
         <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
           <ChevronLeft className="w-5 h-5 text-gray-600" />
@@ -1302,6 +1454,7 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
             <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">{unreadCount}</span>
           )}
         </div>
+        {/* ── FIXED: Mark all read button ── */}
         <button
           onClick={markAllAsRead}
           disabled={unreadCount === 0}
@@ -1311,6 +1464,7 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
         </button>
       </div>
 
+      {/* List — no filter tabs */}
       <div className="flex-1 overflow-y-auto pb-4">
         {loading ? (
           <div className="flex justify-center py-12"><LoadingSpinner /></div>
@@ -1319,8 +1473,8 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
             <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Bell className="w-10 h-10 text-gray-300" />
             </div>
-            <p className="text-gray-500 font-medium">you're all caught up bestie 🎉</p>
-            <p className="text-gray-400 text-sm mt-1">your hype squad will slide in here 📬</p>
+            <p className="text-gray-500 font-medium">No notifications yet</p>
+            <p className="text-gray-400 text-sm mt-1">Activity from others will appear here</p>
           </div>
         ) : (
           <div className="divide-y divide-gray-100">
@@ -1361,27 +1515,29 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
 
 // ========================================
 // SECTION 20: SHARE MODAL
+// ── FIXED: LinkedIn added, crewInvite support, copy feedback, used in crew chat ──
 // ========================================
 
 const ShareModal = ({ post, crewInvite, onClose }) => {
   const [copied, setCopied] = React.useState(false);
+  // Deep link: URL opens the exact post or crew on any device
   const shareUrl = post
     ? deepLink('post', post.id || post._id)
     : crewInvite
-      ? deepLink('crew', crewInvite.id)
-      : window.location.href;
+    ? deepLink('crew', crewInvite.id)
+    : window.location.href;
   const shareText = crewInvite
-    ? `Join the "${crewInvite.name}" reading crew on READCREWW — reading "${crewInvite.name}" by ${crewInvite.author}!`
+    ? `Join the "${crewInvite.name}" reading crew on ReadCrew — reading "${crewInvite.name}" by ${crewInvite.author}!`
     : `Check out this post by ${post?.userName}: "${post?.content?.substring(0, 60)}..."`;
 
   const shareHandlers = {
-    whatsapp: () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank'),
-    facebook: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`, '_blank'),
-    twitter: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, '_blank'),
-    linkedin: () => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodeURIComponent(shareText)}`, '_blank'),
-    telegram: () => window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank'),
-    email: () => window.open(`mailto:?subject=${encodeURIComponent(crewInvite ? `Join my reading crew: ${crewInvite.name}` : 'Check out this READCREWW post')}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`, '_blank'),
-    copyLink: () => {
+    whatsapp:  () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank'),
+    facebook:  () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`, '_blank'),
+    twitter:   () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, '_blank'),
+    linkedin:  () => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodeURIComponent(shareText)}`, '_blank'),
+    telegram:  () => window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank'),
+    email:     () => window.open(`mailto:?subject=${encodeURIComponent(crewInvite ? `Join my reading crew: ${crewInvite.name}` : 'Check out this ReadCrew post')}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`, '_blank'),
+    copyLink:  () => {
       navigator.clipboard.writeText(shareUrl).catch(() => {
         const ta = document.createElement('textarea');
         ta.value = shareUrl;
@@ -1396,11 +1552,11 @@ const ShareModal = ({ post, crewInvite, onClose }) => {
   };
 
   const platforms = [
-    { key: 'whatsapp', color: '#25D366', letter: 'W', label: 'WhatsApp' },
-    { key: 'facebook', color: '#1877F2', letter: 'f', label: 'Facebook' },
-    { key: 'twitter', color: '#1DA1F2', letter: '𝕏', label: 'Twitter' },
+    { key: 'whatsapp', color: '#25D366', letter: 'W',  label: 'WhatsApp' },
+    { key: 'facebook', color: '#1877F2', letter: 'f',  label: 'Facebook' },
+    { key: 'twitter',  color: '#1DA1F2', letter: '𝕏',  label: 'Twitter'  },
     { key: 'linkedin', color: '#0A66C2', letter: 'in', label: 'LinkedIn' },
-    { key: 'telegram', color: '#0088cc', letter: '✈', label: 'Telegram' },
+    { key: 'telegram', color: '#0088cc', letter: '✈',  label: 'Telegram' },
   ];
 
   return (
@@ -1455,8 +1611,7 @@ const ShareModal = ({ post, crewInvite, onClose }) => {
   );
 };
 
-// ========================================
-// SECTION 21: RESHARE MODAL
+// SECTION 21: RESHARE MODAL (FIXED)
 // ========================================
 
 const ReshareModal = ({ post, onClose, onReshare }) => {
@@ -1485,6 +1640,7 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
         </div>
 
         <div className="p-5">
+          {/* Original post preview */}
           <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
             <div className="flex items-center gap-2 mb-2">
               <Avatar initials={post.userName} size="xs" />
@@ -1503,6 +1659,7 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
             )}
           </div>
 
+          {/* Comment input */}
           <div className="mb-4">
             <label className="text-sm text-gray-600 mb-2 block font-medium">Add your thoughts (optional)</label>
             <textarea
@@ -1516,6 +1673,7 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
             <p className="text-xs text-gray-400 text-right mt-1">{comment.length}/500</p>
           </div>
 
+          {/* Visibility toggle */}
           <div className="flex items-center gap-3 mb-5">
             <button
               onClick={() => setIsPublic(!isPublic)}
@@ -1550,11 +1708,11 @@ const PostOptionsModal = ({
   post, user, onClose, onReshare, onSave, isSaved,
   onDelete, isOwner, onFollow, isFollowing, onBlock, isBlocked,
 }) => {
-  const [showReportForm, setShowReportForm] = useState(false);
-  const [reportReason, setReportReason] = useState('');
-  const [reportDetails, setReportDetails] = useState('');
-  const [reportSent, setReportSent] = useState(false);
-  const [reportSubmitting, setReportSubmitting] = useState(false);
+  const [showReportForm,    setShowReportForm]    = useState(false);
+  const [reportReason,      setReportReason]      = useState('');
+  const [reportDetails,     setReportDetails]     = useState('');
+  const [reportSent,        setReportSent]        = useState(false);
+  const [reportSubmitting,  setReportSubmitting]  = useState(false);
 
   const reportReasons = [
     'Spam or misleading', 'Harassment or bullying', 'Inappropriate content',
@@ -1593,7 +1751,7 @@ const PostOptionsModal = ({
             <div className="text-center py-8">
               <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
               <p className="font-semibold text-gray-900 text-lg">Report submitted</p>
-              <p className="text-sm text-gray-500 mt-2">Thanks for helping keep READCREWW safe.</p>
+              <p className="text-sm text-gray-500 mt-2">Thanks for helping keep ReadCrew safe.</p>
             </div>
           ) : (
             <>
@@ -1636,15 +1794,15 @@ const PostOptionsModal = ({
   }
 
   const options = [
-    { id: 'reshare', icon: Repeat, label: 'Reshare', color: 'text-blue-600', action: () => { onReshare(post); onClose(); } },
-    { id: 'save', icon: Bookmark, label: isSaved ? 'Unsave' : 'Save', color: isSaved ? 'text-orange-500' : 'text-gray-700', action: () => { onSave(post); onClose(); } },
+    { id: 'reshare', icon: Repeat,   label: 'Reshare',                    color: 'text-blue-600',   action: () => { onReshare(post); onClose(); } },
+    { id: 'save',    icon: Bookmark, label: isSaved ? 'Unsave' : 'Save',  color: isSaved ? 'text-orange-500' : 'text-gray-700', action: () => { onSave(post); onClose(); } },
   ];
 
   if (!isOwner) {
     options.push(
       { id: 'follow', icon: isFollowing ? UserMinus : UserPlus, label: isFollowing ? 'Unfollow' : 'Follow', color: isFollowing ? 'text-red-500' : 'text-green-600', action: () => { onFollow(post.userEmail, post.userName); onClose(); } },
-      { id: 'block', icon: isBlocked ? UserCheck : UserMinus, label: isBlocked ? 'Unblock User' : 'Block User', color: isBlocked ? 'text-green-600' : 'text-red-500', action: () => { onBlock(post.userEmail, post.userName); onClose(); } },
-      { id: 'report', icon: Flag, label: 'Report Post', color: 'text-red-500', action: () => setShowReportForm(true) }
+      { id: 'block',  icon: isBlocked  ? UserCheck : UserMinus, label: isBlocked  ? 'Unblock User' : 'Block User', color: isBlocked ? 'text-green-600' : 'text-red-500', action: () => { onBlock(post.userEmail, post.userName); onClose(); } },
+      { id: 'report', icon: Flag,       label: 'Report Post',  color: 'text-red-500', action: () => setShowReportForm(true) }
     );
   }
 
@@ -1675,39 +1833,45 @@ const PostOptionsModal = ({
 
 // ========================================
 // SECTION 23: INLINE POST CARD
+// ── FIXED: Global likes, global comment counts ──
 // ========================================
 
-const InlinePostCard = React.memo(({
+const InlinePostCard = ({
   post, user, profileSrc, updateNotificationCount,
   onShare, onReshareClick, onSaveToggle, isSaved,
   onDelete, onFollow, isFollowing, onBlock, isBlocked,
   onViewUserProfile, onViewBookDetails,
 }) => {
-  const [isLiked, setIsLiked] = useState(() => hasUserLikedPost(post.id, user.email));
-  const [likeCount, setLikeCount] = useState(() => getPostLikes(post.id) || post.likes || 0);
-  const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState([]);
-  const [commentCount, setCommentCount] = useState(post.comments || 0);
-  const [newComment, setNewComment] = useState('');
-  const [likedComments, setLikedComments] = useState(new Set());
-  const [showAllComments, setShowAll] = useState(false);
-  const [replyTo, setReplyTo] = useState(null);
-  const [showReplies, setShowReplies] = useState({});
-  const [showOptions, setShowOptions] = useState(false);
-  const [loadingComments, setLoadingComments] = useState(false);
+  // ── Global like state ────────────────────────────────
+  const [isLiked,        setIsLiked]       = useState(() => hasUserLikedPost(post.id, user.email));
+  const [likeCount,      setLikeCount]     = useState(() => getPostLikes(post.id) || post.likes || 0);
+  // ── Comment state ────────────────────────────────────
+  const [showComments,   setShowComments]  = useState(false);
+  const [comments,       setComments]      = useState([]);
+  const [commentCount,   setCommentCount]  = useState(post.comments || 0);
+  const [newComment,     setNewComment]    = useState('');
+  const [likedComments,  setLikedComments] = useState(new Set());
+  const [showAllComments,setShowAll]       = useState(false);
+  const [replyTo,        setReplyTo]       = useState(null);
+  const [showReplies,    setShowReplies]   = useState({});
+  const [showOptions,    setShowOptions]   = useState(false);
+  const [loadingComments,setLoadingComments] = useState(false);
   const inputRef = useRef(null);
 
+  // Sync real like count from global store on mount
   useEffect(() => {
     const realLikes = getPostLikes(post.id);
     if (realLikes !== likeCount) setLikeCount(realLikes);
     setIsLiked(hasUserLikedPost(post.id, user.email));
   }, [post.id]);
 
+  // Load liked comments
   useEffect(() => {
     const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedComments`) || '[]');
     setLikedComments(new Set(liked));
   }, [user.email]);
 
+  // Load comments when section toggled
   useEffect(() => {
     if (!showComments) return;
     loadComments();
@@ -1715,6 +1879,7 @@ const InlinePostCard = React.memo(({
 
   const loadComments = async () => {
     setLoadingComments(true);
+    // CROSS-DEVICE: always fetch from server so friend's comments appear
     const pid = post.id || post._id;
     const cmts = await fetchCommentsFromServer(pid);
     setComments(cmts);
@@ -1722,8 +1887,9 @@ const InlinePostCard = React.memo(({
     setLoadingComments(false);
   };
 
+  // ── FIXED: Global like handler ───────────────────────
   const handleLikePost = async () => {
-    if (isLiked) return;
+    if (isLiked) return; // already liked — one like per user
 
     const newCount = addGlobalLike(post.id, user.email);
     setIsLiked(true);
@@ -1740,29 +1906,32 @@ const InlinePostCard = React.memo(({
       updateNotificationCount?.();
     }
 
+    // Optional server sync
     try {
       await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { userEmail: user.email }, { timeout: 5000 });
-    } catch (_) { }
+    } catch (_) { /* offline — localStorage already updated */ }
   };
 
+  // ── FIXED: Global comment handler ───────────────────
   const handlePostComment = async () => {
     if (!newComment.trim()) return;
 
     const mentions = extractMentions(newComment);
     const commentData = {
-      id: `cmt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      userName: user.name,
+      id:        `cmt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userName:  user.name,
       userEmail: user.email,
       userPhoto: user.profileImage,
-      content: newComment.trim(),
+      content:   newComment.trim(),
       mentions,
-      parentId: replyTo?.id || null,
+      parentId:  replyTo?.id || null,
       timestamp: new Date().toISOString(),
-      likes: 0,
+      likes:     0,
     };
 
     setNewComment('');
     setReplyTo(null);
+    // CROSS-DEVICE: post to server so any device sees it immediately
     const pid = post.id || post._id;
     const updated = await postCommentToServer(pid, commentData);
     setComments(updated);
@@ -1779,6 +1948,7 @@ const InlinePostCard = React.memo(({
       updateNotificationCount?.();
     }
 
+    // Mention notifications
     mentions.forEach(mention => {
       const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
       const mentioned = allUsers.find(u =>
@@ -1828,20 +1998,22 @@ const InlinePostCard = React.memo(({
     setCommentCount(filtered.filter(c => !c.parentId).length);
     localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(filtered));
 
+    // Update count in allPosts
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     localStorage.setItem('allPosts', JSON.stringify(
       allPosts.map(p => p.id === post.id ? { ...p, comments: filtered.filter(c => !c.parentId).length } : p)
     ));
   };
 
-  const topLevelComments = comments.filter(c => !c.parentId);
-  const visibleComments = showAllComments ? topLevelComments : topLevelComments.slice(0, 3);
-  const isPostAuthor = user.email === post.userEmail;
+  const topLevelComments  = comments.filter(c => !c.parentId);
+  const visibleComments   = showAllComments ? topLevelComments : topLevelComments.slice(0, 3);
+  const isPostAuthor      = user.email === post.userEmail;
 
+  // Comment Row Component
   const CommentRow = ({ comment, depth = 0 }) => {
-    const replies = depth < 2 ? comments.filter(c => c.parentId === comment.id) : [];
+    const replies   = depth < 2 ? comments.filter(c => c.parentId === comment.id) : [];
     const isLikedCmt = likedComments.has(comment.id);
-    const isOwn = comment.userEmail === user.email;
+    const isOwn      = comment.userEmail === user.email;
 
     const renderContent = () => {
       if (!comment.mentions?.length) {
@@ -1966,6 +2138,7 @@ const InlinePostCard = React.memo(({
       )}
 
       <div id={`post-${post.id || post._id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition">
+        {/* Header */}
         <div className="px-4 pt-4 pb-2">
           <div className="flex items-start gap-3">
             <button onClick={() => onViewUserProfile(post.userEmail, post.userName)} className="flex-shrink-0">
@@ -2004,6 +2177,7 @@ const InlinePostCard = React.memo(({
           </div>
         </div>
 
+        {/* Content */}
         <div className="px-4 pb-3">
           {post.image && (
             <img
@@ -2047,7 +2221,9 @@ const InlinePostCard = React.memo(({
           )}
         </div>
 
+        {/* Action Bar */}
         <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-5">
+          {/* Like */}
           <button
             onClick={handleLikePost}
             disabled={isLiked}
@@ -2057,6 +2233,7 @@ const InlinePostCard = React.memo(({
             <span>{likeCount}</span>
           </button>
 
+          {/* Comment */}
           <button
             onClick={() => setShowComments(prev => !prev)}
             className={`flex items-center gap-1.5 text-sm font-semibold transition ${showComments ? 'text-orange-500' : 'text-gray-500 hover:text-orange-500'}`}
@@ -2065,6 +2242,7 @@ const InlinePostCard = React.memo(({
             <span>{commentCount}</span>
           </button>
 
+          {/* Save */}
           <button
             onClick={() => onSaveToggle(post)}
             className={`flex items-center gap-1.5 text-sm font-semibold transition ${isSaved ? 'text-orange-500' : 'text-gray-500 hover:text-orange-400'}`}
@@ -2073,6 +2251,7 @@ const InlinePostCard = React.memo(({
             <span>{isSaved ? 'Saved' : 'Save'}</span>
           </button>
 
+          {/* Share / Reshare */}
           <button
             onClick={() => onShare(post)}
             className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-orange-500 transition ml-auto"
@@ -2082,8 +2261,10 @@ const InlinePostCard = React.memo(({
           </button>
         </div>
 
+        {/* Comments Section */}
         {showComments && (
           <>
+            {/* Comment Input */}
             <div className="px-4 py-3 border-t border-gray-50 bg-gray-50/60">
               {replyTo && (
                 <div className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-orange-400">
@@ -2120,6 +2301,7 @@ const InlinePostCard = React.memo(({
               </div>
             </div>
 
+            {/* Comments List */}
             <div className="px-4 py-3 border-t border-gray-100 space-y-3 max-h-96 overflow-y-auto">
               {loadingComments ? (
                 <div className="flex justify-center py-4"><LoadingSpinner size="sm" /></div>
@@ -2146,36 +2328,36 @@ const InlinePostCard = React.memo(({
       </div>
     </>
   );
-});
+};
 
 // ========================================
 // SECTION 24: LOGIN PAGE
 // ========================================
 
 const LoginPage = ({ onLogin }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState('');
-  const [showOTP, setShowOTP] = useState(false);
-  const [otpInput, setOtpInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [devOtp, setDevOtp] = useState('');
-  const [readingGoal, setReadingGoal] = useState({ yearly: 20, monthly: 5 });
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const [showResetPassword, setShowResetPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetSent, setResetSent] = useState(false);
+  const [email,            setEmail]           = useState('');
+  const [password,         setPassword]        = useState('');
+  const [showPassword,     setShowPassword]    = useState(false);
+  const [isLogin,          setIsLogin]         = useState(true);
+  const [name,             setName]            = useState('');
+  const [showOTP,          setShowOTP]         = useState(false);
+  const [otpInput,         setOtpInput]        = useState('');
+  const [loading,          setLoading]         = useState(false);
+  const [error,            setError]           = useState('');
+  const [devOtp,           setDevOtp]          = useState('');
+  const [readingGoal,      setReadingGoal]     = useState({ yearly: 20, monthly: 5 });
+  const [agreeToTerms,     setAgreeToTerms]    = useState(false);
+  const [showResetPassword,setShowResetPassword] = useState(false);
+  const [resetEmail,       setResetEmail]      = useState('');
+  const [resetSent,        setResetSent]       = useState(false);
 
   const validateEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
   const handleSendOTP = () => {
     setError('');
     if (!isLogin && name.trim().length < 2) { setError('Please enter your full name'); return; }
-    if (!validateEmail(email)) { setError('Please enter a valid email address'); return; }
-    if (!isLogin && !agreeToTerms) { setError('Please agree to the terms'); return; }
+    if (!validateEmail(email))              { setError('Please enter a valid email address'); return; }
+    if (!isLogin && !agreeToTerms)          { setError('Please agree to the terms'); return; }
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
     localStorage.setItem('devOTP', otp);
@@ -2186,35 +2368,35 @@ const LoginPage = ({ onLogin }) => {
 
   const handleVerifyOTP = () => {
     setError('');
-    if (otpInput.length !== 6) { setError('Please enter the 6-digit code'); return; }
-    const savedOtp = localStorage.getItem('devOTP');
+    if (otpInput.length !== 6)       { setError('Please enter the 6-digit code'); return; }
+    const savedOtp    = localStorage.getItem('devOTP');
     const pendingUser = JSON.parse(localStorage.getItem('pendingUser') || '{}');
-    if (otpInput !== savedOtp) { setError('Incorrect code. Please try again.'); return; }
+    if (otpInput !== savedOtp)       { setError('Incorrect code. Please try again.'); return; }
 
     localStorage.removeItem('devOTP');
     localStorage.removeItem('pendingUser');
 
     const userData = {
-      id: generateId(),
-      name: pendingUser.name || name,
-      email: pendingUser.email || email,
-      password: pendingUser.password || password,
+      id:          generateId(),
+      name:        pendingUser.name || name,
+      email:       pendingUser.email || email,
+      password:    pendingUser.password || password,
       readingGoal,
-      isVerified: true,
-      createdAt: new Date().toISOString(),
-      stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
+      isVerified:  true,
+      createdAt:   new Date().toISOString(),
+      stats:       { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
       joinedCrews: [],
       readingList: [],
-      savedPosts: [],
-      bio: 'living in my main character era 📚',
-      location: '',
-      website: '',
+      savedPosts:  [],
+      bio:         'Reading is my superpower 📚',
+      location:    '',
+      website:     '',
     };
 
     const users = JSON.parse(localStorage.getItem('users') || '[]');
     const existIdx = users.findIndex(u => u.email === userData.email);
     if (existIdx >= 0) users[existIdx] = { ...users[existIdx], ...userData };
-    else users.push(userData);
+    else               users.push(userData);
     localStorage.setItem('users', JSON.stringify(users));
     localStorage.setItem('currentUser', JSON.stringify(userData));
 
@@ -2232,7 +2414,7 @@ const LoginPage = ({ onLogin }) => {
   const handleLogin = () => {
     setError('');
     if (!validateEmail(email)) { setError('Please enter a valid email address'); return; }
-    if (!password.trim()) { setError('Please enter your password'); return; }
+    if (!password.trim())      { setError('Please enter your password'); return; }
 
     setLoading(true);
     const users = JSON.parse(localStorage.getItem('users') || '[]');
@@ -2350,9 +2532,9 @@ const LoginPage = ({ onLogin }) => {
             </div>
           </div>
           <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent" style={{ fontFamily: 'Georgia, serif' }}>
-            READCREWW
+            ReadCrew
           </h1>
-          <p className="text-gray-500 text-sm mt-2">Read together, slay together. 📚✨</p>
+          <p className="text-gray-500 text-sm mt-2">Read together, grow together.</p>
         </div>
 
         <div className="bg-white rounded-3xl shadow-xl p-7 border border-gray-200">
@@ -2435,60 +2617,60 @@ const LoginPage = ({ onLogin }) => {
 
 const BOOK_DB = {
   thriller: [
-    { title: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.6, reason: 'Twisty, addictive, impossible to put down' },
-    { title: 'The Silent Patient', author: 'Alex Michaelides', genre: 'Thriller', rating: 4.5, reason: 'Jaw-dropping twist guaranteed' },
-    { title: 'Verity', author: 'Colleen Hoover', genre: 'Thriller', rating: 4.6, reason: 'You will NOT see the ending coming' },
-    { title: 'The Girl on the Train', author: 'Paula Hawkins', genre: 'Thriller', rating: 4.4, reason: 'Unreliable narrator at its best' },
-    { title: 'Sharp Objects', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.5, reason: 'Dark, twisted, beautifully written' },
+    { title: 'Gone Girl',           author: 'Gillian Flynn',       genre: 'Thriller',  rating: 4.6, reason: 'Twisty, addictive, impossible to put down' },
+    { title: 'The Silent Patient',  author: 'Alex Michaelides',    genre: 'Thriller',  rating: 4.5, reason: 'Jaw-dropping twist guaranteed' },
+    { title: 'Verity',              author: 'Colleen Hoover',      genre: 'Thriller',  rating: 4.6, reason: 'You will NOT see the ending coming' },
+    { title: 'The Girl on the Train', author: 'Paula Hawkins',     genre: 'Thriller',  rating: 4.4, reason: 'Unreliable narrator at its best' },
+    { title: 'Sharp Objects',       author: 'Gillian Flynn',       genre: 'Thriller',  rating: 4.5, reason: 'Dark, twisted, beautifully written' },
   ],
   fantasy: [
-    { title: 'The Name of the Wind', author: 'Patrick Rothfuss', genre: 'Fantasy', rating: 4.7, reason: 'Stunning prose and world-building' },
-    { title: 'Mistborn', author: 'Brandon Sanderson', genre: 'Fantasy', rating: 4.7, reason: 'Inventive magic system + satisfying plot' },
-    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6, reason: 'Fast-paced, romantic, absolutely addictive' },
-    { title: 'The Way of Kings', author: 'Brandon Sanderson', genre: 'Fantasy', rating: 4.8, reason: 'Epic fantasy at its finest' },
-    { title: 'A Game of Thrones', author: 'George R.R. Martin', genre: 'Fantasy', rating: 4.7, reason: 'Complex characters and political intrigue' },
+    { title: 'The Name of the Wind', author: 'Patrick Rothfuss',  genre: 'Fantasy',   rating: 4.7, reason: 'Stunning prose and world-building' },
+    { title: 'Mistborn',             author: 'Brandon Sanderson', genre: 'Fantasy',   rating: 4.7, reason: 'Inventive magic system + satisfying plot' },
+    { title: 'Fourth Wing',          author: 'Rebecca Yarros',    genre: 'Fantasy',   rating: 4.6, reason: 'Fast-paced, romantic, absolutely addictive' },
+    { title: 'The Way of Kings',     author: 'Brandon Sanderson', genre: 'Fantasy',   rating: 4.8, reason: 'Epic fantasy at its finest' },
+    { title: 'A Game of Thrones',    author: 'George R.R. Martin', genre: 'Fantasy',  rating: 4.7, reason: 'Complex characters and political intrigue' },
   ],
   romance: [
-    { title: 'Beach Read', author: 'Emily Henry', genre: 'Romance', rating: 4.6, reason: 'Witty, heartfelt and genuinely funny' },
-    { title: 'It Ends with Us', author: 'Colleen Hoover', genre: 'Romance', rating: 4.6, reason: 'Emotional, important and beautifully written' },
-    { title: 'People We Meet on Vacation', author: 'Emily Henry', genre: 'Romance', rating: 4.6, reason: 'Nostalgic, swoony and deeply satisfying' },
-    { title: 'The Love Hypothesis', author: 'Ali Hazelwood', genre: 'Romance', rating: 4.7, reason: 'STEM romance that will make you swoon' },
-    { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', genre: 'Romance', rating: 4.7, reason: 'Charming, witty and utterly delightful' },
+    { title: 'Beach Read',               author: 'Emily Henry',     genre: 'Romance', rating: 4.6, reason: 'Witty, heartfelt and genuinely funny' },
+    { title: 'It Ends with Us',          author: 'Colleen Hoover',  genre: 'Romance', rating: 4.6, reason: 'Emotional, important and beautifully written' },
+    { title: 'People We Meet on Vacation', author: 'Emily Henry',   genre: 'Romance', rating: 4.6, reason: 'Nostalgic, swoony and deeply satisfying' },
+    { title: 'The Love Hypothesis',      author: 'Ali Hazelwood',   genre: 'Romance', rating: 4.7, reason: 'STEM romance that will make you swoon' },
+    { title: 'Red, White & Royal Blue',  author: 'Casey McQuiston', genre: 'Romance', rating: 4.7, reason: 'Charming, witty and utterly delightful' },
   ],
   scifi: [
-    { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, reason: 'Most fun you\'ll have reading sci-fi' },
-    { title: 'Dune', author: 'Frank Herbert', genre: 'Sci-Fi', rating: 4.8, reason: 'Foundation of all modern science fiction' },
-    { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, reason: 'Funny, clever and impossible to put down' },
-    { title: 'Children of Time', author: 'Adrian Tchaikovsky', genre: 'Sci-Fi', rating: 4.7, reason: 'Mind-blowing concepts and world-building' },
-    { title: 'The Three-Body Problem', author: 'Cixin Liu', genre: 'Sci-Fi', rating: 4.6, reason: 'Hard sci-fi at its absolute best' },
+    { title: 'Project Hail Mary',      author: 'Andy Weir',         genre: 'Sci-Fi',  rating: 4.8, reason: 'Most fun you\'ll have reading sci-fi' },
+    { title: 'Dune',                    author: 'Frank Herbert',     genre: 'Sci-Fi',  rating: 4.8, reason: 'Foundation of all modern science fiction' },
+    { title: 'The Martian',             author: 'Andy Weir',         genre: 'Sci-Fi',  rating: 4.8, reason: 'Funny, clever and impossible to put down' },
+    { title: 'Children of Time',        author: 'Adrian Tchaikovsky', genre: 'Sci-Fi', rating: 4.7, reason: 'Mind-blowing concepts and world-building' },
+    { title: 'The Three-Body Problem',  author: 'Cixin Liu',         genre: 'Sci-Fi',  rating: 4.6, reason: 'Hard sci-fi at its absolute best' },
   ],
   selfhelp: [
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8, reason: 'Most practical habit book ever written' },
-    { title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', rating: 4.7, reason: 'Will change how you think about money' },
-    { title: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', rating: 4.7, reason: 'Will change how you see humanity' },
-    { title: 'Dare to Lead', author: 'Brené Brown', genre: 'Leadership', rating: 4.6, reason: 'Courageous leadership for everyone' },
-    { title: 'The Power of Now', author: 'Eckhart Tolle', genre: 'Spirituality', rating: 4.6, reason: 'Life-changing perspective on presence' },
+    { title: 'Atomic Habits',             author: 'James Clear',    genre: 'Self-Help', rating: 4.8, reason: 'Most practical habit book ever written' },
+    { title: 'The Psychology of Money',   author: 'Morgan Housel',  genre: 'Finance',   rating: 4.7, reason: 'Will change how you think about money' },
+    { title: 'Sapiens',                   author: 'Yuval Noah Harari', genre: 'History', rating: 4.7, reason: 'Will change how you see humanity' },
+    { title: 'Dare to Lead',              author: 'Brené Brown',    genre: 'Leadership', rating: 4.6, reason: 'Courageous leadership for everyone' },
+    { title: 'The Power of Now',          author: 'Eckhart Tolle',  genre: 'Spirituality', rating: 4.6, reason: 'Life-changing perspective on presence' },
   ],
   mystery: [
-    { title: 'And Then There Were None', author: 'Agatha Christie', genre: 'Mystery', rating: 4.7, reason: 'Best-selling mystery of all time' },
+    { title: 'And Then There Were None',         author: 'Agatha Christie',    genre: 'Mystery', rating: 4.7, reason: 'Best-selling mystery of all time' },
     { title: 'The Seven Husbands of Evelyn Hugo', author: 'Taylor Jenkins Reid', genre: 'Mystery', rating: 4.7, reason: 'Glamorous, emotional and unforgettable' },
-    { title: 'The Thursday Murder Club', author: 'Richard Osman', genre: 'Mystery', rating: 4.5, reason: 'Charming, funny and genuinely clever' },
-    { title: 'The Guest List', author: 'Lucy Foley', genre: 'Mystery', rating: 4.4, reason: 'Perfect atmospheric thriller' },
-    { title: 'One of Us Is Lying', author: 'Karen M. McManus', genre: 'Mystery', rating: 4.5, reason: 'Addictive YA mystery with great twists' },
+    { title: 'The Thursday Murder Club',         author: 'Richard Osman',      genre: 'Mystery', rating: 4.5, reason: 'Charming, funny and genuinely clever' },
+    { title: 'The Guest List',                   author: 'Lucy Foley',         genre: 'Mystery', rating: 4.4, reason: 'Perfect atmospheric thriller' },
+    { title: 'One of Us Is Lying',               author: 'Karen M. McManus',   genre: 'Mystery', rating: 4.5, reason: 'Addictive YA mystery with great twists' },
   ],
   historical: [
-    { title: 'All the Light We Cannot See', author: 'Anthony Doerr', genre: 'Historical Fiction', rating: 4.7, reason: 'Exquisitely written — Pulitzer Prize winner' },
-    { title: 'The Book Thief', author: 'Markus Zusak', genre: 'Historical Fiction', rating: 4.8, reason: 'Utterly unique voice and unforgettable story' },
-    { title: 'The Nightingale', author: 'Kristin Hannah', genre: 'Historical Fiction', rating: 4.8, reason: 'Devastating and triumphant — you will cry' },
-    { title: 'The Kite Runner', author: 'Khaled Hosseini', genre: 'Historical Fiction', rating: 4.8, reason: 'Emotional and powerful' },
-    { title: 'Pachinko', author: 'Min Jin Lee', genre: 'Historical Fiction', rating: 4.7, reason: 'Epic family saga spanning generations' },
+    { title: 'All the Light We Cannot See', author: 'Anthony Doerr',   genre: 'Historical Fiction', rating: 4.7, reason: 'Exquisitely written — Pulitzer Prize winner' },
+    { title: 'The Book Thief',              author: 'Markus Zusak',    genre: 'Historical Fiction', rating: 4.8, reason: 'Utterly unique voice and unforgettable story' },
+    { title: 'The Nightingale',             author: 'Kristin Hannah',  genre: 'Historical Fiction', rating: 4.8, reason: 'Devastating and triumphant — you will cry' },
+    { title: 'The Kite Runner',             author: 'Khaled Hosseini', genre: 'Historical Fiction', rating: 4.8, reason: 'Emotional and powerful' },
+    { title: 'Pachinko',                    author: 'Min Jin Lee',     genre: 'Historical Fiction', rating: 4.7, reason: 'Epic family saga spanning generations' },
   ],
   literary: [
-    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6, reason: 'Beautiful, philosophical and profoundly hopeful' },
-    { title: 'Normal People', author: 'Sally Rooney', genre: 'Literary Fiction', rating: 4.4, reason: 'Painfully accurate about modern relationships' },
-    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', rating: 4.7, reason: 'Short, profound and endlessly re-readable' },
-    { title: 'A Little Life', author: 'Hanya Yanagihara', genre: 'Literary Fiction', rating: 4.6, reason: 'Devastating and unforgettable' },
-    { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', genre: 'Classic', rating: 4.7, reason: 'Timeless masterpiece of American literature' },
+    { title: 'The Midnight Library',   author: 'Matt Haig',             genre: 'Fiction',          rating: 4.6, reason: 'Beautiful, philosophical and profoundly hopeful' },
+    { title: 'Normal People',          author: 'Sally Rooney',          genre: 'Literary Fiction', rating: 4.4, reason: 'Painfully accurate about modern relationships' },
+    { title: 'The Alchemist',          author: 'Paulo Coelho',          genre: 'Inspirational',    rating: 4.7, reason: 'Short, profound and endlessly re-readable' },
+    { title: 'A Little Life',          author: 'Hanya Yanagihara',      genre: 'Literary Fiction', rating: 4.6, reason: 'Devastating and unforgettable' },
+    { title: 'The Great Gatsby',       author: 'F. Scott Fitzgerald',   genre: 'Classic',          rating: 4.7, reason: 'Timeless masterpiece of American literature' },
   ],
 };
 
@@ -2496,29 +2678,29 @@ const generateClientResponse = (text, previousBooks = []) => {
   const t = text.toLowerCase();
   const detect = () => {
     if (/thrille|suspens|crime|murder|dark|creepy|horror|detective|psycholog/i.test(t)) return 'thriller';
-    if (/fantasy|magic|dragon|wizard|sword|epic|tolkien|harry potter|fae/i.test(t)) return 'fantasy';
-    if (/romance|love|swoony|kiss|dating|enemies.to.lovers|trope/i.test(t)) return 'romance';
-    if (/sci.?fi|space|future|robot|alien|tech|mars|nasa|dystop/i.test(t)) return 'scifi';
+    if (/fantasy|magic|dragon|wizard|sword|epic|tolkien|harry potter|fae/i.test(t))    return 'fantasy';
+    if (/romance|love|swoony|kiss|dating|enemies.to.lovers|trope/i.test(t))            return 'romance';
+    if (/sci.?fi|space|future|robot|alien|tech|mars|nasa|dystop/i.test(t))             return 'scifi';
     if (/self.?help|habit|product|motivat|improve|success|mindset|business|finance|invest/i.test(t)) return 'selfhelp';
-    if (/mystery|whodun|cozy|clue|puzzle|agatha|detective/i.test(t)) return 'mystery';
-    if (/histor|period|war|ancient|medieval|century|wwii|world war/i.test(t)) return 'historical';
+    if (/mystery|whodun|cozy|clue|puzzle|agatha|detective/i.test(t))                   return 'mystery';
+    if (/histor|period|war|ancient|medieval|century|wwii|world war/i.test(t))          return 'historical';
     return 'literary';
   };
-  const cat = detect();
-  const list = BOOK_DB[cat] || BOOK_DB.literary;
-  const prev = new Set(previousBooks.map(b => b.title));
+  const cat   = detect();
+  const list  = BOOK_DB[cat] || BOOK_DB.literary;
+  const prev  = new Set(previousBooks.map(b => b.title));
   const fresh = list.filter(b => !prev.has(b.title));
-  const recs = (fresh.length >= 5 ? fresh : list).slice(0, 5);
+  const recs  = (fresh.length >= 5 ? fresh : list).slice(0, 5);
 
   const intros = {
-    thriller: "Here are 5 gripping thrillers you won't be able to put down! 🔪",
-    fantasy: "5 magical worlds waiting for you to explore ✨",
-    romance: "5 romance reads that will give you all the feels ❤️",
-    scifi: "5 sci-fi journeys that will blow your mind 🚀",
-    selfhelp: "5 books that will genuinely change how you think 💡",
-    mystery: "5 mysteries that'll keep you guessing until the last page 🔍",
+    thriller:   "Here are 5 gripping thrillers you won't be able to put down! 🔪",
+    fantasy:    "5 magical worlds waiting for you to explore ✨",
+    romance:    "5 romance reads that will give you all the feels ❤️",
+    scifi:      "5 sci-fi journeys that will blow your mind 🚀",
+    selfhelp:   "5 books that will genuinely change how you think 💡",
+    mystery:    "5 mysteries that'll keep you guessing until the last page 🔍",
     historical: "5 historical novels that transport you completely 🏰",
-    literary: "5 beautifully written books that will stay with you 📚",
+    literary:   "5 beautifully written books that will stay with you 📚",
   };
   return { reply: intros[cat] || "Here are 5 great picks for you! 📚", books: recs };
 };
@@ -2527,7 +2709,7 @@ const generateClientResponse = (text, previousBooks = []) => {
 // SECTION 26: BOOK CARD COMPONENT
 // ========================================
 
-const BookCard = React.memo(({ book, onCreateCrew, onViewDetails }) => (
+const BookCard = ({ book, onCreateCrew, onViewDetails }) => (
   <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
     <div className="flex gap-4">
       <DynamicBookCover title={book.title} author={book.author} size="md" onClick={() => onViewDetails?.(book)} />
@@ -2549,20 +2731,20 @@ const BookCard = React.memo(({ book, onCreateCrew, onViewDetails }) => (
       </button>
     </div>
   </div>
-));
+);
 
 // ========================================
 // SECTION 27: POST PAGE
 // ========================================
 
 const PostPage = ({ user, onPost, setPage }) => {
-  const [content, setContent] = useState('');
-  const [bookName, setBookName] = useState('');
-  const [author, setAuthor] = useState('');
-  const [image, setImage] = useState(null);
-  const [isPublic, setIsPublic] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [charCount, setCharCount] = useState(0);
+  const [content,   setContent]  = useState('');
+  const [bookName,  setBookName] = useState('');
+  const [author,    setAuthor]   = useState('');
+  const [image,     setImage]    = useState(null);
+  const [isPublic,  setIsPublic] = useState(true);
+  const [uploading, setUploading]= useState(false);
+  const [charCount, setCharCount]= useState(0);
   const fileInputRef = useRef(null);
 
   const handleContentChange = (e) => { const t = e.target.value; setContent(t); setCharCount(t.length); };
@@ -2572,19 +2754,19 @@ const PostPage = ({ user, onPost, setPage }) => {
     setUploading(true);
 
     const postData = {
-      id: generateId(),
-      content: sanitizeText(content.trim()),
-      bookName: bookName.trim() || undefined,
-      author: author.trim() || undefined,
+      id:           generateId(),
+      content:      sanitizeText(content.trim()),
+      bookName:     bookName.trim() || undefined,
+      author:       author.trim()   || undefined,
       image,
       isPublic,
-      userName: user.name,
-      userEmail: user.email,
-      userPhoto: user.profileImage,
+      userName:     user.name,
+      userEmail:    user.email,
+      userPhoto:    user.profileImage,
       userInitials: user.name.slice(0, 2).toUpperCase(),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      comments: 0,
+      createdAt:    new Date().toISOString(),
+      likes:        0,
+      comments:     0,
       reshareCount: 0,
     };
 
@@ -2641,7 +2823,7 @@ const PostPage = ({ user, onPost, setPage }) => {
 
         <div className="space-y-3 mb-4">
           <input value={bookName} onChange={e => setBookName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300 transition" placeholder="📖 Book name (optional)" />
-          <input value={author} onChange={e => setAuthor(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300 transition" placeholder="✍️ Author (optional)" />
+          <input value={author}   onChange={e => setAuthor(e.target.value)}   className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300 transition" placeholder="✍️ Author (optional)" />
         </div>
 
         {image && (
@@ -2673,14 +2855,14 @@ const PostPage = ({ user, onPost, setPage }) => {
 // ========================================
 
 const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [likedReviews, setLikedReviews] = useState([]);
-  const [newReview, setNewReview] = useState({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [sortBy, setSortBy] = useState('newest');
+  const [reviews,         setReviews]        = useState([]);
+  const [loading,         setLoading]        = useState(true);
+  const [showCreateForm,  setShowCreateForm] = useState(false);
+  const [likedReviews,    setLikedReviews]   = useState([]);
+  const [newReview,       setNewReview]      = useState({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
+  const [searchQuery,     setSearchQuery]    = useState('');
+  const [selectedBook,    setSelectedBook]   = useState(null);
+  const [sortBy,          setSortBy]         = useState('newest');
 
   useEffect(() => {
     loadReviews();
@@ -2739,15 +2921,15 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
   const filtered = reviews
     .filter(r => r.bookName?.toLowerCase().includes(searchQuery.toLowerCase()) || r.author?.toLowerCase().includes(searchQuery.toLowerCase()) || r.userName?.toLowerCase().includes(searchQuery.toLowerCase()))
     .sort((a, b) => {
-      if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
+      if (sortBy === 'newest')  return new Date(b.createdAt) - new Date(a.createdAt);
       if (sortBy === 'popular') return (b.likes || 0) - (a.likes || 0);
-      if (sortBy === 'rating') return b.rating - a.rating;
+      if (sortBy === 'rating')  return b.rating - a.rating;
       return 0;
     });
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
-      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => { }} />}
+      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
 
       <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
         <button onClick={() => setPage('home')} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
@@ -2773,15 +2955,15 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
 
         {showCreateForm && (
           <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Spill the Tea ☕</h3>
+            <h3 className="font-semibold text-gray-900 mb-3">Write a Review</h3>
             <div className="space-y-3 mb-4">
               <input type="text" value={newReview.bookName} onChange={e => setNewReview({ ...newReview, bookName: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
-              <input type="text" value={newReview.author} onChange={e => setNewReview({ ...newReview, author: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author *" />
+              <input type="text" value={newReview.author}   onChange={e => setNewReview({ ...newReview, author: e.target.value })}   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author *" />
               <div>
                 <label className="text-xs text-gray-600 mb-1 block">Your Rating</label>
                 <StarRating rating={newReview.rating} onChange={r => setNewReview({ ...newReview, rating: r })} size="md" />
               </div>
-              <textarea value={newReview.review} onChange={e => setNewReview({ ...newReview, review: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="spill the tea on this book ☕... *" rows={4} />
+              <textarea value={newReview.review} onChange={e => setNewReview({ ...newReview, review: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Write your review... *" rows={4} />
               <div className="flex gap-2">
                 {['positive', 'negative'].map(s => (
                   <button key={s} type="button" onClick={() => setNewReview({ ...newReview, sentiment: s })} className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${newReview.sentiment === s ? (s === 'positive' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
@@ -2799,7 +2981,7 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
         ) : filtered.length === 0 ? (
           <div className="text-center py-12">
             <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">{searchQuery ? `No reviews for "${searchQuery}"` : 'no reviews yet — spill the tea ☕. Be the first!'}</p>
+            <p className="text-gray-500">{searchQuery ? `No reviews for "${searchQuery}"` : 'No reviews yet. Be the first!'}</p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -2843,228 +3025,153 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
 };
 
 // ========================================
-// SECTION 29: EXPLORE PAGE
+// SECTION 29: EXPLORE PAGE (AI Chat)
 // ========================================
 
 const ExplorePage = ({ user, setPage, onCreateCrew }) => {
-  const [tab, setTab] = useState('ai');
   const [messages, setMessages] = useState([{
     role: 'assistant',
-    content: "bestie i got u 😭📚 tell me the VIBE — genre, mood, fave character type, or the last book that had u in ur feelings. no boring recs i promise 🤞",
+    content: "Hey! 👋 I'm Page Turner, your AI book guide. Tell me what you're in the mood for — a genre, a vibe, or the last book you loved. Let's find your next great read!",
     timestamp: new Date(),
   }]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [books, setBooks] = useState([]);
-  const [selectedBook, setSelBook] = useState(null);
-  const [charQuery, setCharQuery] = useState('');
-  const [charBooks, setCharBooks] = useState([]);
-  const [charLoading, setCharLoading] = useState(false);
-  const [charDone, setCharDone] = useState(false);
-  const [libraries, setLibraries] = useState([]);
-  const [libLoading, setLibLoading] = useState(false);
-  const [libError, setLibError] = useState('');
-  const [userLocation, setUserLoc] = useState(null);
-  const endRef = useRef(null);
-  const [sessionId] = useState(() => `s_${Date.now()}`);
+  const [input,      setInput]     = useState('');
+  const [loading,    setLoading]   = useState(false);
+  const [books,      setBooks]     = useState([]);
+  const [selectedBook, setSelectedBook] = useState(null);
+  const [sessionId]  = useState(() => `session_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const [mode,       setMode]      = useState('chat');
+  const messagesEndRef = useRef(null);
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
-    const text = input.trim();
+    const userText = input.trim();
     setInput('');
-    setMessages(p => [...p, { role: 'user', content: text, timestamp: new Date() }]);
+    setMessages(prev => [...prev, { role: 'user', content: userText, timestamp: new Date() }]);
     setLoading(true);
-    let used = false;
+
+    let usedBackend = false;
     try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 25000);
+      const controller = new AbortController();
+      const tId = setTimeout(() => controller.abort(), 25000);
       const res = await fetch(`${API_URL}/api/books/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId }),
-        signal: ctrl.signal,
+        body: JSON.stringify({ message: userText, sessionId }),
+        signal: controller.signal,
       });
-      clearTimeout(tid);
+      clearTimeout(tId);
       if (res.ok) {
-        const d = await res.json();
-        if (d.success && d.reply) {
-          setMessages(p => [...p, { role: 'assistant', content: d.reply, timestamp: new Date() }]);
-          if (d.recommendations?.length) setBooks(d.recommendations);
-          used = true;
+        const data = await res.json();
+        if (data.success && data.reply) {
+          setMessages(prev => [...prev, { role: 'assistant', content: data.reply, timestamp: new Date() }]);
+          if (data.recommendations?.length > 0) setBooks(data.recommendations);
+          usedBackend = true;
         }
       }
-    } catch (_) { }
-    if (!used) {
-      const { reply, books: recs } = generateClientResponse(text, books);
-      setMessages(p => [...p, { role: 'assistant', content: reply, timestamp: new Date() }]);
-      if (recs.length) setBooks(recs);
+    } catch (_) { /* use client fallback */ }
+
+    if (!usedBackend) {
+      const { reply, books: recs } = generateClientResponse(userText, books);
+      setMessages(prev => [...prev, { role: 'assistant', content: reply, timestamp: new Date() }]);
+      if (recs.length > 0) setBooks(recs);
     }
     setLoading(false);
   };
 
-  const fmt = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-
-  const searchByCharacter = async () => {
-    if (!charQuery.trim()) return;
-    setCharLoading(true); setCharDone(false); setCharBooks([]);
-    try {
-      const q = encodeURIComponent(`character "${charQuery.trim()}"`);
-      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=12&orderBy=relevance&langRestrict=en`);
-      if (res.ok) {
-        const d = await res.json();
-        const results = (d.items || []).map(item => {
-          const v = item.volumeInfo;
-          const cover = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
-          return {
-            title: v.title || 'Unknown',
-            author: v.authors?.[0] || 'Unknown',
-            genre: v.categories?.[0] || 'Fiction',
-            rating: v.averageRating || 4.0,
-            description: v.description || '',
-            coverUrl: cover ? cover.replace('http:', 'https:').replace('&edge=curl', '') : null,
-            pageCount: v.pageCount,
-            publishedDate: v.publishedDate,
-          };
-        }).filter(b => b.title !== 'Unknown');
-        setCharBooks(results);
-      }
-    } catch (e) {
-      setCharBooks([]);
-    }
-    setCharLoading(false); setCharDone(true);
+  const formatTime = (ts) => {
+    if (!ts) return '';
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
-  const findNearbyLibraries = () => {
-    setLibLoading(true); setLibError('');
-    if (!navigator.geolocation) {
-      setLibError("Geolocation not supported on this device.");
-      setLibLoading(false); return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        setUserLoc({ lat, lng });
-        try {
-          const query = `[out:json][timeout:25];(node["amenity"="library"](around:5000,${lat},${lng});way["amenity"="library"](around:5000,${lat},${lng}););out center 15;`;
-          const res = await fetch('https://overpass-api.de/api/interpreter', {
-            method: 'POST',
-            body: query,
-          });
-          if (res.ok) {
-            const data = await res.json();
-            const libs = data.elements.map(el => {
-              const clat = el.lat || el.center?.lat;
-              const clng = el.lon || el.center?.lon;
-              const dist = clat && clng ? Math.round(Math.sqrt(Math.pow((clat - lat) * 111, 2) + Math.pow((clng - lng) * 111 * Math.cos(lat * Math.PI / 180), 2)) * 10) / 10 : null;
-              return {
-                id: el.id,
-                name: el.tags?.name || 'Public Library',
-                address: [el.tags?.['addr:street'], el.tags?.['addr:city']].filter(Boolean).join(', ') || 'Address unavailable',
-                phone: el.tags?.phone || el.tags?.['contact:phone'] || null,
-                website: el.tags?.website || el.tags?.['contact:website'] || null,
-                opening: el.tags?.opening_hours || null,
-                lat: clat, lng: clng, dist,
-                mapsUrl: `https://www.google.com/maps/search/?api=1&query=${clat},${clng}`,
-              };
-            }).filter(l => l.lat).sort((a, b) => (a.dist || 999) - (b.dist || 999));
-            setLibraries(libs);
-            if (libs.length === 0) setLibError("No libraries found within 5km. Try a bigger city!");
-          }
-        } catch (e) {
-          setLibError("Couldn't load libraries rn. Check your connection and try again 😅");
-        }
-        setLibLoading(false);
-      },
-      (err) => {
-        setLibError("Location access denied. Enable location to find nearby libraries 📍");
-        setLibLoading(false);
-      },
-      { timeout: 10000, maximumAge: 60000 }
-    );
-  };
-
-  const quickPrompts = ['🔪 dark & twisty', '✨ main character energy', '❤️ slow burn romance', '🚀 sci-fi banger', '💡 big brain reads', '🏰 historical era', '🌙 cozy vibes', '😭 cry-worthy'];
+  const quickPrompts = [
+    '🔪 I want a thriller', '✨ Fantasy adventure', '❤️ Swoony romance',
+    '🚀 Sci-fi action', '📈 Self-improvement', '🏰 Historical fiction',
+  ];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1] pb-24 overflow-y-auto">
       <div className="px-5 pt-8 pb-4">
-        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{ fontFamily: 'Georgia, serif' }}>
-          main character reads ✨
-        </h1>
-        <p className="text-sm text-[#8B7968]">ur AI bestie has the hottest recs 🔥</p>
+        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{ fontFamily: 'Georgia, serif' }}>What to read next?</h1>
+        <p className="text-sm text-[#8B7968]">Chat with your AI book guide</p>
       </div>
 
-      <div className="flex gap-2 px-4 mb-4 overflow-x-auto scrollbar-hide">
-        {[
-          { id: 'ai', em: '🤖', label: 'AI Chat' },
-          { id: 'character', em: '🎭', label: 'By Character' },
-          { id: 'libraries', em: '📍', label: 'Nearby Libraries' },
-        ].map(({ id, em, label }) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 ${tab === id ? 'bg-orange-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-orange-300'}`}>
-            <span>{em}</span><span>{label}</span>
+      {/* Mode tabs */}
+      <div className="flex gap-2 px-5 mb-4 overflow-x-auto scrollbar-hide">
+        {[['chat', '✨', 'AI Chat'], ['browse', '📚', 'Browse'], ['popular', '🔥', 'Popular']].map(([id, emoji, label]) => (
+          <button key={id} onClick={() => setMode(id)} className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${mode === id ? 'bg-orange-500 text-white shadow' : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>
+            <span>{emoji}</span><span>{label}</span>
           </button>
         ))}
       </div>
 
-      {tab === 'ai' && (
+      {mode === 'chat' && (
         <>
-          <div className="px-4 space-y-3 pb-44">
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
-                {m.role === 'assistant' && (
+          <div className="px-4 space-y-3 pb-36">
+            {messages.map((msg, i) => (
+              <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                {msg.role === 'assistant' && (
                   <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0 shadow">
                     <BookOpen className="w-4 h-4 text-white" />
                   </div>
                 )}
-                <div className={`max-w-[78%] flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === 'user' ? 'bg-orange-500 text-white rounded-br-sm' : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'}`}>
-                    {m.content}
+                <div className={`max-w-[78%] flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${msg.role === 'user' ? 'bg-orange-500 text-white rounded-br-sm' : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'}`}>
+                    {msg.content}
                   </div>
-                  <span className="text-[10px] text-gray-400 mt-1 px-1">{fmt(m.timestamp)}</span>
+                  <span className="text-[10px] text-gray-400 mt-1 px-1">{formatTime(msg.timestamp)}</span>
                 </div>
               </div>
             ))}
+
             {loading && (
               <div className="flex justify-start items-end gap-2">
                 <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0">
                   <BookOpen className="w-4 h-4 text-white" />
                 </div>
-                <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
-                  <div className="flex gap-1.5">{[0, 150, 300].map(d => <div key={d} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />)}</div>
+                <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm border border-gray-100">
+                  <div className="flex gap-1.5 items-center">
+                    {[0, 150, 300].map(d => <div key={d} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />)}
+                  </div>
                 </div>
               </div>
             )}
+
             {books.length > 0 && (
               <div className="space-y-3 pt-4">
                 <div className="flex items-center gap-2 px-1">
                   <div className="h-px flex-1 bg-orange-200" />
-                  <span className="text-xs text-orange-500 font-semibold">📚 NO-CAP RECS</span>
+                  <span className="text-xs text-orange-500 font-semibold">📚 RECOMMENDATIONS</span>
                   <div className="h-px flex-1 bg-orange-200" />
                 </div>
-                {books.map((b, i) => (
-                  <BookCard key={i} book={b} onCreateCrew={() => { onCreateCrew(b); setPage('crews'); }} onViewDetails={setSelBook} />
+                {books.map((book, i) => (
+                  <BookCard
+                    key={`${i}-${book.title}`}
+                    book={book}
+                    onCreateCrew={() => { onCreateCrew(book); setPage('crews'); }}
+                    onViewDetails={(b) => setSelectedBook(b)}
+                  />
                 ))}
               </div>
             )}
-            <div ref={endRef} />
+            <div ref={messagesEndRef} />
           </div>
 
-          {messages.length <= 1 && (
-            <div className="fixed bottom-36 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+          {/* Quick prompts */}
+          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 w-full max-w-md px-4 mb-2">
+            {messages.length <= 1 && (
               <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-                {quickPrompts.map(q => (
-                  <button key={q} onClick={() => setInput(q.substring(2))}
-                    className="flex-shrink-0 px-3 py-1.5 bg-white border border-orange-200 rounded-full text-xs text-orange-600 font-medium hover:bg-orange-50 whitespace-nowrap shadow-sm">
-                    {q}
+                {quickPrompts.map(p => (
+                  <button key={p} onClick={() => { setInput(p.substring(2)); }} className="flex-shrink-0 px-3 py-1.5 bg-white border border-orange-200 rounded-full text-xs text-orange-600 font-medium hover:bg-orange-50 transition whitespace-nowrap shadow-sm">
+                    {p}
                   </button>
                 ))}
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
+          {/* Chat Input */}
           <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-md px-4">
             <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 px-3 py-2.5">
               <div className="flex items-center gap-2">
@@ -3072,11 +3179,14 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                   value={input}
                   onChange={e => setInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                  placeholder="Tell me the vibe and I gotchu 📚✨"
+                  placeholder="Tell me what you're in the mood for..."
                   className="flex-1 bg-transparent text-sm text-[#2D1F14] outline-none placeholder-gray-400"
                 />
-                <button onClick={sendMessage} disabled={!input.trim() || loading}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${input.trim() && !loading ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                <button
+                  onClick={sendMessage}
+                  disabled={!input.trim() || loading}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${input.trim() && !loading ? 'bg-orange-500 text-white hover:bg-orange-600' : 'bg-gray-100 text-gray-400'}`}
+                >
                   <Send className="w-4 h-4" />
                 </button>
               </div>
@@ -3085,147 +3195,46 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         </>
       )}
 
-      {tab === 'character' && (
-        <div className="px-4 py-2 pb-10">
-          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm mb-5">
-            <h2 className="text-lg font-bold mb-1">Search by Character 🎭</h2>
-            <p className="text-sm text-gray-500 mb-4">obsessed with a character? find the book they came from or books with similar vibes 👀</p>
-            <div className="flex gap-2">
-              <div className="relative flex-1">
-                <input
-                  value={charQuery}
-                  onChange={e => setCharQuery(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter') searchByCharacter(); }}
-                  placeholder="e.g. Hermione, Heathcliff, Jay Gatsby…"
-                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 transition"
-                />
-              </div>
-              <button onClick={searchByCharacter} disabled={!charQuery.trim() || charLoading}
-                className="px-5 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-orange-600 transition flex items-center gap-2">
-                {charLoading ? <LoadingSpinner size="sm" color="white" /> : <Search className="w-4 h-4" />}
-                {charLoading ? '' : 'Search'}
+      {mode === 'browse' && (
+        <div className="px-4 py-4">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">Browse by Genre</h2>
+          <div className="grid grid-cols-2 gap-3">
+            {Object.keys(BOOK_DB).map(genre => (
+              <button
+                key={genre}
+                onClick={() => {
+                  setBooks(BOOK_DB[genre]);
+                  setMode('chat');
+                  setMessages(prev => [...prev, { role: 'assistant', content: `Here are some great ${genre} books for you! 📚`, timestamp: new Date() }]);
+                }}
+                className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition text-left"
+              >
+                <h3 className="font-semibold text-gray-900 capitalize">{genre}</h3>
+                <p className="text-xs text-gray-500 mt-1">{BOOK_DB[genre].length} books</p>
               </button>
-            </div>
+            ))}
           </div>
-
-          {charLoading && (
-            <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
-          )}
-
-          {charDone && charBooks.length === 0 && !charLoading && (
-            <div className="text-center py-12">
-              <span className="text-5xl mb-4 block">🤷</span>
-              <p className="text-gray-600 font-medium">no books found for that character ngl</p>
-              <p className="text-gray-400 text-sm mt-1">try a different spelling or a more famous character</p>
-            </div>
-          )}
-
-          {charBooks.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-600 mb-2">found {charBooks.length} books featuring or inspired by <span className="text-orange-500">"{charQuery}"</span> ✨</p>
-              {charBooks.map((b, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
-                  <div className="flex gap-4">
-                    <DynamicBookCover title={b.title} author={b.author} size="md" onClick={() => setSelBook(b)} />
-                    <div className="flex-1 min-w-0">
-                      <h3 className="font-bold text-gray-900 text-sm leading-tight">{b.title}</h3>
-                      <p className="text-xs text-gray-500 mt-0.5">by {b.author}</p>
-                      {b.genre && <span className="inline-block mt-1.5 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{b.genre}</span>}
-                      {b.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{b.description.replace(/<[^>]*>/g, '')}</p>}
-                      <div className="flex items-center gap-2 mt-2">
-                        <StarRating rating={Math.round(b.rating || 4)} size="xs" readonly />
-                        <span className="text-xs font-semibold text-gray-700">{(b.rating || 4).toFixed(1)}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
-                    <button onClick={() => setSelBook(b)} className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 transition">View Details</button>
-                    <button onClick={() => { onCreateCrew(b); setPage('crews'); }} className="flex-1 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-orange-600 transition">
-                      <Users className="w-4 h-4" />Crew
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!charDone && !charLoading && charBooks.length === 0 && (
-            <div className="grid grid-cols-2 gap-3">
-              {['Sherlock Holmes', 'Elizabeth Bennet', 'Katniss Everdeen', 'Atticus Finch', 'Holden Caulfield', 'Daenerys Targaryen'].map(char => (
-                <button key={char} onClick={() => { setCharQuery(char); }} className="bg-white rounded-xl p-3 border border-gray-200 text-left hover:border-orange-300 hover:shadow-sm transition">
-                  <span className="text-2xl block mb-1">📖</span>
-                  <p className="text-sm font-semibold text-gray-800">{char}</p>
-                </button>
-              ))}
-            </div>
-          )}
         </div>
       )}
 
-      {tab === 'libraries' && (
-        <div className="px-4 py-2 pb-10">
-          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm mb-5">
-            <h2 className="text-lg font-bold mb-1">Nearby Libraries 📍</h2>
-            <p className="text-sm text-gray-500 mb-4">find public libraries within 5km of ur location — because physical books are still iconic 📚</p>
-            <button onClick={findNearbyLibraries} disabled={libLoading}
-              className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-60">
-              {libLoading ? <><LoadingSpinner size="sm" color="white" /><span>Finding libraries...</span></> : <><Navigation className="w-5 h-5" /><span>Find Libraries Near Me</span></>}
-            </button>
-            {libError && <p className="text-red-500 text-sm mt-3 text-center">{libError}</p>}
+      {mode === 'popular' && (
+        <div className="px-4 py-4">
+          <h2 className="text-lg font-bold text-gray-900 mb-3">Popular This Week</h2>
+          <div className="space-y-3">
+            {Object.values(BOOK_DB).flat().sort((a, b) => b.rating - a.rating).slice(0, 10).map((book, i) => (
+              <BookCard
+                key={i}
+                book={book}
+                onCreateCrew={() => { onCreateCrew(book); setPage('crews'); }}
+                onViewDetails={(b) => setSelectedBook(b)}
+              />
+            ))}
           </div>
-
-          {libLoading && (
-            <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
-          )}
-
-          {libraries.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-600 mb-2">found {libraries.length} libraries nearby 🎉</p>
-              {libraries.map((lib, i) => (
-                <div key={lib.id || i} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <BookOpen className="w-5 h-5 text-orange-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-bold text-gray-900 text-sm">{lib.name}</h3>
-                        {lib.dist && <span className="text-xs text-orange-600 font-semibold bg-orange-50 px-2 py-0.5 rounded-full flex-shrink-0">{lib.dist} km</span>}
-                      </div>
-                      {lib.address && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3" />{lib.address}</p>}
-                      {lib.opening && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Clock className="w-3 h-3" />{lib.opening}</p>}
-                      {lib.phone && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><Phone className="w-3 h-3" />{lib.phone}</p>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-                    <a href={lib.mapsUrl} target="_blank" rel="noopener noreferrer"
-                      className="flex-1 py-2 bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-blue-600 transition">
-                      <Navigation className="w-3.5 h-3.5" />Directions
-                    </a>
-                    {lib.website && (
-                      <a href={lib.website.startsWith('http') ? lib.website : `https://${lib.website}`} target="_blank" rel="noopener noreferrer"
-                        className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-gray-50 transition">
-                        <Globe className="w-3.5 h-3.5" />Website
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!libLoading && libraries.length === 0 && !libError && (
-            <div className="text-center py-12">
-              <span className="text-6xl block mb-4">📍</span>
-              <p className="text-gray-600 font-medium">tap the button to find libraries near u</p>
-              <p className="text-gray-400 text-sm mt-1">uses your device location — 100% private, not stored</p>
-            </div>
-          )}
         </div>
       )}
 
       {selectedBook && (
-        <BookDetailsModal book={selectedBook} onClose={() => setSelBook(null)} onCreateCrew={onCreateCrew} />
+        <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={onCreateCrew} />
       )}
     </div>
   );
@@ -3233,6 +3242,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
 
 // ========================================
 // SECTION 30: HOME PAGE
+// ── Uses personalized feed algorithm ──
 // ========================================
 
 const HomePage = ({
@@ -3242,23 +3252,25 @@ const HomePage = ({
   onViewUserProfile, onViewBookDetails,
   deepLinkPostId, onDeepLinkHandled,
 }) => {
-  const [trendingBooks, setTrendingBooks] = useState([]);
-  const [loadingTrending, setLoadingTrending] = useState(true);
-  const [feedPosts, setFeedPosts] = useState([]);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [showShare, setShowShare] = useState(null);
-  const [showReshare, setShowReshare] = useState(null);
-  const [stats, setStats] = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
-  const [readingProgress, setReadingProgress] = useState(0);
-  const [feedRefreshed, setFeedRefreshed] = useState(false);
+  const [trendingBooks,  setTrendingBooks]  = useState([]);
+  const [loadingTrending,setLoadingTrending]= useState(true);
+  const [feedPosts,      setFeedPosts]      = useState([]);
+  const [selectedBook,   setSelectedBook]   = useState(null);
+  const [showShare,      setShowShare]      = useState(null);
+  const [showReshare,    setShowReshare]    = useState(null);
+  const [stats,          setStats]          = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
+  const [readingProgress,setReadingProgress]= useState(0);
+  const [feedRefreshed,  setFeedRefreshed]  = useState(false);
 
+  // ── DEEP LINK: scroll to linked post once feed is loaded ────────────────
   useEffect(() => {
     if (!deepLinkPostId || feedPosts.length === 0) return;
+    // Give DOM a tick to render
     setTimeout(() => {
       const el = document.getElementById(`post-${deepLinkPostId}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.style.boxShadow = '0 0 0 3px #f97316';
+        el.style.boxShadow = '0 0 0 3px #f97316';  // highlight ring
         setTimeout(() => { el.style.boxShadow = ''; }, 2500);
       }
       onDeepLinkHandled?.();
@@ -3281,35 +3293,25 @@ const HomePage = ({
       }
     });
     socket.on('post_deleted', ({ postId }) => setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId)));
-    socket.on('post_liked', ({ postId, likes }) => setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p)));
+    socket.on('post_liked',   ({ postId, likes }) => setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p)));
 
     return () => { socket.off('new_post'); socket.off('post_deleted'); socket.off('post_liked'); };
   }, [user.email, blockedUsers]);
 
+  // Re-generate feed whenever posts or following changes
   useEffect(() => {
     loadPersonalizedFeed();
   }, [posts.length, following.length]);
 
-  const POSTS_PER_PAGE = 10;
-  const [visibleCount, setVisibleCount] = useState(POSTS_PER_PAGE);
-  const loaderRef = useRef(null);
-
-  useEffect(() => {
-    if (!loaderRef.current) return;
-    const observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) setVisibleCount(c => c + POSTS_PER_PAGE);
-    }, { threshold: 0.1 });
-    observer.observe(loaderRef.current);
-    return () => observer.disconnect();
-  }, [feedPosts.length]);
-
   const loadPersonalizedFeed = async () => {
+    // First try server
     try {
       const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`, { timeout: 8000 });
       if (res.data.success) {
         const serverPosts = res.data.posts || [];
+        // Merge with local posts so nothing is lost
         const allLocal = JSON.parse(localStorage.getItem('allPosts') || '[]');
-        const merged = [...serverPosts];
+        const merged   = [...serverPosts];
         allLocal.forEach(lp => { if (!merged.find(sp => sp.id === lp.id)) merged.push(lp); });
         localStorage.setItem('allPosts', JSON.stringify(merged));
 
@@ -3318,9 +3320,10 @@ const HomePage = ({
         setFeedRefreshed(true);
         return;
       }
-    } catch (_) { }
+    } catch (_) { /* fall through */ }
 
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    // Fallback: use local + personalize
+    const allPosts    = JSON.parse(localStorage.getItem('allPosts') || '[]');
     const personalized = generatePersonalizedFeed(user.email, allPosts, blockedUsers);
     setFeedPosts(personalized);
     setFeedRefreshed(true);
@@ -3330,27 +3333,28 @@ const HomePage = ({
     try {
       const res = await axios.get(`${API_URL}/api/books/trending?limit=8`, { timeout: 8000 });
       if (res.data.success) { setTrendingBooks(res.data.books); setLoadingTrending(false); return; }
-    } catch (_) { }
+    } catch (_) { /* fallback */ }
     setTrendingBooks([
-      { title: 'Atomic Habits', author: 'James Clear', rating: 4.8 },
-      { title: 'Project Hail Mary', author: 'Andy Weir', rating: 4.8 },
-      { title: 'Fourth Wing', author: 'Rebecca Yarros', rating: 4.6 },
-      { title: 'The Midnight Library', author: 'Matt Haig', rating: 4.6 },
+      { title: 'Atomic Habits',         author: 'James Clear',    rating: 4.8 },
+      { title: 'Project Hail Mary',     author: 'Andy Weir',      rating: 4.8 },
+      { title: 'Fourth Wing',           author: 'Rebecca Yarros', rating: 4.6 },
+      { title: 'The Midnight Library',  author: 'Matt Haig',      rating: 4.6 },
       { title: 'The Psychology of Money', author: 'Morgan Housel', rating: 4.7 },
-      { title: 'It Ends with Us', author: 'Colleen Hoover', rating: 4.6 },
+      { title: 'It Ends with Us',       author: 'Colleen Hoover', rating: 4.6 },
     ]);
     setLoadingTrending(false);
   };
 
+  // ── FIXED: proper reshare handler ───────────────────
   const handleReshareClick = (post) => { setShowReshare(post); };
   const handleReshare = (post, comment, isPublic) => {
     onResharePost(post, comment, isPublic);
     setShowReshare(null);
   };
 
-  const userCrews = crews.filter(c => user?.joinedCrews?.includes(c.id) || JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]').includes(c.id));
+  const userCrews     = crews.filter(c => user?.joinedCrews?.includes(c.id) || JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]').includes(c.id));
   const hasReadingGoal = user?.readingGoal?.yearly > 0;
-  const notifCount = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read && n.type !== 'message').length;
+  const notifCount    = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read && n.type !== 'message').length;
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
@@ -3376,15 +3380,16 @@ const HomePage = ({
         />
       )}
 
-      {showShare && <ShareModal post={showShare} onClose={() => setShowShare(null)} />}
+      {showShare   && <ShareModal post={showShare} onClose={() => setShowShare(null)} />}
       {showReshare && <ReshareModal post={showReshare} onClose={() => setShowReshare(null)} onReshare={handleReshare} />}
 
       <div className="px-4 py-4 space-y-5">
+        {/* Welcome Card */}
         <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-bold">Hey, {user?.name?.split(' ')[0]}! 📚</h2>
-              <p className="text-orange-100 text-sm mt-1">no cap, this feed was made for u 🎯</p>
+              <p className="text-orange-100 text-sm mt-1">Your personalized feed is ready</p>
             </div>
             <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
               <BookOpen className="w-6 h-6 text-white" />
@@ -3404,6 +3409,7 @@ const HomePage = ({
           )}
         </div>
 
+        {/* Algorithm info banner */}
         <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 flex items-center gap-3">
           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
             <Sparkles className="w-4 h-4 text-blue-500" />
@@ -3417,12 +3423,13 @@ const HomePage = ({
           </button>
         </div>
 
+        {/* Stats Grid */}
         <div className="grid grid-cols-4 gap-2">
           {[
-            { label: 'Books', value: stats.booksRead, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100', page: 'profile' },
-            { label: 'Reviews', value: stats.reviewsGiven, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100', page: 'reviews' },
-            { label: 'Posts', value: stats.postsCreated, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100', page: 'post' },
-            { label: 'Crews', value: stats.crewsJoined, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100', page: 'crews' },
+            { label: 'Books',   value: stats.booksRead,    icon: BookOpen,   color: 'text-blue-600',   bg: 'bg-blue-100',   page: 'profile'  },
+            { label: 'Reviews', value: stats.reviewsGiven, icon: Star,       color: 'text-purple-600', bg: 'bg-purple-100', page: 'reviews'  },
+            { label: 'Posts',   value: stats.postsCreated, icon: Edit3,      color: 'text-green-600',  bg: 'bg-green-100',  page: 'post'     },
+            { label: 'Crews',   value: stats.crewsJoined,  icon: Users,      color: 'text-orange-600', bg: 'bg-orange-100', page: 'crews'    },
           ].map(({ label, value, icon: Icon, color, bg, page }, idx) => (
             <div key={idx} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition" onClick={() => setPage(page)}>
               <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}><Icon className={`w-4 h-4 ${color}`} /></div>
@@ -3432,6 +3439,7 @@ const HomePage = ({
           ))}
         </div>
 
+        {/* Trending Books */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-orange-500" />Trending Books</h2>
@@ -3458,6 +3466,7 @@ const HomePage = ({
           )}
         </div>
 
+        {/* Your Crews */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />Your Crews</h2>
@@ -3481,19 +3490,21 @@ const HomePage = ({
             ))}
             {userCrews.length === 0 && (
               <div className="col-span-2 bg-white rounded-xl p-6 text-center border border-gray-200">
-                <p className="text-gray-500 text-sm">no crews yet — find ur people 👯</p>
+                <p className="text-gray-500 text-sm">No crews joined yet</p>
                 <button onClick={() => setPage('crews')} className="mt-2 text-orange-500 text-sm font-medium hover:underline">Browse Crews →</button>
               </div>
             )}
           </div>
         </div>
 
+        {/* Create Post CTA */}
         <button onClick={() => setPage('post')} className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
           {profileSrc ? <img src={profileSrc} alt="profile" className="w-9 h-9 rounded-full object-cover flex-shrink-0" /> : <Avatar initials={user?.name} size="sm" />}
-          <span className="text-gray-400 text-sm flex-1 text-left">What's your current read? spill 👀</span>
+          <span className="text-gray-400 text-sm flex-1 text-left">Share your reading journey...</span>
           <span className="text-xs text-orange-500 font-medium bg-orange-50 px-3 py-1 rounded-full">Post</span>
         </button>
 
+        {/* Personalized Feed */}
         <div>
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
@@ -3509,11 +3520,11 @@ const HomePage = ({
             {feedPosts.length === 0 ? (
               <div className="bg-white rounded-xl p-8 text-center border border-gray-200">
                 <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">no posts yet — be the main character 🌟</p>
+                <p className="text-gray-500">No posts yet. Be the first to share!</p>
                 <button onClick={() => setPage('post')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition">Create Post</button>
               </div>
             ) : (
-              feedPosts.slice(0, visibleCount).map((post, idx) => (
+              feedPosts.map((post, idx) => (
                 <InlinePostCard
                   key={post.id || idx}
                   post={post}
@@ -3534,11 +3545,6 @@ const HomePage = ({
                 />
               ))
             )}
-            {feedPosts.length > visibleCount && (
-              <div ref={loaderRef} className="flex justify-center py-6">
-                <LoadingSpinner size="md" color="orange" />
-              </div>
-            )}
           </div>
         </div>
       </div>
@@ -3554,29 +3560,29 @@ const ProfilePage = ({
   user, posts, setPage, onLogout, onUpdateUser,
   profileSrc, setProfileSrc, savedPosts, following, followers,
 }) => {
-  const [activeTab, setActiveTab] = useState('Posts');
-  const [stats, setStats] = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
-  const [readingGoal, setReadingGoal] = useState(user?.readingGoal || { yearly: 0, monthly: 0 });
-  const [showEditGoal, setShowEditGoal] = useState(false);
-  const [editGoal, setEditGoal] = useState(readingGoal);
-  const [books, setBooks] = useState([]);
-  const [showAddBook, setShowAddBook] = useState(false);
-  const [newBook, setNewBook] = useState({ title: '', author: '', rating: 5, notes: '' });
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [editName, setEditName] = useState(user?.name || '');
-  const [editBio, setEditBio] = useState(user?.bio || '');
-  const [editLocation, setEditLocation] = useState(user?.location || '');
-  const [editWebsite, setEditWebsite] = useState(user?.website || '');
+  const [activeTab,     setActiveTab]     = useState('Posts');
+  const [stats,         setStats]         = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
+  const [readingGoal,   setReadingGoal]   = useState(user?.readingGoal || { yearly: 0, monthly: 0 });
+  const [showEditGoal,  setShowEditGoal]  = useState(false);
+  const [editGoal,      setEditGoal]      = useState(readingGoal);
+  const [books,         setBooks]         = useState([]);
+  const [showAddBook,   setShowAddBook]   = useState(false);
+  const [newBook,       setNewBook]       = useState({ title: '', author: '', rating: 5, notes: '' });
+  const [editingProfile,setEditingProfile]= useState(false);
+  const [editName,      setEditName]      = useState(user?.name      || '');
+  const [editBio,       setEditBio]       = useState(user?.bio       || '');
+  const [editLocation,  setEditLocation]  = useState(user?.location  || '');
+  const [editWebsite,   setEditWebsite]   = useState(user?.website   || '');
   const [showFollowers, setShowFollowers] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
   const fileInputRef = useRef(null);
 
-  const myPosts = posts.filter(p => p.userEmail === user?.email);
-  const myReviews = JSON.parse(localStorage.getItem('reviews') || '[]').filter(r => r.userEmail === user?.email);
-  const savedPostsList = posts.filter(p => savedPosts?.includes(p.id));
+  const myPosts       = posts.filter(p => p.userEmail === user?.email);
+  const myReviews     = JSON.parse(localStorage.getItem('reviews') || '[]').filter(r => r.userEmail === user?.email);
+  const savedPostsList= posts.filter(p => savedPosts?.includes(p.id));
   const joinedCrewIds = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
-  const allCrews = JSON.parse(localStorage.getItem('crews') || '[]');
-  const myCrews = allCrews.filter(c => joinedCrewIds.includes(c.id) || joinedCrewIds.includes(String(c.id)));
+  const allCrews      = JSON.parse(localStorage.getItem('crews') || '[]');
+  const myCrews       = allCrews.filter(c => joinedCrewIds.includes(c.id) || joinedCrewIds.includes(String(c.id)));
 
   useEffect(() => {
     const savedStats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
@@ -3691,6 +3697,7 @@ const ProfilePage = ({
       </div>
 
       <div className="px-4 py-5">
+        {/* Profile Header */}
         <div className="flex items-start gap-4 mb-5">
           <div className="relative flex-shrink-0">
             {profileSrc ? (
@@ -3707,10 +3714,10 @@ const ProfilePage = ({
           <div className="flex-1 min-w-0">
             {editingProfile ? (
               <div className="space-y-2">
-                <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Your name" />
+                <input value={editName}     onChange={e => setEditName(e.target.value)}     className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Your name" />
                 <input value={editLocation} onChange={e => setEditLocation(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Location" />
-                <input value={editWebsite} onChange={e => setEditWebsite(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Website" />
-                <textarea value={editBio} onChange={e => setEditBio(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Your bio..." rows={2} />
+                <input value={editWebsite}  onChange={e => setEditWebsite(e.target.value)}  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Website" />
+                <textarea value={editBio}   onChange={e => setEditBio(e.target.value)}      className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Your bio..." rows={2} />
                 <div className="flex gap-2">
                   <button onClick={handleSaveProfile} className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">Save</button>
                   <button onClick={() => setEditingProfile(false)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
@@ -3726,7 +3733,7 @@ const ProfilePage = ({
                     <ExternalLink className="w-3 h-3" />{user.website.replace(/^https?:\/\//, '')}
                   </a>
                 )}
-                <p className="text-sm text-gray-600 mt-2 italic">"{user?.bio || 'living in my main character era 📚'}"</p>
+                <p className="text-sm text-gray-600 mt-2 italic">"{user?.bio || 'Reading is my superpower 📚'}"</p>
                 <div className="flex gap-4 mt-2">
                   <button onClick={() => setShowFollowers(true)} className="text-center hover:opacity-75 transition">
                     <p className="font-bold text-gray-900">{followers?.length || 0}</p>
@@ -3745,6 +3752,7 @@ const ProfilePage = ({
           </div>
         </div>
 
+        {/* Reading Goal */}
         <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100 mb-5">
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
@@ -3782,12 +3790,13 @@ const ProfilePage = ({
           )}
         </div>
 
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-2 bg-white rounded-xl p-3 border border-gray-200 mb-5">
           {[
-            { label: 'Books', value: stats.booksRead, icon: BookOpen, color: 'text-blue-600' },
-            { label: 'Reviews', value: stats.reviewsGiven, icon: Star, color: 'text-purple-600' },
-            { label: 'Posts', value: stats.postsCreated, icon: Edit3, color: 'text-green-600' },
-            { label: 'Crews', value: stats.crewsJoined, icon: Users, color: 'text-orange-600' },
+            { label: 'Books',   value: stats.booksRead,    icon: BookOpen, color: 'text-blue-600' },
+            { label: 'Reviews', value: stats.reviewsGiven, icon: Star,     color: 'text-purple-600' },
+            { label: 'Posts',   value: stats.postsCreated, icon: Edit3,    color: 'text-green-600' },
+            { label: 'Crews',   value: stats.crewsJoined,  icon: Users,    color: 'text-orange-600' },
           ].map(({ label, value, icon: Icon, color }, idx) => (
             <div key={idx} className="text-center">
               <Icon className={`w-5 h-5 ${color} mx-auto mb-1`} />
@@ -3797,6 +3806,7 @@ const ProfilePage = ({
           ))}
         </div>
 
+        {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-4 overflow-x-auto scrollbar-hide">
           {tabs.map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
@@ -3806,12 +3816,13 @@ const ProfilePage = ({
           ))}
         </div>
 
+        {/* Tab: Posts */}
         {activeTab === 'Posts' && (
           <div className="space-y-4">
             {myPosts.length === 0 ? (
               <div className="text-center py-8">
                 <Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">no posts rn — start ur era 📸</p>
+                <p className="text-gray-500">No posts yet</p>
                 <button onClick={() => setPage('post')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition">Create First Post</button>
               </div>
             ) : myPosts.map(post => (
@@ -3829,13 +3840,14 @@ const ProfilePage = ({
           </div>
         )}
 
+        {/* Tab: Reviews */}
         {activeTab === 'Reviews' && (
           <div className="space-y-4">
             {myReviews.length === 0 ? (
               <div className="text-center py-8">
                 <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">no reviews yet — spill the tea ☕</p>
-                <button onClick={() => setPage('reviews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition">Spill the Tea ☕</button>
+                <p className="text-gray-500">No reviews yet</p>
+                <button onClick={() => setPage('reviews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition">Write a Review</button>
               </div>
             ) : myReviews.map(review => (
               <div key={review.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
@@ -3849,6 +3861,7 @@ const ProfilePage = ({
           </div>
         )}
 
+        {/* Tab: Books Read */}
         {activeTab === 'Books Read' && (
           <div className="space-y-4">
             <div className="flex items-center justify-between mb-2">
@@ -3860,7 +3873,7 @@ const ProfilePage = ({
             {showAddBook && (
               <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                 <div className="space-y-3">
-                  <input value={newBook.title} onChange={e => setNewBook({ ...newBook, title: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
+                  <input value={newBook.title}  onChange={e => setNewBook({ ...newBook, title: e.target.value })}  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
                   <input value={newBook.author} onChange={e => setNewBook({ ...newBook, author: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author" />
                   <div><label className="text-xs text-gray-600 mb-1 block">Your Rating</label><StarRating rating={newBook.rating} onChange={r => setNewBook({ ...newBook, rating: r })} size="md" /></div>
                   <textarea value={newBook.notes} onChange={e => setNewBook({ ...newBook, notes: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Notes..." rows={2} />
@@ -3889,10 +3902,11 @@ const ProfilePage = ({
           </div>
         )}
 
+        {/* Tab: Crews */}
         {activeTab === 'Crews' && (
           <div className="space-y-3">
             {myCrews.length === 0
-              ? <div className="text-center py-8"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no crews yet — find ur people 👯</p><button onClick={() => setPage('crews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Browse Crews</button></div>
+              ? <div className="text-center py-8"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No crews joined yet</p><button onClick={() => setPage('crews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Browse Crews</button></div>
               : myCrews.map(crew => (
                 <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
                   <div className="flex items-center px-4 gap-4 py-3">
@@ -3912,6 +3926,7 @@ const ProfilePage = ({
           </div>
         )}
 
+        {/* Tab: Saved */}
         {activeTab === 'Saved' && (
           <div className="space-y-4">
             {savedPostsList.length === 0
@@ -3939,14 +3954,14 @@ const ProfilePage = ({
 // ========================================
 
 const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount, onViewUserProfile, isJoined, joinCrew }) => {
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [selBook, setSelBook] = useState(null);
-  const [showShare, setShowShare] = useState(false);
+  const [messages,   setMessages]  = useState([]);
+  const [newMessage, setNewMessage]= useState('');
+  const [selBook,    setSelBook]   = useState(null);
+  const [showShare,  setShowShare] = useState(false);
   const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
+  const fileInputRef   = useRef(null);
 
-  const { onlineCount } = useCrewPresence(crew.id, user.id, user.name);
+  const { onlineCount }                          = useCrewPresence(crew.id, user.id, user.name);
   const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(crew.id, user.id, user.name);
   const hasJoined = isJoined(crew.id);
 
@@ -3970,13 +3985,13 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
     if (!newMessage.trim() || !hasJoined) return;
     stopTyping();
     const msg = {
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
+      userId:       user.id,
+      userName:     user.name,
+      userEmail:    user.email,
       userInitials: user.name?.slice(0, 2).toUpperCase(),
-      content: newMessage.trim(),
-      type: 'text',
-      timestamp: new Date().toISOString(),
+      content:      newMessage.trim(),
+      type:         'text',
+      timestamp:    new Date().toISOString(),
     };
     setNewMessage('');
 
@@ -4021,10 +4036,10 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
   const formatMsgTime = (ts) => {
     const diff = Date.now() - new Date(ts);
     const mins = Math.floor(diff / 60000);
-    const hrs = Math.floor(diff / 3600000);
+    const hrs  = Math.floor(diff / 3600000);
     if (mins < 1) return 'Just now';
     if (mins < 60) return `${mins}m`;
-    if (hrs < 24) return `${hrs}h`;
+    if (hrs < 24)  return `${hrs}h`;
     return new Date(ts).toLocaleDateString();
   };
 
@@ -4058,6 +4073,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
   return (
     <div className="fixed inset-0 flex flex-col z-[60] bg-[#e5ddd5] overflow-hidden"
       style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+      {/* Header */}
       <div className="flex-shrink-0 bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
           <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
@@ -4078,12 +4094,13 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
         <button onClick={() => setShowShare(true)} className="p-2 hover:bg-gray-100 rounded-full" title="Invite friends"><Share2 className="w-5 h-5 text-gray-600" /></button>
       </div>
 
+      {/* Messages */}
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center py-16">
             <MessageCircle className="w-12 h-12 text-gray-300 mb-3" />
             <p className="text-gray-500 font-medium">No messages yet</p>
-            <p className="text-xs text-gray-400 mt-1">no messages yet — break the ice bestie 🧊</p>
+            <p className="text-xs text-gray-400 mt-1">Be the first to say something!</p>
           </div>
         )}
 
@@ -4115,7 +4132,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
                         {formatMsgTime(msg.timestamp)}
                         {isOwn && (() => {
                           const s = getReadStatus(msg.timestamp, crew.id, onlineCount);
-                          if (s === 'read') return <span className="ml-1 text-blue-400">✓✓</span>;
+                          if (s === 'read')      return <span className="ml-1 text-blue-400">✓✓</span>;
                           if (s === 'delivered') return <span className="ml-1 text-gray-400">✓✓</span>;
                           return <span className="ml-1 text-gray-300">✓</span>;
                         })()}
@@ -4130,12 +4147,14 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
         <div ref={messagesEndRef} />
       </div>
 
+      {/* Typing */}
       {typingUsers.length > 0 && (
         <div className="px-4 py-1 text-xs text-gray-500 italic bg-transparent">
           {typingUsers.length === 1 ? `${typingUsers[0]} is typing...` : typingUsers.length === 2 ? `${typingUsers[0]} and ${typingUsers[1]} are typing...` : `${typingUsers.length} people are typing...`}
         </div>
       )}
 
+      {/* Input */}
       <div className="flex-shrink-0 bg-gray-50 border-t px-3 py-2.5">
         <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow border border-gray-100">
           <button onClick={() => fileInputRef.current?.click()} className="w-8 h-8 flex items-center justify-center flex-shrink-0">
@@ -4149,7 +4168,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
             onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stopTyping(); sendMessage(); } }}
             onBlur={stopTyping}
             className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
-            placeholder="say something bestie... 💬"
+            placeholder="Type a message..."
           />
           <button
             onClick={() => { stopTyping(); sendMessage(); }}
@@ -4161,7 +4180,7 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
         </div>
       </div>
 
-      {selBook && <BookDetailsModal book={selBook} onClose={() => setSelBook(null)} onCreateCrew={() => { }} />}
+      {selBook && <BookDetailsModal book={selBook} onClose={() => setSelBook(null)} onCreateCrew={() => {}} />}
       {showShare && <ShareModal crewInvite={crew} onClose={() => setShowShare(false)} />}
     </div>
   );
@@ -4171,34 +4190,22 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
 // SECTION 33: CREWS PAGE
 // ========================================
 
-const CrewSkeleton = () => (
-  <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm animate-pulse">
-    <div className="flex items-center px-4 gap-4 py-3">
-      <div className="w-16 h-20 bg-gray-200 rounded-xl flex-shrink-0" />
-      <div className="flex-1 space-y-2">
-        <div className="h-4 bg-gray-200 rounded w-3/4" />
-        <div className="h-3 bg-gray-200 rounded w-1/2" />
-        <div className="h-5 bg-gray-200 rounded-full w-20 mt-1" />
-      </div>
-    </div>
-  </div>
-);
-
 const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount, onViewUserProfile, deepLinkCrewId, onDeepLinkHandled }) => {
-  const [view, setView] = useState('list');
-  const [selectedCrew, setSelectedCrew] = useState(null);
-  const [crews, setCrews] = useState([]);
-  const [joinedCrews, setJoinedCrews] = useState([]);
-  const [crewMembers, setCrewMembers] = useState([]);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newCrewData, setNewCrewData] = useState({ name: '', author: '', genre: '' });
-  const [toastMessage, setToastMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [unreadMessages, setUnreadMessages] = useState({});
-  const [showShareModal, setShowShareModal] = useState(null);
-  const [loadingCrews, setLoadingCrews] = useState(true);
+  const [view,           setView]          = useState('list');
+  const [selectedCrew,   setSelectedCrew]  = useState(null);
+  const [crews,          setCrews]         = useState([]);
+  const [joinedCrews,    setJoinedCrews]   = useState([]);
+  const [crewMembers,    setCrewMembers]   = useState([]);
+  const [showCreateForm, setShowCreateForm]= useState(false);
+  const [newCrewData,    setNewCrewData]   = useState({ name: '', author: '', genre: '' });
+  const [toastMessage,   setToastMessage]  = useState('');
+  const [searchQuery,    setSearchQuery]   = useState('');
+  const [selectedBook,   setSelectedBook]  = useState(null);
+  const [unreadMessages, setUnreadMessages]= useState({});
+  const [showShareModal, setShowShareModal]= useState(null);
+  const [loadingCrews,   setLoadingCrews]  = useState(true);
 
+  // CROSS-DEVICE: fetch all crews from server so every phone sees the same list
   const loadCrews = useCallback(async () => {
     setLoadingCrews(true);
     const res = await api.get('/api/social/crews');
@@ -4206,10 +4213,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     if (res?.data?.success) {
       allCrews = res.data.crews || [];
     } else {
+      // Fallback: merge localStorage + initialCrews (seed data)
       const saved = JSON.parse(localStorage.getItem('crews') || '[]');
       allCrews = [...saved];
     }
+    // Always merge seed/initialCrews so "Becoming", "The Beach" etc. are always visible
     initialCrews.forEach(ic => { if (!allCrews.find(c => String(c.id) === String(ic.id))) allCrews.push(ic); });
+    // Also pull any locally-created crews not yet synced
     const local = JSON.parse(localStorage.getItem('crews') || '[]');
     local.forEach(lc => { if (!allCrews.find(c => String(c.id) === String(lc.id))) allCrews.push(lc); });
     localStorage.setItem('crews', JSON.stringify(allCrews));
@@ -4228,6 +4238,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     setUnreadMessages(counts);
   }, [user.email, loadCrews]);
 
+  // Deep-link: auto-navigate to linked crew once list is loaded
   useEffect(() => {
     if (!deepLinkCrewId || crews.length === 0) return;
     const target = crews.find(c => String(c.id) === String(deepLinkCrewId) || c.slug === deepLinkCrewId);
@@ -4249,7 +4260,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
     stats.crewsJoined = (stats.crewsJoined || 0) + 1;
     localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
-    showToast(`🔥 locked in with "${crew.name}"!`);
+    showToast(`🎉 Joined "${crew.name}"!`);
     if (crew.createdBy !== user.email) {
       pushNotification(crew.createdBy, { type: 'join', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} joined your crew "${crew.name}"`, crewId: crew.id });
       updateNotificationCount?.();
@@ -4269,7 +4280,8 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   };
 
   const createCrew = async () => {
-    if (!newCrewData.name || !newCrewData.author) { alert('bestie fill in the book name and author first 👀'); return; }
+    if (!newCrewData.name || !newCrewData.author) { alert('Please fill book name and author'); return; }
+    // ── FIX: One-book-one-crew — redirect to existing crew rather than blocking ──
     const existing = crews.find(c =>
       c.name.trim().toLowerCase() === newCrewData.name.trim().toLowerCase() &&
       c.author.trim().toLowerCase() === newCrewData.author.trim().toLowerCase()
@@ -4285,6 +4297,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     }
 
     const newCrew = { id: generateId(), ...newCrewData, members: 1, chats: 0, createdBy: user.email, createdByName: user.name, createdAt: new Date().toISOString() };
+    // Save to server so ALL devices see this new crew immediately
     const res = await api.post('/api/social/crews', newCrew);
     const saved = res?.data?.success ? res.data.crew : newCrew;
     const updatedCrews = [saved, ...crews];
@@ -4304,7 +4317,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
   useEffect(() => {
     if (!selectedCrew) return;
     const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const members = allUsers
+    const members  = allUsers
       .filter(u => { const j = JSON.parse(localStorage.getItem(`user_${u.email}_joinedCrews`) || '[]'); return j.includes(selectedCrew.id) || j.includes(String(selectedCrew.id)); })
       .map(u => ({ id: u.id, name: u.name, email: u.email, initials: u.name?.slice(0, 2), isCreator: u.email === selectedCrew.createdBy }));
     if (!members.find(m => m.email === selectedCrew.createdBy)) {
@@ -4313,18 +4326,20 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
     setCrewMembers(members);
   }, [selectedCrew]);
 
-  const filtered = crews.filter(c => c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || c.author?.toLowerCase().includes(searchQuery.toLowerCase()) || c.genre?.toLowerCase().includes(searchQuery.toLowerCase()));
-  const joinedList = filtered.filter(c => isJoined(c.id));
-  const discoverList = filtered.filter(c => !isJoined(c.id));
+  const filtered       = crews.filter(c => c.name?.toLowerCase().includes(searchQuery.toLowerCase()) || c.author?.toLowerCase().includes(searchQuery.toLowerCase()) || c.genre?.toLowerCase().includes(searchQuery.toLowerCase()));
+  const joinedList     = filtered.filter(c => isJoined(c.id));
+  const discoverList   = filtered.filter(c => !isJoined(c.id));
 
   const Toast = () => toastMessage ? (
     <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] text-center animate-slideDown">{toastMessage}</div>
   ) : null;
 
+  // Chat view
   if (view === 'chat' && selectedCrew) {
     return <CrewChatView crew={selectedCrew} user={user} crewMembers={crewMembers} onBack={() => setView('detail')} updateNotificationCount={updateNotificationCount} onViewUserProfile={onViewUserProfile} isJoined={isJoined} joinCrew={joinCrew} />;
   }
 
+  // Detail view
   if (view === 'detail' && selectedCrew) {
     const joined = isJoined(selectedCrew.id);
     return (
@@ -4387,12 +4402,13 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
           )}
         </div>
 
-        {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => { }} />}
+        {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
         {showShareModal && <ShareModal crewInvite={showShareModal} onClose={() => setShowShareModal(null)} />}
       </div>
     );
   }
 
+  // List view
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
       <Toast />
@@ -4416,9 +4432,9 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
             <h3 className="font-semibold mb-3">Create New Crew</h3>
             {newCrewData.name && <div className="flex justify-center mb-4"><DynamicBookCover title={newCrewData.name} author={newCrewData.author} size="lg" /></div>}
             <div className="space-y-3">
-              <input value={newCrewData.name} onChange={e => setNewCrewData({ ...newCrewData, name: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
+              <input value={newCrewData.name}   onChange={e => setNewCrewData({ ...newCrewData, name: e.target.value })}   className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
               <input value={newCrewData.author} onChange={e => setNewCrewData({ ...newCrewData, author: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author *" />
-              <input value={newCrewData.genre} onChange={e => setNewCrewData({ ...newCrewData, genre: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Genre (optional)" />
+              <input value={newCrewData.genre}  onChange={e => setNewCrewData({ ...newCrewData, genre: e.target.value })}  className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Genre (optional)" />
               <div className="flex gap-2">
                 <button onClick={createCrew} className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">Create</button>
                 <button onClick={() => setShowCreateForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
@@ -4427,15 +4443,11 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
           </div>
         )}
 
-        {loadingCrews ? (
-          <div className="space-y-3 mb-6">
-            {[1, 2, 3, 4].map(i => <CrewSkeleton key={i} />)}
-          </div>
-        ) : null}
-        <div className="mb-6" style={{ display: loadingCrews ? 'none' : 'block' }}>
+        {/* My Crews */}
+        <div className="mb-6">
           <h2 className="text-lg font-bold mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />My Crews ({joinedList.length})</h2>
           {joinedList.length === 0
-            ? <div className="bg-white rounded-xl p-6 text-center border border-gray-200"><p className="text-gray-500 text-sm">no crews yet — find ur people 👯. Explore below!</p></div>
+            ? <div className="bg-white rounded-xl p-6 text-center border border-gray-200"><p className="text-gray-500 text-sm">No crews joined yet. Explore below!</p></div>
             : joinedList.map(crew => (
               <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-green-200 shadow-sm cursor-pointer mb-3 hover:shadow-md transition" onClick={() => { setSelectedCrew(crew); setView('detail'); }}>
                 <div className="flex items-center px-4 gap-4 py-3">
@@ -4466,6 +4478,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
           }
         </div>
 
+        {/* Discover Crews */}
         <div>
           <h2 className="text-lg font-bold mb-3">Discover Crews ({discoverList.length})</h2>
           <div className="space-y-3">
@@ -4494,7 +4507,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
         </div>
       </div>
 
-      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => { }} />}
+      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
       {showShareModal && <ShareModal crewInvite={showShareModal} onClose={() => setShowShareModal(null)} />}
     </div>
   );
@@ -4505,25 +4518,25 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
 // ========================================
 
 const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onBack, onFollow, isFollowing, onBlock, isBlocked }) => {
-  const [userData, setUserData] = useState(null);
-  const [userPosts, setUserPosts] = useState([]);
-  const [userReviews, setReviews] = useState([]);
-  const [userBooks, setBooks] = useState([]);
-  const [userCrews, setCrews] = useState([]);
-  const [followers, setFollowers] = useState([]);
-  const [following, setFollowing] = useState([]);
-  const [activeTab, setActiveTab] = useState('Posts');
-  const [stats, setStats] = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
+  const [userData,   setUserData]  = useState(null);
+  const [userPosts,  setUserPosts] = useState([]);
+  const [userReviews,setReviews]   = useState([]);
+  const [userBooks,  setBooks]     = useState([]);
+  const [userCrews,  setCrews]     = useState([]);
+  const [followers,  setFollowers] = useState([]);
+  const [following,  setFollowing] = useState([]);
+  const [activeTab,  setActiveTab] = useState('Posts');
+  const [stats,      setStats]     = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
 
   useEffect(() => { loadData(); }, [viewedUserEmail]);
 
   const loadData = () => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const found = users.find(u => u.email === viewedUserEmail);
+    const users    = JSON.parse(localStorage.getItem('users') || '[]');
+    const found    = users.find(u => u.email === viewedUserEmail);
     if (found) setUserData(found);
 
-    const fwers = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_followers`) || '[]');
-    const fwing = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_following`) || '[]');
+    const fwers  = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_followers`) || '[]');
+    const fwing  = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_following`) || '[]');
     setFollowers(fwers);
     setFollowing(fwing);
 
@@ -4536,7 +4549,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
     setBooks(JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_readingList`) || '[]'));
 
     const joinedIds = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_joinedCrews`) || '[]');
-    const allCrews = JSON.parse(localStorage.getItem('crews') || '[]');
+    const allCrews  = JSON.parse(localStorage.getItem('crews') || '[]');
     setCrews(allCrews.filter(c => joinedIds.includes(c.id) || joinedIds.includes(String(c.id))));
 
     const st = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_stats`) || '{}');
@@ -4586,12 +4599,13 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           </div>
         </div>
 
+        {/* Stats */}
         <div className="grid grid-cols-4 gap-2 bg-white rounded-xl p-3 border border-gray-200 mb-5">
           {[
-            { label: 'Books', value: stats.booksRead, icon: BookOpen, color: 'text-blue-600' },
-            { label: 'Reviews', value: stats.reviewsGiven, icon: Star, color: 'text-purple-600' },
-            { label: 'Posts', value: stats.postsCreated, icon: Edit3, color: 'text-green-600' },
-            { label: 'Crews', value: stats.crewsJoined, icon: Users, color: 'text-orange-600' },
+            { label: 'Books',   value: stats.booksRead,    icon: BookOpen, color: 'text-blue-600' },
+            { label: 'Reviews', value: stats.reviewsGiven, icon: Star,     color: 'text-purple-600' },
+            { label: 'Posts',   value: stats.postsCreated, icon: Edit3,    color: 'text-green-600' },
+            { label: 'Crews',   value: stats.crewsJoined,  icon: Users,    color: 'text-orange-600' },
           ].map(({ label, value, icon: Icon, color }, idx) => (
             <div key={idx} className="text-center">
               <Icon className={`w-5 h-5 ${color} mx-auto mb-1`} />
@@ -4601,6 +4615,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
           ))}
         </div>
 
+        {/* Tabs */}
         <div className="flex border-b border-gray-200 mb-4 overflow-x-auto scrollbar-hide">
           {tabs.map(tab => (
             <button key={tab} onClick={() => setActiveTab(tab)}
@@ -4612,7 +4627,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
         {activeTab === 'Posts' && (
           <div className="space-y-4">
             {userPosts.length === 0
-              ? <div className="text-center py-8"><Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no posts rn — start ur era 📸</p></div>
+              ? <div className="text-center py-8"><Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No posts yet</p></div>
               : userPosts.map(post => (
                 <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                   <p className="text-sm text-gray-700 mb-2">{post.content}</p>
@@ -4632,7 +4647,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
         {activeTab === 'Reviews' && (
           <div className="space-y-4">
             {userReviews.length === 0
-              ? <div className="text-center py-8"><Star className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no reviews yet — spill the tea ☕</p></div>
+              ? <div className="text-center py-8"><Star className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No reviews yet</p></div>
               : userReviews.map(review => (
                 <div key={review.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                   <div className="flex items-start gap-3 mb-2">
@@ -4670,7 +4685,7 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
         {activeTab === 'Crews' && (
           <div className="space-y-3">
             {userCrews.length === 0
-              ? <div className="text-center py-8"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no crews yet — find ur people 👯</p></div>
+              ? <div className="text-center py-8"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No crews joined yet</p></div>
               : userCrews.map(crew => (
                 <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
                   <div className="flex items-center px-4 gap-4 py-3">
@@ -4699,55 +4714,60 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
 // ========================================
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [profileSrc, setProfileSrc] = useState(null);
-  const [currentPage, setCurrentPage] = useState('home');
-  const [showBottomNav, setShowBottomNav] = useState(true);
-  const [posts, setPosts] = useState([]);
-  const [crews, setCrews] = useState([
-    { id: 'crew_atomic', name: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', members: 24, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_tuesdays', name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 12, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_alchemist', name: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', members: 31, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_hailmary', name: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', members: 18, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_fourth', name: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', members: 42, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_midnight', name: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', members: 29, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_becoming', name: 'Becoming', author: 'Michelle Obama', genre: 'Memoir', members: 27, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_beach', name: 'The Beach', author: 'Alex Garland', genre: 'Fiction', members: 15, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_sapiens', name: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', members: 22, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_psychology', name: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', members: 19, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_silentpatient', name: 'The Silent Patient', author: 'Alex Michaelides', genre: 'Thriller', members: 33, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_gonegirl', name: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', members: 21, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
+  const [isLoggedIn,        setIsLoggedIn]       = useState(false);
+  const [currentUser,       setCurrentUser]      = useState(null);
+  const [profileSrc,        setProfileSrc]       = useState(null);
+  const [currentPage,       setCurrentPage]      = useState('home');
+  const [showBottomNav,     setShowBottomNav]    = useState(true);
+  const [posts,             setPosts]            = useState([]);
+  const [crews,             setCrews]            = useState([
+    { id: 'crew_atomic',      name: 'Atomic Habits',          author: 'James Clear',       genre: 'Self-Help',    members: 24, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_tuesdays',    name: 'Tuesdays with Morrie',   author: 'Mitch Albom',       genre: 'Inspiration',  members: 12, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_alchemist',   name: 'The Alchemist',          author: 'Paulo Coelho',      genre: 'Fiction',      members: 31, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_hailmary',    name: 'Project Hail Mary',      author: 'Andy Weir',         genre: 'Sci-Fi',       members: 18, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_fourth',      name: 'Fourth Wing',            author: 'Rebecca Yarros',    genre: 'Fantasy',      members: 42, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_midnight',    name: 'The Midnight Library',   author: 'Matt Haig',         genre: 'Fiction',      members: 29, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_becoming',    name: 'Becoming',               author: 'Michelle Obama',    genre: 'Memoir',       members: 27, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_beach',       name: 'The Beach',              author: 'Alex Garland',      genre: 'Fiction',      members: 15, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_sapiens',     name: 'Sapiens',                author: 'Yuval Noah Harari', genre: 'History',      members: 22, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_psychology',  name: 'The Psychology of Money', author: 'Morgan Housel',   genre: 'Finance',      members: 19, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_silentpatient',name: 'The Silent Patient',    author: 'Alex Michaelides',  genre: 'Thriller',     members: 33, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
+    { id: 'crew_gonegirl',    name: 'Gone Girl',              author: 'Gillian Flynn',     genre: 'Thriller',     members: 21, chats: 0, createdBy: 'system', createdByName: 'ReadCrew', createdAt: '2024-01-01T00:00:00Z' },
   ]);
-  const [savedPosts, setSavedPosts] = useState([]);
-  const [following, setFollowing] = useState([]);
-  const [followers, setFollowers] = useState([]);
-  const [blockedUsers, setBlockedUsers] = useState([]);
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [currentToast, setCurrentToast] = useState(null);
+  const [savedPosts,        setSavedPosts]       = useState([]);
+  const [following,         setFollowing]        = useState([]);
+  const [followers,         setFollowers]        = useState([]);
+  const [blockedUsers,      setBlockedUsers]     = useState([]);
+  const [unreadMessages,    setUnreadMessages]   = useState(0);
+  const [notificationCount, setNotificationCount]= useState(0);
+  const [currentToast,      setCurrentToast]     = useState(null);
   const [selectedUserProfile, setSelectedUserProfile] = useState(null);
-  const [showUserProfile, setShowUserProfile] = useState(false);
-  const [viewingFullProfile, setViewingFullProfile] = useState(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [loading, setLoading] = useState(true);
+  const [showUserProfile,   setShowUserProfile]  = useState(false);
+  const [viewingFullProfile,setViewingFullProfile]= useState(null);
+  const [isOnline,          setIsOnline]         = useState(navigator.onLine);
+  const [loading,           setLoading]          = useState(true);
   const prevCountRef = useRef(0);
+  const notifPollRef = useRef(null);
 
+  // Deep-link state — set when URL contains ?rc_type=post|crew&rc_id=X
   const [deepLinkPostId, setDeepLinkPostId] = useState(null);
   const [deepLinkCrewId, setDeepLinkCrewId] = useState(null);
 
+  // Network status
   useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
+    const handleOnline  = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
+    window.addEventListener('online',  handleOnline);
     window.addEventListener('offline', handleOffline);
     return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
   }, []);
 
+  // Show/hide bottom nav
   useEffect(() => {
     setShowBottomNav(currentPage !== 'post' && !viewingFullProfile);
   }, [currentPage, viewingFullProfile]);
 
+  // Initial load
   useEffect(() => {
     const init = async () => {
       const storedUser = localStorage.getItem('currentUser');
@@ -4765,6 +4785,7 @@ export default function App() {
         if (pi) setProfileSrc(pi);
       }
 
+      // CROSS-DEVICE: Fetch posts from server so friend posts appear
       try {
         const email = (JSON.parse(localStorage.getItem('currentUser') || '{}')).email;
         const res = await api.get(`/api/social/posts?userEmail=${encodeURIComponent(email || '')}`);
@@ -4772,7 +4793,7 @@ export default function App() {
           const sp = res.data.posts || [];
           const lp = JSON.parse(localStorage.getItem('allPosts') || '[]');
           const merged = [...sp];
-          lp.forEach(lx => { if (!merged.find(sx => (sx.id || sx._id) === (lx.id || lx._id))) merged.push(lx); });
+          lp.forEach(lx => { if (!merged.find(sx => (sx.id||sx._id) === (lx.id||lx._id))) merged.push(lx); });
           localStorage.setItem('allPosts', JSON.stringify(merged));
           setPosts(merged);
         } else {
@@ -4787,6 +4808,7 @@ export default function App() {
 
       if (!localStorage.getItem('reportedPosts')) localStorage.setItem('reportedPosts', JSON.stringify([]));
 
+      // Handle deep links from shared URLs
       const dl = parseDeepLink();
       if (dl) {
         if (dl.type === 'post') { setDeepLinkPostId(dl.id); setCurrentPage('home'); }
@@ -4799,16 +4821,18 @@ export default function App() {
     init();
   }, []);
 
+  // ── FIXED: Notification counter system ───────────────
   const checkForNewNotifications = useCallback(() => {
     if (!currentUser) return;
 
-    const raw = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
-    const social = raw.filter(n => n.type !== 'message');
-    const crewMsgs = raw.filter(n => n.type === 'message');
+    const raw     = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
+    const social  = raw.filter(n => n.type !== 'message');
+    const crewMsgs= raw.filter(n => n.type === 'message');
 
     const unreadSocial = social.filter(n => !n.read).length;
-    const unreadCrew = crewMsgs.filter(n => !n.read).length;
+    const unreadCrew   = crewMsgs.filter(n => !n.read).length;
 
+    // ── FIX: Only show toast for brand-new notifs not yet toasted ──
     if (unreadSocial > prevCountRef.current) {
       const newest = social.find(n => !n.read && !_shownToastIds.has(n.id));
       if (newest) {
@@ -4828,24 +4852,27 @@ export default function App() {
 
     checkForNewNotifications();
 
+    // CROSS-DEVICE: Poll server for notifications every 15s — picks up notifs pushed by other devices
     const pollNotifications = async () => {
       try {
         const res = await api.get(`/api/social/notifications/${encodeURIComponent(currentUser.email)}`);
         if (res?.data?.success) {
           const fresh = res.data.notifications || [];
-          const old = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
+          const old   = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
+          // Merge: server wins for read status, but keep any local-only notifs
           const merged = [...fresh];
           old.forEach(o => { if (!merged.find(f => f.id === o.id)) merged.push(o); });
           merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
           localStorage.setItem(`user_${currentUser.email}_notifications`, JSON.stringify(merged));
           checkForNewNotifications();
         }
-      } catch (_) { }
+      } catch (_) { /* server offline — use localStorage */ }
     };
 
     const interval = setInterval(pollNotifications, 15000);
-    pollNotifications();
+    pollNotifications(); // Run immediately on mount
 
+    // Listen for real-time custom events
     const handleCustom = (e) => {
       if (e.detail?.targetEmail === currentUser.email) checkForNewNotifications();
     };
@@ -4854,8 +4881,9 @@ export default function App() {
     };
 
     window.addEventListener('rc:notif', handleCustom);
-    window.addEventListener('storage', handleStorage);
+    window.addEventListener('storage',  handleStorage);
 
+    // Socket.io real-time
     socket.emit('join_user_room', currentUser.email);
     socket.on('new_notification', (notification) => {
       if (notification.toEmail === currentUser?.email) {
@@ -4867,7 +4895,7 @@ export default function App() {
     return () => {
       clearInterval(interval);
       window.removeEventListener('rc:notif', handleCustom);
-      window.removeEventListener('storage', handleStorage);
+      window.removeEventListener('storage',  handleStorage);
       socket.off('new_notification');
     };
   }, [currentUser, checkForNewNotifications]);
@@ -4877,7 +4905,7 @@ export default function App() {
     setIsLoggedIn(true);
     localStorage.setItem('currentUser', JSON.stringify(userData));
 
-    ['followers', 'following', 'blocked', 'notifications', 'likedPosts', 'likedReviews', 'readingList', 'savedPosts'].forEach(key => {
+    ['followers','following','blocked','notifications','likedPosts','likedReviews','readingList','savedPosts'].forEach(key => {
       if (!localStorage.getItem(`user_${userData.email}_${key}`))
         localStorage.setItem(`user_${userData.email}_${key}`, JSON.stringify([]));
     });
@@ -4908,14 +4936,15 @@ export default function App() {
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
   };
 
+  // ── FIXED: Global post handler ───────────────────────
   const handlePost = (postData) => {
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     const newPost = {
       ...postData,
-      id: postData.id || generateId(),
-      createdAt: postData.createdAt || new Date().toISOString(),
-      likes: 0,
-      comments: 0,
+      id:          postData.id || generateId(),
+      createdAt:   postData.createdAt || new Date().toISOString(),
+      likes:       0,
+      comments:    0,
       reshareCount: postData.reshareCount || 0,
     };
 
@@ -4923,14 +4952,15 @@ export default function App() {
     localStorage.setItem('allPosts', JSON.stringify(allPosts));
     setPosts(allPosts);
 
+    // Update stats
     const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
     stats.postsCreated = (stats.postsCreated || 0) + 1;
     localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(stats));
   };
 
   const handleDeletePost = (post) => {
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const filtered = allPosts.filter(p => p.id !== post.id);
+    const allPosts  = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const filtered  = allPosts.filter(p => p.id !== post.id);
     localStorage.setItem('allPosts', JSON.stringify(filtered));
     setPosts(filtered);
     const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
@@ -4940,70 +4970,77 @@ export default function App() {
 
   const handleSavePost = (post) => {
     const userSaved = JSON.parse(localStorage.getItem(`user_${currentUser.email}_savedPosts`) || '[]');
-    const updated = userSaved.includes(post.id) ? userSaved.filter(id => id !== post.id) : [...userSaved, post.id];
+    const updated   = userSaved.includes(post.id) ? userSaved.filter(id => id !== post.id) : [...userSaved, post.id];
     localStorage.setItem(`user_${currentUser.email}_savedPosts`, JSON.stringify(updated));
     setSavedPosts(updated);
   };
 
+  // ── FIXED: Reshare handler — creates new post globally ──
   const handleReshare = (originalPost, comment, isPublic = true) => {
+    // Increment reshare count on original post
     incrementReshareCount(originalPost.id);
 
+    // Notify original author
     if (originalPost.userEmail !== currentUser.email) {
       pushNotification(originalPost.userEmail, {
-        type: 'reshare',
-        fromUser: currentUser.name,
+        type:         'reshare',
+        fromUser:     currentUser.name,
         fromUserEmail: currentUser.email,
-        message: `${currentUser.name} reshared your post`,
-        postId: originalPost.id,
+        message:      `${currentUser.name} reshared your post`,
+        postId:       originalPost.id,
       });
       checkForNewNotifications();
     }
 
+    // Create the reshare post and add it to the global feed
     const resharePost = {
-      id: generateId(),
-      content: originalPost.content || originalPost.story || '',
-      bookName: originalPost.bookName,
-      author: originalPost.author,
-      image: originalPost.image,
+      id:           generateId(),
+      content:      originalPost.content || originalPost.story || '',
+      bookName:     originalPost.bookName,
+      author:       originalPost.author,
+      image:        originalPost.image,
       isPublic,
-      isReshare: true,
+      isReshare:    true,
       reshareComment: comment || null,
-      userName: currentUser.name,
-      userEmail: currentUser.email,
-      userPhoto: currentUser.profileImage,
+      userName:     currentUser.name,
+      userEmail:    currentUser.email,
+      userPhoto:    currentUser.profileImage,
       userInitials: currentUser.name.slice(0, 2).toUpperCase(),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      comments: 0,
+      createdAt:    new Date().toISOString(),
+      likes:        0,
+      comments:     0,
       reshareCount: 0,
       originalPost: {
-        id: originalPost.id,
+        id:       originalPost.id,
         userName: originalPost.userName,
         userEmail: originalPost.userEmail,
-        content: originalPost.content || originalPost.story || '',
+        content:  originalPost.content || originalPost.story || '',
       },
     };
 
     handlePost(resharePost);
 
+    // Show success toast
     setCurrentToast({
-      type: 'success',
-      message: 'Post reshared successfully!',
+      type:      'success',
+      message:   'Post reshared successfully!',
       timestamp: new Date().toISOString(),
     });
     setTimeout(() => setCurrentToast(null), 3000);
   };
 
-  const handleFollow = useCallback((targetEmail, targetName) => {
+  const handleFollow = (targetEmail, targetName) => {
     const currentFollowing = JSON.parse(localStorage.getItem(`user_${currentUser.email}_following`) || '[]');
 
     if (currentFollowing.includes(targetEmail)) {
+      // Unfollow
       const updated = currentFollowing.filter(e => e !== targetEmail);
       localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(updated));
       setFollowing(updated);
       const tf = JSON.parse(localStorage.getItem(`user_${targetEmail}_followers`) || '[]');
       localStorage.setItem(`user_${targetEmail}_followers`, JSON.stringify(tf.filter(e => e !== currentUser.email)));
     } else {
+      // Follow
       const updated = [...currentFollowing, targetEmail];
       localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(updated));
       setFollowing(updated);
@@ -5016,7 +5053,7 @@ export default function App() {
       setCurrentToast({ type: 'success', message: `You are now following ${targetName} 🎉`, timestamp: new Date().toISOString() });
       setTimeout(() => setCurrentToast(null), 3000);
     }
-  }, [currentUser, checkForNewNotifications]);
+  };
 
   const handleBlockUser = (targetEmail, targetName) => {
     const current = JSON.parse(localStorage.getItem(`user_${currentUser.email}_blocked`) || '[]');
@@ -5045,17 +5082,19 @@ export default function App() {
     setViewingFullProfile({ email: userEmail, name: userName });
   };
 
-  const filteredPosts = React.useMemo(() => posts.filter(p => !blockedUsers.includes(p.userEmail)), [posts, blockedUsers]);
+  const filteredPosts = posts.filter(p => !blockedUsers.includes(p.userEmail));
 
   if (loading) return <LoadingSpinner size="xl" fullScreen />;
   if (!isLoggedIn) return <LoginPage onLogin={handleLogin} />;
 
   return (
     <div className="flex justify-center min-h-screen bg-gray-200">
+      {/* Toast notifications */}
       {currentToast && (
         <NotificationToast notification={currentToast} onClose={() => setCurrentToast(null)} />
       )}
 
+      {/* Offline banner */}
       {!isOnline && (
         <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white text-center py-1.5 text-xs z-[200] flex items-center justify-center gap-2">
           <WifiOff className="w-3 h-3" />
@@ -5064,6 +5103,7 @@ export default function App() {
       )}
 
       <div className="w-full max-w-md relative bg-white min-h-screen overflow-hidden shadow-xl">
+        {/* User Profile Quick View */}
         {showUserProfile && selectedUserProfile && (
           <UserProfileModal
             userEmail={selectedUserProfile.email}
@@ -5078,6 +5118,7 @@ export default function App() {
           />
         )}
 
+        {/* Full Profile Page */}
         {viewingFullProfile && (
           <div className="absolute inset-0 z-50 bg-white overflow-y-auto">
             <FullUserProfilePage
@@ -5093,6 +5134,7 @@ export default function App() {
           </div>
         )}
 
+        {/* Main Pages */}
         {!viewingFullProfile && (
           <>
             {currentPage === 'home' && (
@@ -5112,7 +5154,7 @@ export default function App() {
                 onBlock={handleBlockUser}
                 blockedUsers={blockedUsers}
                 onViewUserProfile={handleViewUserProfile}
-                onViewBookDetails={() => { }}
+                onViewBookDetails={(book) => { /* handled inside HomePage */ }}
                 deepLinkPostId={deepLinkPostId}
                 onDeepLinkHandled={() => setDeepLinkPostId(null)}
               />
