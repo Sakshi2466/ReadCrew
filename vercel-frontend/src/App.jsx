@@ -1,12 +1,12 @@
 // ========================================
-// App.jsx - READCREWW Social Platform
+// App.jsx - ReadCrew Social Platform
 // Complete Rewrite - All Bugs Fixed:
 // ✅ Global Likes & Comments (cross-user sync)
 // ✅ Personalized Feed Algorithm
 // ✅ Fixed Notifications (no filter tabs, mark-all-read works)
 // ✅ Fixed Reshare (persists globally)
 // ✅ Real comment counts on posts
-// Version: 3.1 — All Issues Resolved
+// Version: 3.0 — Complete
 // ========================================
 
 // ========================================
@@ -91,13 +91,17 @@ const FEED_WEIGHTS = {
   like: 2.0,
   view: 0.5,
   skip: -1.0,
+
   follow_author: 6.0,
   close_friend: 3.0,
   mutual_follow: 1.5,
+
   book_interest: 3.0,
   tag_match: 2.0,
+
   recency_half_life: 24,
   min_score_factor: 0.05,
+
   discovery_ratio: 0.20,
 };
 
@@ -189,7 +193,7 @@ const generatePersonalizedFeed = (userEmail, allPosts, blockedUsers = []) => {
   if (!allPosts || allPosts.length === 0) return [];
 
   const profile = buildUserInterestProfile(userEmail);
-  const candidates = allPosts.filter(p => !blockedUsers.includes(p.userEmail));
+  const candidates = allPosts.filter(p => !blockedUsers.includes(p.userEmail) && p.userEmail !== userEmail);
 
   const scored = candidates
     .map(post => ({ post, score: scorePostForUser(post, profile) }))
@@ -415,22 +419,6 @@ const NotificationToast = ({ notification, onClose }) => {
     info: <Info className="w-5 h-5 text-blue-500" />,
   };
 
-  const bgColors = {
-    like: 'bg-red-50 border-red-200',
-    comment: 'bg-blue-50 border-blue-200',
-    mention: 'bg-amber-50 border-amber-200',
-    reshare: 'bg-indigo-50 border-indigo-200',
-    follow: 'bg-green-50 border-green-200',
-    invite: 'bg-purple-50 border-purple-200',
-    message: 'bg-emerald-50 border-emerald-200',
-    join: 'bg-blue-50 border-blue-200',
-    leave: 'bg-red-50 border-red-200',
-    review: 'bg-yellow-50 border-yellow-200',
-    warning: 'bg-orange-50 border-orange-200',
-    success: 'bg-green-50 border-green-200',
-    info: 'bg-blue-50 border-blue-200',
-  };
-
   const iconBgs = {
     like: 'bg-red-100', comment: 'bg-blue-100', mention: 'bg-amber-100',
     reshare: 'bg-indigo-100', follow: 'bg-green-100', invite: 'bg-purple-100',
@@ -441,7 +429,7 @@ const NotificationToast = ({ notification, onClose }) => {
 
   return (
     <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-slideDown">
-      <div className={`rounded-2xl shadow-2xl border-2 overflow-hidden ${bgColors[notification.type] || 'bg-white border-gray-200'}`}>
+      <div className={`rounded-2xl shadow-2xl border border-gray-200 bg-white overflow-hidden`}>
         <div className="p-4 flex items-start gap-3">
           <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBgs[notification.type] || 'bg-purple-100'}`}>
             {icons[notification.type] || <Bell className="w-5 h-5 text-gray-500" />}
@@ -569,7 +557,6 @@ const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
         className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
         onError={() => { setCoverUrl(null); setError(true); }}
         loading="lazy"
-        decoding="async"
         referrerPolicy="no-referrer"
       />
     </div>
@@ -1267,7 +1254,6 @@ const NotificationsPage = ({ user, onClose, updateNotificationCount }) => {
     localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
     updateNotificationCount?.();
-    window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
   };
 
   const deleteNotification = (id) => {
@@ -1523,7 +1509,7 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
               value={comment}
               onChange={(e) => setComment(e.target.value)}
               className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none transition"
-              placeholder="what's ur hot take on this? 🔥"
+              placeholder="What do you think about this?"
               rows={3}
               maxLength={500}
             />
@@ -1539,7 +1525,7 @@ const ReshareModal = ({ post, onClose, onReshare }) => {
               {isPublic ? 'Public' : 'Private'}
             </button>
             <span className="text-xs text-gray-400">
-              {isPublic ? 'the whole timeline will see this' : 'just for ur eyes bestie'}
+              {isPublic ? 'Visible to everyone' : 'Only visible to you'}
             </span>
           </div>
 
@@ -1631,7 +1617,7 @@ const PostOptionsModal = ({
                 value={reportDetails}
                 onChange={(e) => setReportDetails(e.target.value)}
                 className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none mb-4"
-                placeholder="anything else bestie? (optional)"
+                placeholder="Additional details (optional)..."
                 rows={3}
                 disabled={!reportReason}
               />
@@ -2121,7 +2107,7 @@ const InlinePostCard = React.memo(({
                     onChange={e => setNewComment(e.target.value)}
                     onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); } }}
                     className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
-                    placeholder={replyTo ? `Reply to @${replyTo.userName}...` : 'drop a comment... @mention ur crew 💬'}
+                    placeholder={replyTo ? `Reply to @${replyTo.userName}...` : 'Write a comment... (@mention someone)'}
                   />
                 </div>
                 <button
@@ -2642,7 +2628,7 @@ const PostPage = ({ user, onPost, setPage }) => {
               value={content}
               onChange={handleContentChange}
               className="w-full bg-transparent text-gray-900 placeholder-gray-400 outline-none text-base resize-none"
-              placeholder="bestie what are u reading rn? spill 👀"
+              placeholder="What are you reading? Share your thoughts..."
               rows={6}
               maxLength={1000}
               autoFocus
@@ -2864,7 +2850,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [tab, setTab] = useState('ai');
   const [messages, setMessages] = useState([{
     role: 'assistant',
-    content: "bestie i got u 😭📚 tell me the VIBE — genre, mood, or the last book that had u in ur feelings. no boring recs i promise 🤞",
+    content: "bestie i got u 😭📚 tell me the VIBE — genre, mood, fave character type, or the last book that had u in ur feelings. no boring recs i promise 🤞",
     timestamp: new Date(),
   }]);
   const [input, setInput] = useState('');
@@ -2873,19 +2859,21 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
   const [selectedBook, setSelBook] = useState(null);
   const [charQuery, setCharQuery] = useState('');
   const [charBooks, setCharBooks] = useState([]);
-  const [charLoading, setCharLoad] = useState(false);
+  const [charLoading, setCharLoading] = useState(false);
   const [charDone, setCharDone] = useState(false);
   const [libraries, setLibraries] = useState([]);
-  const [libLoading, setLibLoad] = useState(false);
+  const [libLoading, setLibLoading] = useState(false);
   const [libError, setLibError] = useState('');
-  const messagesEndRef = useRef(null);
-  const [sessionId] = useState(() => `s_${Date.now()}_${Math.random().toString(36).slice(2)}`);
+  const [userLocation, setUserLoc] = useState(null);
+  const endRef = useRef(null);
+  const [sessionId] = useState(() => `s_${Date.now()}`);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
   const sendMessage = async () => {
     if (!input.trim() || loading) return;
-    const text = input.trim(); setInput('');
+    const text = input.trim();
+    setInput('');
     setMessages(p => [...p, { role: 'user', content: text, timestamp: new Date() }]);
     setLoading(true);
     let used = false;
@@ -2893,8 +2881,10 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), 25000);
       const res = await fetch(`${API_URL}/api/books/chat`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId }), signal: ctrl.signal,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, sessionId }),
+        signal: ctrl.signal,
       });
       clearTimeout(tid);
       if (res.ok) {
@@ -2914,9 +2904,11 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
     setLoading(false);
   };
 
+  const fmt = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
   const searchByCharacter = async () => {
     if (!charQuery.trim()) return;
-    setCharLoad(true); setCharDone(false); setCharBooks([]);
+    setCharLoading(true); setCharDone(false); setCharBooks([]);
     try {
       const q = encodeURIComponent(`character "${charQuery.trim()}"`);
       const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=12&orderBy=relevance&langRestrict=en`);
@@ -2926,28 +2918,40 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
           const v = item.volumeInfo;
           const cover = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
           return {
-            title: v.title || 'Unknown', author: v.authors?.[0] || 'Unknown',
-            genre: v.categories?.[0] || 'Fiction', rating: v.averageRating || 4.0,
-            description: (v.description || '').replace(/<[^>]*>/g, ''),
+            title: v.title || 'Unknown',
+            author: v.authors?.[0] || 'Unknown',
+            genre: v.categories?.[0] || 'Fiction',
+            rating: v.averageRating || 4.0,
+            description: v.description || '',
             coverUrl: cover ? cover.replace('http:', 'https:').replace('&edge=curl', '') : null,
-            pageCount: v.pageCount, publishedDate: v.publishedDate,
+            pageCount: v.pageCount,
+            publishedDate: v.publishedDate,
           };
         }).filter(b => b.title !== 'Unknown');
         setCharBooks(results);
       }
-    } catch (e) { setCharBooks([]); }
-    setCharLoad(false); setCharDone(true);
+    } catch (e) {
+      setCharBooks([]);
+    }
+    setCharLoading(false); setCharDone(true);
   };
 
   const findNearbyLibraries = () => {
-    setLibLoad(true); setLibError('');
-    if (!navigator.geolocation) { setLibError('geolocation not supported on this device bestie 😅'); setLibLoad(false); return; }
+    setLibLoading(true); setLibError('');
+    if (!navigator.geolocation) {
+      setLibError("Geolocation not supported on this device.");
+      setLibLoading(false); return;
+    }
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const { latitude: lat, longitude: lng } = pos.coords;
+        setUserLoc({ lat, lng });
         try {
           const query = `[out:json][timeout:25];(node["amenity"="library"](around:5000,${lat},${lng});way["amenity"="library"](around:5000,${lat},${lng}););out center 15;`;
-          const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
+          const res = await fetch('https://overpass-api.de/api/interpreter', {
+            method: 'POST',
+            body: query,
+          });
           if (res.ok) {
             const data = await res.json();
             const libs = data.elements.map(el => {
@@ -2955,33 +2959,40 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               const clng = el.lon || el.center?.lon;
               const dist = clat && clng ? Math.round(Math.sqrt(Math.pow((clat - lat) * 111, 2) + Math.pow((clng - lng) * 111 * Math.cos(lat * Math.PI / 180), 2)) * 10) / 10 : null;
               return {
-                id: el.id, name: el.tags?.name || 'Public Library',
+                id: el.id,
+                name: el.tags?.name || 'Public Library',
                 address: [el.tags?.['addr:street'], el.tags?.['addr:city']].filter(Boolean).join(', ') || 'Address unavailable',
                 phone: el.tags?.phone || el.tags?.['contact:phone'] || null,
                 website: el.tags?.website || el.tags?.['contact:website'] || null,
-                opening: el.tags?.opening_hours || null, lat: clat, lng: clng, dist,
+                opening: el.tags?.opening_hours || null,
+                lat: clat, lng: clng, dist,
                 mapsUrl: `https://www.google.com/maps/search/?api=1&query=${clat},${clng}`,
               };
             }).filter(l => l.lat).sort((a, b) => (a.dist || 999) - (b.dist || 999));
             setLibraries(libs);
-            if (!libs.length) setLibError('no libraries found within 5km — try a bigger city! 🏙️');
+            if (libs.length === 0) setLibError("No libraries found within 5km. Try a bigger city!");
           }
-        } catch (e) { setLibError('Couldn\'t load libraries rn. Check ur connection 😅'); }
-        setLibLoad(false);
+        } catch (e) {
+          setLibError("Couldn't load libraries rn. Check your connection and try again 😅");
+        }
+        setLibLoading(false);
       },
-      () => { setLibError('location access denied — enable location to find libraries 📍'); setLibLoad(false); },
+      (err) => {
+        setLibError("Location access denied. Enable location to find nearby libraries 📍");
+        setLibLoading(false);
+      },
       { timeout: 10000, maximumAge: 60000 }
     );
   };
 
-  const fmt = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const quickPrompts = ['🔪 dark & twisty', '✨ main character energy', '❤️ slow burn romance', '🚀 sci-fi banger', '💡 big brain reads', '🏰 historical era', '🌙 cozy vibes', '😭 cry-worthy'];
-  const famousChars = ['Sherlock Holmes', 'Elizabeth Bennet', 'Katniss Everdeen', 'Atticus Finch', 'Holden Caulfield', 'Daenerys Targaryen'];
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1] pb-24 overflow-y-auto">
       <div className="px-5 pt-8 pb-4">
-        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{ fontFamily: 'Georgia, serif' }}>main character reads ✨</h1>
+        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{ fontFamily: 'Georgia, serif' }}>
+          main character reads ✨
+        </h1>
         <p className="text-sm text-[#8B7968]">ur AI bestie has the hottest recs 🔥</p>
       </div>
 
@@ -2998,72 +3009,81 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         ))}
       </div>
 
-      {tab === 'ai' && (<>
-        <div className="px-4 space-y-3 pb-44">
-          {messages.map((m, i) => (
-            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
-              {m.role === 'assistant' && (
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0 shadow">
+      {tab === 'ai' && (
+        <>
+          <div className="px-4 space-y-3 pb-44">
+            {messages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
+                {m.role === 'assistant' && (
+                  <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0 shadow">
+                    <BookOpen className="w-4 h-4 text-white" />
+                  </div>
+                )}
+                <div className={`max-w-[78%] flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === 'user' ? 'bg-orange-500 text-white rounded-br-sm' : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'}`}>
+                    {m.content}
+                  </div>
+                  <span className="text-[10px] text-gray-400 mt-1 px-1">{fmt(m.timestamp)}</span>
+                </div>
+              </div>
+            ))}
+            {loading && (
+              <div className="flex justify-start items-end gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0">
                   <BookOpen className="w-4 h-4 text-white" />
                 </div>
-              )}
-              <div className={`max-w-[78%] flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === 'user' ? 'bg-orange-500 text-white rounded-br-sm' : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'}`}>
-                  {m.content}
+                <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
+                  <div className="flex gap-1.5">{[0, 150, 300].map(d => <div key={d} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />)}</div>
                 </div>
-                <span className="text-[10px] text-gray-400 mt-1 px-1">{fmt(m.timestamp)}</span>
               </div>
-            </div>
-          ))}
-          {loading && (
-            <div className="flex justify-start items-end gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0"><BookOpen className="w-4 h-4 text-white" /></div>
-              <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
-                <div className="flex gap-1.5">{[0, 150, 300].map(d => <div key={d} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />)}</div>
+            )}
+            {books.length > 0 && (
+              <div className="space-y-3 pt-4">
+                <div className="flex items-center gap-2 px-1">
+                  <div className="h-px flex-1 bg-orange-200" />
+                  <span className="text-xs text-orange-500 font-semibold">📚 NO-CAP RECS</span>
+                  <div className="h-px flex-1 bg-orange-200" />
+                </div>
+                {books.map((b, i) => (
+                  <BookCard key={i} book={b} onCreateCrew={() => { onCreateCrew(b); setPage('crews'); }} onViewDetails={setSelBook} />
+                ))}
+              </div>
+            )}
+            <div ref={endRef} />
+          </div>
+
+          {messages.length <= 1 && (
+            <div className="fixed bottom-36 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+                {quickPrompts.map(q => (
+                  <button key={q} onClick={() => setInput(q.substring(2))}
+                    className="flex-shrink-0 px-3 py-1.5 bg-white border border-orange-200 rounded-full text-xs text-orange-600 font-medium hover:bg-orange-50 whitespace-nowrap shadow-sm">
+                    {q}
+                  </button>
+                ))}
               </div>
             </div>
           )}
-          {books.length > 0 && (
-            <div className="space-y-3 pt-4">
-              <div className="flex items-center gap-2 px-1">
-                <div className="h-px flex-1 bg-orange-200" />
-                <span className="text-xs text-orange-500 font-semibold">📚 NO-CAP RECS</span>
-                <div className="h-px flex-1 bg-orange-200" />
-              </div>
-              {books.map((b, i) => (
-                <BookCard key={i} book={b} onCreateCrew={() => { onCreateCrew(b); setPage('crews'); }} onViewDetails={setSelBook} />
-              ))}
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-        {messages.length <= 1 && (
-          <div className="fixed bottom-36 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
-            <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-              {quickPrompts.map(q => (
-                <button key={q} onClick={() => setInput(q.substring(2))}
-                  className="flex-shrink-0 px-3 py-1.5 bg-white border border-orange-200 rounded-full text-xs text-orange-600 font-medium hover:bg-orange-50 whitespace-nowrap shadow-sm">
-                  {q}
+
+          <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+            <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <input
+                  value={input}
+                  onChange={e => setInput(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  placeholder="Tell me the vibe and I gotchu 📚✨"
+                  className="flex-1 bg-transparent text-sm text-[#2D1F14] outline-none placeholder-gray-400"
+                />
+                <button onClick={sendMessage} disabled={!input.trim() || loading}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${input.trim() && !loading ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                  <Send className="w-4 h-4" />
                 </button>
-              ))}
+              </div>
             </div>
           </div>
-        )}
-        <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-md px-4">
-          <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 px-3 py-2.5">
-            <div className="flex items-center gap-2">
-              <input value={input} onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder="tell me the vibe and I gotchu 📚✨"
-                className="flex-1 bg-transparent text-sm text-[#2D1F14] outline-none placeholder-gray-400" />
-              <button onClick={sendMessage} disabled={!input.trim() || loading}
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${input.trim() && !loading ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-        </div>
-      </>)}
+        </>
+      )}
 
       {tab === 'character' && (
         <div className="px-4 py-2 pb-10">
@@ -3071,10 +3091,15 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
             <h2 className="text-lg font-bold mb-1">Search by Character 🎭</h2>
             <p className="text-sm text-gray-500 mb-4">obsessed with a character? find the book they came from or books with similar vibes 👀</p>
             <div className="flex gap-2">
-              <input value={charQuery} onChange={e => setCharQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') searchByCharacter(); }}
-                placeholder="e.g. Hermione, Heathcliff, Jay Gatsby…"
-                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400" />
+              <div className="relative flex-1">
+                <input
+                  value={charQuery}
+                  onChange={e => setCharQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') searchByCharacter(); }}
+                  placeholder="e.g. Hermione, Heathcliff, Jay Gatsby…"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 transition"
+                />
+              </div>
               <button onClick={searchByCharacter} disabled={!charQuery.trim() || charLoading}
                 className="px-5 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-orange-600 transition flex items-center gap-2">
                 {charLoading ? <LoadingSpinner size="sm" color="white" /> : <Search className="w-4 h-4" />}
@@ -3082,7 +3107,11 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               </button>
             </div>
           </div>
-          {charLoading && <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>}
+
+          {charLoading && (
+            <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
+          )}
+
           {charDone && charBooks.length === 0 && !charLoading && (
             <div className="text-center py-12">
               <span className="text-5xl mb-4 block">🤷</span>
@@ -3090,9 +3119,10 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               <p className="text-gray-400 text-sm mt-1">try a different spelling or a more famous character</p>
             </div>
           )}
+
           {charBooks.length > 0 && (
             <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-600 mb-2">found {charBooks.length} books featuring <span className="text-orange-500">"{charQuery}"</span> ✨</p>
+              <p className="text-sm font-semibold text-gray-600 mb-2">found {charBooks.length} books featuring or inspired by <span className="text-orange-500">"{charQuery}"</span> ✨</p>
               {charBooks.map((b, i) => (
                 <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
                   <div className="flex gap-4">
@@ -3101,7 +3131,7 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
                       <h3 className="font-bold text-gray-900 text-sm leading-tight">{b.title}</h3>
                       <p className="text-xs text-gray-500 mt-0.5">by {b.author}</p>
                       {b.genre && <span className="inline-block mt-1.5 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{b.genre}</span>}
-                      {b.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{b.description}</p>}
+                      {b.description && <p className="text-xs text-gray-500 mt-2 line-clamp-2">{b.description.replace(/<[^>]*>/g, '')}</p>}
                       <div className="flex items-center gap-2 mt-2">
                         <StarRating rating={Math.round(b.rating || 4)} size="xs" readonly />
                         <span className="text-xs font-semibold text-gray-700">{(b.rating || 4).toFixed(1)}</span>
@@ -3118,11 +3148,11 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               ))}
             </div>
           )}
-          {!charDone && !charLoading && (
+
+          {!charDone && !charLoading && charBooks.length === 0 && (
             <div className="grid grid-cols-2 gap-3">
-              {famousChars.map(char => (
-                <button key={char} onClick={() => setCharQuery(char)}
-                  className="bg-white rounded-xl p-3 border border-gray-200 text-left hover:border-orange-300 hover:shadow-sm transition">
+              {['Sherlock Holmes', 'Elizabeth Bennet', 'Katniss Everdeen', 'Atticus Finch', 'Holden Caulfield', 'Daenerys Targaryen'].map(char => (
+                <button key={char} onClick={() => { setCharQuery(char); }} className="bg-white rounded-xl p-3 border border-gray-200 text-left hover:border-orange-300 hover:shadow-sm transition">
                   <span className="text-2xl block mb-1">📖</span>
                   <p className="text-sm font-semibold text-gray-800">{char}</p>
                 </button>
@@ -3136,19 +3166,23 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
         <div className="px-4 py-2 pb-10">
           <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm mb-5">
             <h2 className="text-lg font-bold mb-1">Nearby Libraries 📍</h2>
-            <p className="text-sm text-gray-500 mb-4">find public libraries within 5km — because physical books are still iconic 📚</p>
+            <p className="text-sm text-gray-500 mb-4">find public libraries within 5km of ur location — because physical books are still iconic 📚</p>
             <button onClick={findNearbyLibraries} disabled={libLoading}
               className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-60">
               {libLoading ? <><LoadingSpinner size="sm" color="white" /><span>Finding libraries...</span></> : <><Navigation className="w-5 h-5" /><span>Find Libraries Near Me</span></>}
             </button>
             {libError && <p className="text-red-500 text-sm mt-3 text-center">{libError}</p>}
           </div>
-          {libLoading && <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>}
+
+          {libLoading && (
+            <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
+          )}
+
           {libraries.length > 0 && (
             <div className="space-y-3">
               <p className="text-sm font-semibold text-gray-600 mb-2">found {libraries.length} libraries nearby 🎉</p>
               {libraries.map((lib, i) => (
-                <div key={lib.id || i} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
+                <div key={lib.id || i} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm hover:shadow-md transition">
                   <div className="flex items-start gap-3">
                     <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
                       <BookOpen className="w-5 h-5 text-orange-500" />
@@ -3179,17 +3213,20 @@ const ExplorePage = ({ user, setPage, onCreateCrew }) => {
               ))}
             </div>
           )}
-          {!libLoading && !libraries.length && !libError && (
+
+          {!libLoading && libraries.length === 0 && !libError && (
             <div className="text-center py-12">
               <span className="text-6xl block mb-4">📍</span>
               <p className="text-gray-600 font-medium">tap the button to find libraries near u</p>
-              <p className="text-gray-400 text-sm mt-1">uses ur device location — 100% private, not stored</p>
+              <p className="text-gray-400 text-sm mt-1">uses your device location — 100% private, not stored</p>
             </div>
           )}
         </div>
       )}
 
-      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelBook(null)} onCreateCrew={onCreateCrew} />}
+      {selectedBook && (
+        <BookDetailsModal book={selectedBook} onClose={() => setSelBook(null)} onCreateCrew={onCreateCrew} />
+      )}
     </div>
   );
 };
@@ -3203,7 +3240,6 @@ const HomePage = ({
   profileSrc, savedPosts, onSavePost, onResharePost, onDeletePost,
   onFollow, following, onBlock, blockedUsers,
   onViewUserProfile, onViewBookDetails,
-  onCreateCrew,
   deepLinkPostId, onDeepLinkHandled,
 }) => {
   const [trendingBooks, setTrendingBooks] = useState([]);
@@ -3214,9 +3250,7 @@ const HomePage = ({
   const [showReshare, setShowReshare] = useState(null);
   const [stats, setStats] = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
   const [readingProgress, setReadingProgress] = useState(0);
-  const [showBookDate, setShowBookDate] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(10);
-  const loaderRef = useRef(null);
+  const [feedRefreshed, setFeedRefreshed] = useState(false);
 
   useEffect(() => {
     if (!deepLinkPostId || feedPosts.length === 0) return;
@@ -3254,13 +3288,16 @@ const HomePage = ({
 
   useEffect(() => {
     loadPersonalizedFeed();
-    setVisibleCount(10);
   }, [posts.length, following.length]);
+
+  const POSTS_PER_PAGE = 10;
+  const [visibleCount, setVisibleCount] = useState(POSTS_PER_PAGE);
+  const loaderRef = useRef(null);
 
   useEffect(() => {
     if (!loaderRef.current) return;
     const observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) setVisibleCount(c => c + 10);
+      if (entries[0].isIntersecting) setVisibleCount(c => c + POSTS_PER_PAGE);
     }, { threshold: 0.1 });
     observer.observe(loaderRef.current);
     return () => observer.disconnect();
@@ -3278,6 +3315,7 @@ const HomePage = ({
 
         const personalized = generatePersonalizedFeed(user.email, merged, blockedUsers);
         setFeedPosts(personalized);
+        setFeedRefreshed(true);
         return;
       }
     } catch (_) { }
@@ -3285,6 +3323,7 @@ const HomePage = ({
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     const personalized = generatePersonalizedFeed(user.email, allPosts, blockedUsers);
     setFeedPosts(personalized);
+    setFeedRefreshed(true);
   };
 
   const loadTrendingBooks = async () => {
@@ -3338,7 +3377,6 @@ const HomePage = ({
       )}
 
       {showShare && <ShareModal post={showShare} onClose={() => setShowShare(null)} />}
-      {showBookDate && <BookDateModal onClose={() => setShowBookDate(false)} user={user} onCreateCrew={onCreateCrew || (() => { })} />}
       {showReshare && <ReshareModal post={showReshare} onClose={() => setShowReshare(null)} onReshare={handleReshare} />}
 
       <div className="px-4 py-4 space-y-5">
@@ -3371,8 +3409,8 @@ const HomePage = ({
             <Sparkles className="w-4 h-4 text-blue-500" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-blue-900">this feed is lowkey obsessed with u</p>
-            <p className="text-xs text-blue-600">ranked by ur vibes, follows & book taste ✨</p>
+            <p className="text-xs font-semibold text-blue-900">Personalized for you</p>
+            <p className="text-xs text-blue-600">Feed ranked by your likes, follows & reading interests</p>
           </div>
           <button onClick={loadPersonalizedFeed} className="p-1.5 hover:bg-blue-100 rounded-lg transition">
             <RefreshCw className="w-4 h-4 text-blue-400" />
@@ -3449,15 +3487,6 @@ const HomePage = ({
             )}
           </div>
         </div>
-
-        <button onClick={() => setShowBookDate(true)} className="w-full bg-gradient-to-r from-pink-500 to-orange-500 rounded-xl p-4 text-white shadow-lg flex items-center gap-3 hover:opacity-90 transition active:scale-95">
-          <span className="text-2xl">📖💘</span>
-          <div className="flex-1 text-left">
-            <p className="font-bold text-sm">Book Date</p>
-            <p className="text-pink-100 text-xs">go on a date with ur next read bestie ✨</p>
-          </div>
-          <ChevronRight className="w-5 h-5 text-pink-200" />
-        </button>
 
         <button onClick={() => setPage('post')} className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
           {profileSrc ? <img src={profileSrc} alt="profile" className="w-9 h-9 rounded-full object-cover flex-shrink-0" /> : <Avatar initials={user?.name} size="sm" />}
@@ -4378,7 +4407,7 @@ const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount
       <div className="px-4 py-4">
         <div className="mb-4 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="search for ur next read crew 🔍" className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400" />
+          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search crews..." className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400" />
           {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 transform -translate-y-1/2"><X className="w-4 h-4 text-gray-400" /></button>}
         </div>
 
@@ -4658,181 +4687,6 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
                 </div>
               ))
             }
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 34B: BOOK DATE FEATURE
-// ========================================
-
-const BookDateModal = ({ onClose, user, onCreateCrew }) => {
-  const [step, setStep] = useState('pick');
-  const [dateBook, setDate] = useState(null);
-  const [dateVibe, setVibe] = useState('');
-  const [rating, setRating] = useState(0);
-  const [review, setReview] = useState('');
-  const [wouldReturn, setWR] = useState(null);
-  const [loading, setLoad] = useState(false);
-
-  const vibeOptions = [
-    { emoji: '☕', label: 'Cozy café date', desc: 'relaxed, slow burn, warm vibes' },
-    { emoji: '🌙', label: 'Late night date', desc: 'couldn\'t put it down, stayed up till 3am' },
-    { emoji: '🌊', label: 'Beach date', desc: 'breezy, light, perfect summer read' },
-    { emoji: '🎢', label: 'Rollercoaster', desc: 'emotional wreck, twist after twist' },
-    { emoji: '💔', label: 'Situationship', desc: 'started strong, then disappointed me' },
-    { emoji: '💍', label: 'The one', desc: 'instant fave, 10/10 no notes' },
-  ];
-
-  const sampleBooks = [
-    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6 },
-    { title: 'It Ends with Us', author: 'Colleen Hoover', genre: 'Romance', rating: 4.6 },
-    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6 },
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8 },
-    { title: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.6 },
-    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', rating: 4.7 },
-  ];
-
-  const saveDateCard = () => {
-    const card = {
-      id: `date_${Date.now()}`,
-      bookTitle: dateBook.title,
-      bookAuthor: dateBook.author,
-      vibe: dateVibe,
-      rating,
-      review,
-      wouldReturn,
-      userName: user.name,
-      userEmail: user.email,
-      createdAt: new Date().toISOString(),
-    };
-    const existing = JSON.parse(localStorage.getItem(`user_${user.email}_bookDates`) || '[]');
-    existing.unshift(card);
-    localStorage.setItem(`user_${user.email}_bookDates`, JSON.stringify(existing));
-
-    const post = {
-      id: `post_${Date.now()}`,
-      content: `went on a book date with "${dateBook.title}" by ${dateBook.author} 📖\n\nVibe: ${dateVibe}\n\n${review}\n\nWould I come back? ${wouldReturn ? 'absolutely 💍' : 'it\'s complicated 💔'}`,
-      bookName: dateBook.title,
-      author: dateBook.author,
-      userName: user.name,
-      userEmail: user.email,
-      createdAt: new Date().toISOString(),
-      likes: 0, comments: 0, reshareCount: 0,
-      isBookDate: true,
-    };
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    allPosts.unshift(post);
-    localStorage.setItem('allPosts', JSON.stringify(allPosts));
-    setStep('done');
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-4"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-      <div className="bg-white rounded-3xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto shadow-2xl">
-
-        {step === 'pick' && (<>
-          <div className="bg-gradient-to-br from-pink-500 to-orange-500 p-6 rounded-t-3xl text-white">
-            <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-white/20 rounded-full"><X className="w-5 h-5" /></button>
-            <div className="text-4xl mb-2">📖💘</div>
-            <h2 className="text-2xl font-bold">Book Date</h2>
-            <p className="text-pink-100 text-sm mt-1">go on a date with ur next read bestie ✨</p>
-          </div>
-          <div className="p-5">
-            <p className="text-sm font-semibold text-gray-700 mb-3">pick ur date for tonight 👇</p>
-            <div className="space-y-3 mb-5">
-              {sampleBooks.map((b, i) => (
-                <button key={i} onClick={() => { setDate(b); setStep('date'); }}
-                  className="w-full flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition text-left">
-                  <DynamicBookCover title={b.title} author={b.author} size="xs" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm truncate">{b.title}</p>
-                    <p className="text-xs text-gray-500">by {b.author}</p>
-                  </div>
-                  <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                </button>
-              ))}
-            </div>
-            <button onClick={onClose} className="w-full py-2 text-sm text-gray-500 hover:text-gray-700">maybe another time</button>
-          </div>
-        </>)}
-
-        {step === 'date' && dateBook && (<>
-          <div className="bg-gradient-to-br from-pink-500 to-orange-500 p-6 rounded-t-3xl text-white">
-            <h2 className="text-xl font-bold">ur date: {dateBook.title} 📖</h2>
-            <p className="text-pink-100 text-sm mt-1">what kinda date is this gonna be? 👀</p>
-          </div>
-          <div className="p-5">
-            <div className="grid grid-cols-2 gap-3 mb-5">
-              {vibeOptions.map(v => (
-                <button key={v.label} onClick={() => setVibe(v.label)}
-                  className={`p-3 rounded-xl border-2 text-left transition ${dateVibe === v.label ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
-                  <span className="text-2xl block mb-1">{v.emoji}</span>
-                  <p className="font-semibold text-xs text-gray-800">{v.label}</p>
-                  <p className="text-[10px] text-gray-500 mt-0.5">{v.desc}</p>
-                </button>
-              ))}
-            </div>
-            <button onClick={() => dateVibe && setStep('review')} disabled={!dateVibe}
-              className="w-full py-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-xl font-semibold disabled:opacity-40">
-              it's a date 💅
-            </button>
-          </div>
-        </>)}
-
-        {step === 'review' && (<>
-          <div className="bg-gradient-to-br from-pink-500 to-orange-500 p-6 rounded-t-3xl text-white">
-            <h2 className="text-xl font-bold">so how was the date? ☕</h2>
-            <p className="text-pink-100 text-sm mt-1">spill everything bestie 👀</p>
-          </div>
-          <div className="p-5 space-y-4">
-            <div>
-              <p className="text-sm font-semibold text-gray-700 mb-2">rate ur date 💖</p>
-              <StarRating rating={rating} onChange={setRating} size="lg" />
-            </div>
-            <textarea value={review} onChange={e => setReview(e.target.value)} rows={4}
-              className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none"
-              placeholder="ok bestie full review — what happened, did u cry, would u recommend..." />
-            <div>
-              <p className="text-sm font-semibold text-gray-700 mb-2">would u go on a second date? 👀</p>
-              <div className="flex gap-3">
-                <button onClick={() => setWR(true)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition ${wouldReturn === true ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600'}`}>
-                  💍 absolutely
-                </button>
-                <button onClick={() => setWR(false)}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition ${wouldReturn === false ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-200 text-gray-600'}`}>
-                  💔 it's complicated
-                </button>
-              </div>
-            </div>
-            <button onClick={saveDateCard} disabled={!rating || !review.trim() || wouldReturn === null}
-              className="w-full py-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-xl font-semibold disabled:opacity-40">
-              post my date card ✨
-            </button>
-          </div>
-        </>)}
-
-        {step === 'done' && (
-          <div className="p-8 text-center">
-            <div className="text-6xl mb-4">📖💘</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">date card posted!</h2>
-            <p className="text-gray-500 text-sm mb-6">ur book date is now on ur feed bestie 🎉</p>
-            <div className="bg-gradient-to-r from-pink-50 to-orange-50 rounded-2xl p-4 mb-5 border border-orange-100">
-              <p className="font-bold text-gray-900">{dateBook?.title}</p>
-              <p className="text-sm text-gray-500">by {dateBook?.author}</p>
-              <p className="text-sm text-pink-600 mt-2">{dateVibe}</p>
-              <StarRating rating={rating} size="sm" readonly />
-              <p className="text-xs text-gray-600 mt-2 italic">"{review.substring(0, 80)}{review.length > 80 ? '...' : ''}"</p>
-            </div>
-            <button onClick={onClose}
-              className="w-full py-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-xl font-semibold">
-              slay 💅
-            </button>
           </div>
         )}
       </div>
@@ -5162,7 +5016,7 @@ export default function App() {
       setCurrentToast({ type: 'success', message: `You are now following ${targetName} 🎉`, timestamp: new Date().toISOString() });
       setTimeout(() => setCurrentToast(null), 3000);
     }
-  }, [currentUser]);
+  }, [currentUser, checkForNewNotifications]);
 
   const handleBlockUser = (targetEmail, targetName) => {
     const current = JSON.parse(localStorage.getItem(`user_${currentUser.email}_blocked`) || '[]');
@@ -5258,13 +5112,7 @@ export default function App() {
                 onBlock={handleBlockUser}
                 blockedUsers={blockedUsers}
                 onViewUserProfile={handleViewUserProfile}
-                onViewBookDetails={(book) => { }}
-                onCreateCrew={(book) => {
-                  const nc = { id: generateId(), name: book.title, author: book.author, genre: book.genre || 'General', members: 1, chats: 0, createdBy: currentUser.email, createdByName: currentUser.name, createdAt: new Date().toISOString() };
-                  const updatedCrews = [nc, ...crews]; setCrews(updatedCrews);
-                  localStorage.setItem('crews', JSON.stringify(updatedCrews));
-                  setCurrentPage('crews');
-                }}
+                onViewBookDetails={() => { }}
                 deepLinkPostId={deepLinkPostId}
                 onDeepLinkHandled={() => setDeepLinkPostId(null)}
               />
