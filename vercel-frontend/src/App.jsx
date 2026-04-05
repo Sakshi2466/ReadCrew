@@ -226,90 +226,21 @@ const generatePersonalizedFeed = (userEmail, allPosts, blockedUsers = []) => {
   return finalFeed;
 };
 
-// ========================================
-// SECTION 4: GLOBAL INTERACTION HELPERS
-// ========================================
-
-const getPostLikes = (postId) => {
-  const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  return likedBy.length;
-};
-
-const hasUserLikedPost = (postId, userEmail) => {
-  const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  return likedBy.includes(userEmail);
-};
-
-const addGlobalLike = (postId, userEmail) => {
-  const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  if (likedBy.includes(userEmail)) return likedBy.length;
-
-  likedBy.push(userEmail);
-  localStorage.setItem(`post_${postId}_likedBy`, JSON.stringify(likedBy));
-
-  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  const updatedPosts = allPosts.map(p =>
-    p.id === postId ? { ...p, likes: likedBy.length } : p
-  );
-  localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-
-  const userLiked = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
-  if (!userLiked.includes(postId)) {
-    userLiked.push(postId);
-    localStorage.setItem(`user_${userEmail}_likedPosts`, JSON.stringify(userLiked));
+// Test backend connection
+const testBackend = async () => {
+  try {
+    const response = await fetch('https://versal-book-app.onrender.com/api/health');
+    const data = await response.json();
+    console.log('Backend health:', data);
+    return data.status === 'healthy';
+  } catch (error) {
+    console.error('Backend unreachable:', error);
+    return false;
   }
-
-  return likedBy.length;
 };
 
-const getPostComments = (postId) => {
-  return JSON.parse(localStorage.getItem(`post_${postId}_comments`) || '[]');
-};
-
-const fetchCommentsFromServer = async (postId) => {
-  const res = await api.get(`/api/social/posts/${postId}/comments`);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
-  }
-  return getPostComments(postId);
-};
-
-const postCommentToServer = async (postId, commentData) => {
-  const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
-  }
-  const cmts = getPostComments(postId);
-  cmts.push(commentData);
-  localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-  const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  localStorage.setItem('allPosts', JSON.stringify(
-    all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-  ));
-  return cmts;
-};
-
-const incrementReshareCount = (postId) => {
-  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  const updatedPosts = allPosts.map(p =>
-    p.id === postId ? { ...p, reshareCount: (p.reshareCount || 0) + 1 } : p
-  );
-  localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-  return (updatedPosts.find(p => p.id === postId)?.reshareCount) || 0;
-};
-
+// Call this on app start
+testBackend();
 // ========================================
 // SECTION 5: NOTIFICATION HELPERS
 // ========================================
