@@ -227,87 +227,280 @@ const generatePersonalizedFeed = (userEmail, allPosts, blockedUsers = []) => {
 };
 
 // ========================================
-// SECTION 4: GLOBAL INTERACTION HELPERS
+// SECTION 4: GLOBAL INTERACTION HELPERS (FIXED FOR BACKEND)
 // ========================================
 
-const getPostLikes = (postId) => {
+// Your backend API base URL
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com/api/social';
+
+// Helper for API calls
+const apiCall = async (endpoint, options = {}) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+      },
+      ...options
+    });
+    
+    const data = await response.json();
+    return { success: data.success, data };
+  } catch (error) {
+    console.error(`API Error (${endpoint}):`, error);
+    return { success: false, error: error.message };
+  }
+};
+
+// ========== POSTS (GLOBAL) ==========
+
+// Get all posts from backend (GLOBAL - all users see all posts)
+const getAllPosts = async (page = 1, limit = 20, userEmail = null) => {
+  let url = `/posts?page=${page}&limit=${limit}`;
+  if (userEmail) url += `&userEmail=${encodeURIComponent(userEmail)}`;
+  
+  const result = await apiCall(url);
+  if (result.success) {
+    // Cache in localStorage for offline fallback
+    localStorage.setItem('allPosts', JSON.stringify(result.data.posts));
+    return result.data.posts;
+  }
+  
+  // Fallback to localStorage if server fails
+  return JSON.parse(localStorage.getItem('allPosts') || '[]');
+};
+
+// Create a new post (GLOBAL)
+const createPost = async (postData) => {
+  const result = await apiCall('/posts', {
+    method: 'POST',
+    body: JSON.stringify(postData)
+  });
+  
+  if (result.success) {
+    // Update local cache
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    allPosts.unshift(result.data.post);
+    localStorage.setItem('allPosts', JSON.stringify(allPosts.slice(0, 500)));
+    return result.data.post;
+  }
+  
+  throw new Error(result.data?.message || 'Failed to create post');
+};
+
+// ========== LIKES (GLOBAL) ==========
+
+// Get like count for a post
+const getPostLikes = async (postId) => {
+  const result = await apiCall(`/posts/${postId}`);
+  if (result.success) {
+    return result.data.post.likes;
+  }
+  
+  // Fallback to localStorage
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
   return likedBy.length;
 };
 
-const hasUserLikedPost = (postId, userEmail) => {
+// Check if user liked a post
+const hasUserLikedPost = async (postId, userEmail) => {
+  if (!userEmail) return false;
+  
+  const result = await apiCall(`/posts/${postId}`);
+  if (result.success && result.data.post) {
+    return result.data.post.likedBy?.includes(userEmail) || false;
+  }
+  
+  // Fallback to localStorage
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
   return likedBy.includes(userEmail);
 };
 
-const addGlobalLike = (postId, userEmail) => {
+// Toggle like on a post (GLOBAL)
+const addGlobalLike = async (postId, userEmail, userName = '') => {
+  if (!userEmail) return { likes: 0, liked: false };
+  
+  const result = await apiCall(`/posts/${postId}/like`, {
+    method: 'POST',
+    body: JSON.stringify({ userEmail, userName })
+  });
+  
+  if (result.success) {
+    const { likes, liked } = result.data;
+    
+    // Update local cache
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const updatedPosts = allPosts.map(p =>
+      p.id === postId ? { ...p, likes } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+    
+    return { likes, liked };
+  }
+  
+  // Fallback to localStorage only
   const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  if (likedBy.includes(userEmail)) return likedBy.length;
-
-  likedBy.push(userEmail);
+  const alreadyLiked = likedBy.includes(userEmail);
+  
+  if (alreadyLiked) {
+    const index = likedBy.indexOf(userEmail);
+    likedBy.splice(index, 1);
+  } else {
+    likedBy.push(userEmail);
+  }
+  
   localStorage.setItem(`post_${postId}_likedBy`, JSON.stringify(likedBy));
-
+  
   const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
   const updatedPosts = allPosts.map(p =>
     p.id === postId ? { ...p, likes: likedBy.length } : p
   );
   localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-
-  const userLiked = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
-  if (!userLiked.includes(postId)) {
-    userLiked.push(postId);
-    localStorage.setItem(`user_${userEmail}_likedPosts`, JSON.stringify(userLiked));
-  }
-
-  return likedBy.length;
+  
+  return { likes: likedBy.length, liked: !alreadyLiked };
 };
 
-const getPostComments = (postId) => {
+// ========== COMMENTS (GLOBAL) ==========
+
+// Get comments for a post
+const getPostComments = async (postId) => {
+  const result = await apiCall(`/posts/${postId}/comments`);
+  
+  if (result.success) {
+    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(result.data.comments));
+    return result.data.comments;
+  }
+  
+  // Fallback to localStorage
   return JSON.parse(localStorage.getItem(`post_${postId}_comments`) || '[]');
 };
 
+// Fetch comments from server (alias)
 const fetchCommentsFromServer = async (postId) => {
-  const res = await api.get(`/api/social/posts/${postId}/comments`);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
-  }
-  return getPostComments(postId);
+  return await getPostComments(postId);
 };
 
+// Add a comment to a post (GLOBAL)
 const postCommentToServer = async (postId, commentData) => {
-  const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
+  const result = await apiCall(`/posts/${postId}/comments`, {
+    method: 'POST',
+    body: JSON.stringify(commentData)
+  });
+  
+  if (result.success) {
+    const { comments } = result.data;
+    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(comments));
+    
+    // Update comment count in local cache
+    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+    const topLevelComments = comments.filter(c => !c.parentId);
+    const updatedPosts = allPosts.map(p =>
+      p.id === postId ? { ...p, comments: topLevelComments.length } : p
+    );
+    localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+    
+    return comments;
   }
-  const cmts = getPostComments(postId);
-  cmts.push(commentData);
+  
+  // Fallback to localStorage
+  const cmts = JSON.parse(localStorage.getItem(`post_${postId}_comments`) || '[]');
+  const newComment = {
+    id: `cmt_${Date.now()}`,
+    ...commentData,
+    timestamp: new Date().toISOString(),
+    likes: 0,
+    likedBy: []
+  };
+  cmts.push(newComment);
   localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-  const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  localStorage.setItem('allPosts', JSON.stringify(
-    all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-  ));
+  
+  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+  const updatedPosts = allPosts.map(p =>
+    p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p
+  );
+  localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+  
   return cmts;
 };
 
-const incrementReshareCount = (postId) => {
+// ========== RESHARE (GLOBAL) ==========
+
+// Increment reshare count (GLOBAL)
+const incrementReshareCount = async (postId, userEmail, userName, reshareComment = '') => {
+  // First, create the reshare post
+  const originalPost = await getPostById(postId);
+  
+  if (originalPost) {
+    const reshareData = {
+      content: reshareComment || `Shared: ${originalPost.content?.substring(0, 100)}`,
+      userName,
+      userEmail,
+      isReshare: true,
+      originalPostId: postId,
+      originalPost: originalPost,
+      reshareComment: reshareComment,
+      type: 'reshare'
+    };
+    
+    const result = await createPost(reshareData);
+    
+    if (result) {
+      // Update local reshare count
+      const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+      const updatedPosts = allPosts.map(p =>
+        p.id === postId ? { ...p, reshareCount: (p.reshareCount || 0) + 1 } : p
+      );
+      localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
+      return (updatedPosts.find(p => p.id === postId)?.reshareCount) || 0;
+    }
+  }
+  
+  // Fallback to localStorage only
   const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
   const updatedPosts = allPosts.map(p =>
     p.id === postId ? { ...p, reshareCount: (p.reshareCount || 0) + 1 } : p
   );
   localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
   return (updatedPosts.find(p => p.id === postId)?.reshareCount) || 0;
+};
+
+// Helper: Get single post by ID
+const getPostById = async (postId) => {
+  const result = await apiCall(`/posts/${postId}`);
+  if (result.success) {
+    return result.data.post;
+  }
+  
+  // Fallback to localStorage
+  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
+  return allPosts.find(p => p.id === postId);
+};
+
+// ========== HELPER FUNCTIONS FOR UI ==========
+
+// Get current user from localStorage
+const getCurrentUser = () => {
+  const userStr = localStorage.getItem('currentUser');
+  if (userStr) {
+    try {
+      return JSON.parse(userStr);
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+};
+
+// Get user email helper
+const getUserEmail = () => {
+  const user = getCurrentUser();
+  return user?.email || null;
+};
+
+// Get user name helper
+const getUserName = () => {
+  const user = getCurrentUser();
+  return user?.name || user?.userName || 'User';
 };
 
 // ========================================
@@ -1797,6 +1990,8 @@ const PostOptionsModal = ({
 // ========================================
 // SECTION 23: INLINE POST CARD
 // ✅ Heart Glitter: burst of hearts+sparkles when you like a post
+// ✅ Toggle Like/Unlike - Click to like, click again to unlike
+// ✅ Global sync with backend - all users see updates
 // ========================================
 
 const InlinePostCard = React.memo(({
@@ -1805,8 +2000,17 @@ const InlinePostCard = React.memo(({
   onDelete, onFollow, isFollowing, onBlock, isBlocked,
   onViewUserProfile, onViewBookDetails,
 }) => {
-  const [isLiked, setIsLiked] = useState(() => hasUserLikedPost(post.id, user.email));
-  const [likeCount, setLikeCount] = useState(() => getPostLikes(post.id) || post.likes || 0);
+  // ========== STATE ==========
+  // Like state - initializes from post data or localStorage
+  const [isLiked, setIsLiked] = useState(() => {
+    if (post.likedBy && user?.email) {
+      return post.likedBy.includes(user.email);
+    }
+    return hasUserLikedPost(post.id, user?.email);
+  });
+  const [likeCount, setLikeCount] = useState(() => post.likes || getPostLikes(post.id) || 0);
+  
+  // Comment states
   const [showComments, setShowComments] = useState(false);
   const [comments, setComments] = useState([]);
   const [commentCount, setCommentCount] = useState(post.comments || 0);
@@ -1817,27 +2021,49 @@ const InlinePostCard = React.memo(({
   const [showReplies, setShowReplies] = useState({});
   const [showOptions, setShowOptions] = useState(false);
   const [loadingComments, setLoadingComments] = useState(false);
-  // ✅ Glitter effect state — stores position for burst animation
+  
+  // Loading states
+  const [isLiking, setIsLiking] = useState(false); // Prevents double clicks
+  
+  // Glitter effect state
   const [glitterEffects, setGlitterEffects] = useState([]);
+  
+  // Refs
   const likeButtonRef = useRef(null);
   const inputRef = useRef(null);
 
+  // ========== EFFECTS ==========
+  
+  // Update like status when post data changes (from socket/backend)
   useEffect(() => {
-    const realLikes = getPostLikes(post.id);
-    if (realLikes !== likeCount) setLikeCount(realLikes);
-    setIsLiked(hasUserLikedPost(post.id, user.email));
-  }, [post.id]);
+    const updateLikeStatus = async () => {
+      if (user?.email) {
+        const liked = await hasUserLikedPost(post.id, user.email);
+        setIsLiked(liked);
+      }
+    };
+    updateLikeStatus();
+    
+    // Update like count from post object if changed
+    if (post.likes !== undefined && post.likes !== likeCount) {
+      setLikeCount(post.likes);
+    }
+  }, [post.id, post.likes, user?.email]);
 
+  // Load liked comments from localStorage
   useEffect(() => {
-    const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedComments`) || '[]');
+    const liked = JSON.parse(localStorage.getItem(`user_${user?.email}_likedComments`) || '[]');
     setLikedComments(new Set(liked));
-  }, [user.email]);
+  }, [user?.email]);
 
+  // Load comments when panel opens
   useEffect(() => {
     if (!showComments) return;
     loadComments();
   }, [showComments]);
 
+  // ========== COMMENT FUNCTIONS ==========
+  
   const loadComments = async () => {
     setLoadingComments(true);
     const pid = post.id || post._id;
@@ -1847,7 +2073,8 @@ const InlinePostCard = React.memo(({
     setLoadingComments(false);
   };
 
-  // ✅ Trigger the glitter burst at the exact screen position of the like button
+  // ========== GLITTER ANIMATION ==========
+  
   const triggerGlitter = () => {
     if (!likeButtonRef.current) return;
     const rect = likeButtonRef.current.getBoundingClientRect();
@@ -1860,34 +2087,58 @@ const InlinePostCard = React.memo(({
     }, 1500);
   };
 
+  // ========== LIKE/UNLIKE FUNCTION (TOGGLE) ==========
+  
   const handleLikePost = async () => {
-    if (isLiked) return;
-
-    // ✅ Fire glitter animation
-    triggerGlitter();
-
-    const newCount = addGlobalLike(post.id, user.email);
-    setIsLiked(true);
-    setLikeCount(newCount);
-
-    if (post.userEmail !== user.email) {
-      pushNotification(post.userEmail, {
-        type: 'like',
-        fromUser: user.name,
-        fromUserEmail: user.email,
-        message: `${user.name} liked your post`,
-        postId: post.id,
-      });
-      updateNotificationCount?.();
-    }
-
+    // Prevent multiple rapid clicks
+    if (isLiking) return;
+    if (!user?.email) return;
+    
+    setIsLiking(true);
+    
+    // Store previous state for animation logic
+    const wasLiked = isLiked;
+    
     try {
-      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { userEmail: user.email }, { timeout: 5000 });
-    } catch (_) { }
+      // Call backend to TOGGLE like (likes if not liked, unlikes if already liked)
+      const result = await addGlobalLike(post.id, user.email, user.name);
+      
+      if (result) {
+        // Update UI with new state from server
+        setIsLiked(result.liked);
+        setLikeCount(result.likes);
+        
+        // 🎆 Show glitter animation ONLY when actually liking (not unliking)
+        if (result.liked && !wasLiked) {
+          triggerGlitter();
+        }
+        
+        // 🔔 Send notification ONLY when liking (not when unliking)
+        if (result.liked && !wasLiked && post.userEmail !== user.email) {
+          pushNotification(post.userEmail, {
+            type: 'like',
+            fromUser: user.name,
+            fromUserEmail: user.email,
+            message: `${user.name} liked your post`,
+            postId: post.id,
+          });
+          updateNotificationCount?.();
+        }
+      }
+    } catch (error) {
+      console.error('Failed to toggle like:', error);
+      // Optional: Show toast notification for error
+      // toast.error('Failed to update like. Please try again.');
+    } finally {
+      setIsLiking(false);
+    }
   };
 
+  // ========== COMMENT HANDLERS ==========
+  
   const handlePostComment = async () => {
     if (!newComment.trim()) return;
+    if (!user?.email) return;
 
     const mentions = extractMentions(newComment);
     const commentData = {
@@ -1905,10 +2156,13 @@ const InlinePostCard = React.memo(({
     setNewComment('');
     setReplyTo(null);
     const pid = post.id || post._id;
+    
+    // Send to backend
     const updated = await postCommentToServer(pid, commentData);
     setComments(updated);
     setCommentCount(updated.filter(c => !c.parentId).length);
 
+    // Send notification to post author
     if (post.userEmail !== user.email) {
       pushNotification(post.userEmail, {
         type: 'comment',
@@ -1920,6 +2174,7 @@ const InlinePostCard = React.memo(({
       updateNotificationCount?.();
     }
 
+    // Send notifications for mentions
     mentions.forEach(mention => {
       const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
       const mentioned = allUsers.find(u =>
@@ -1938,17 +2193,20 @@ const InlinePostCard = React.memo(({
     });
   };
 
-  const handleLikeComment = (commentId, commentUserEmail) => {
+  const handleLikeComment = async (commentId, commentUserEmail) => {
     if (likedComments.has(commentId)) return;
+    
     const updated = comments.map(c =>
       c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c
     );
     setComments(updated);
     localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updated));
+    
     const newLiked = new Set(likedComments);
     newLiked.add(commentId);
     setLikedComments(newLiked);
     localStorage.setItem(`user_${user.email}_likedComments`, JSON.stringify([...newLiked]));
+    
     if (commentUserEmail && commentUserEmail !== user.email) {
       pushNotification(commentUserEmail, {
         type: 'like',
@@ -1965,20 +2223,25 @@ const InlinePostCard = React.memo(({
     setComments(filtered);
     setCommentCount(filtered.filter(c => !c.parentId).length);
     localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(filtered));
+    
     const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
     localStorage.setItem('allPosts', JSON.stringify(
       allPosts.map(p => p.id === post.id ? { ...p, comments: filtered.filter(c => !c.parentId).length } : p)
     ));
   };
 
+  // ========== RENDER HELPERS ==========
+  
   const topLevelComments = comments.filter(c => !c.parentId);
   const visibleComments = showAllComments ? topLevelComments : topLevelComments.slice(0, 3);
-  const isPostAuthor = user.email === post.userEmail;
+  const isPostAuthor = user?.email === post.userEmail;
 
+  // ========== COMMENT ROW COMPONENT ==========
+  
   const CommentRow = ({ comment, depth = 0 }) => {
     const replies = depth < 2 ? comments.filter(c => c.parentId === comment.id) : [];
     const isLikedCmt = likedComments.has(comment.id);
-    const isOwn = comment.userEmail === user.email;
+    const isOwn = comment.userEmail === user?.email;
 
     const renderContent = () => {
       if (!comment.mentions?.length) {
@@ -2084,9 +2347,11 @@ const InlinePostCard = React.memo(({
     );
   };
 
+  // ========== MAIN RENDER ==========
+  
   return (
     <>
-      {/* ✅ Render glitter burst effects */}
+      {/* Render glitter burst effects */}
       {glitterEffects.map(effect => (
         <HeartGlitterEffect
           key={effect.id}
@@ -2096,6 +2361,7 @@ const InlinePostCard = React.memo(({
         />
       ))}
 
+      {/* Post Options Modal */}
       {showOptions && (
         <PostOptionsModal
           post={post} user={user}
@@ -2112,7 +2378,10 @@ const InlinePostCard = React.memo(({
         />
       )}
 
+      {/* Main Post Card */}
       <div id={`post-${post.id || post._id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition">
+        
+        {/* Post Header */}
         <div className="px-4 pt-4 pb-2">
           <div className="flex items-start gap-3">
             <button onClick={() => onViewUserProfile(post.userEmail, post.userName)} className="flex-shrink-0">
@@ -2151,6 +2420,7 @@ const InlinePostCard = React.memo(({
           </div>
         </div>
 
+        {/* Post Content */}
         <div className="px-4 pb-3">
           {post.image && (
             <img
@@ -2194,18 +2464,26 @@ const InlinePostCard = React.memo(({
           )}
         </div>
 
+        {/* Post Actions - Like, Comment, Save, Share */}
         <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-5">
-          {/* ✅ Like button with ref for glitter position detection */}
+          
+          {/* LIKE BUTTON - Toggles like/unlike */}
           <button
             ref={likeButtonRef}
             onClick={handleLikePost}
-            disabled={isLiked}
-            className={`flex items-center gap-1.5 text-sm font-semibold transition-all ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
+            disabled={isLiking}
+            className={`flex items-center gap-1.5 text-sm font-semibold transition-all 
+              ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'} 
+              ${isLiking ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
           >
-            <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 scale-125' : ''} transition-transform duration-200`} />
+            <Heart 
+              className={`w-5 h-5 transition-all duration-200 
+                ${isLiked ? 'fill-red-500 scale-110' : ''}`} 
+            />
             <span>{likeCount}</span>
           </button>
 
+          {/* COMMENT BUTTON */}
           <button
             onClick={() => setShowComments(prev => !prev)}
             className={`flex items-center gap-1.5 text-sm font-semibold transition ${showComments ? 'text-orange-500' : 'text-gray-500 hover:text-orange-500'}`}
@@ -2214,6 +2492,7 @@ const InlinePostCard = React.memo(({
             <span>{commentCount}</span>
           </button>
 
+          {/* SAVE BUTTON */}
           <button
             onClick={() => onSaveToggle(post)}
             className={`flex items-center gap-1.5 text-sm font-semibold transition ${isSaved ? 'text-orange-500' : 'text-gray-500 hover:text-orange-400'}`}
@@ -2222,6 +2501,7 @@ const InlinePostCard = React.memo(({
             <span>{isSaved ? 'Saved' : 'Save'}</span>
           </button>
 
+          {/* SHARE BUTTON */}
           <button
             onClick={() => onShare(post)}
             className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-orange-500 transition ml-auto"
@@ -2231,15 +2511,19 @@ const InlinePostCard = React.memo(({
           </button>
         </div>
 
+        {/* Comments Section */}
         {showComments && (
           <>
+            {/* Add Comment Input */}
             <div className="px-4 py-3 border-t border-gray-50 bg-gray-50/60">
               {replyTo && (
                 <div className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-orange-400">
                   <p className="text-xs text-orange-600 font-medium flex-1">
                     Replying to <span className="font-bold">{replyTo.userName}</span>
                   </p>
-                  <button onClick={() => setReplyTo(null)}><X className="w-3.5 h-3.5 text-gray-400" /></button>
+                  <button onClick={() => setReplyTo(null)}>
+                    <X className="w-3.5 h-3.5 text-gray-400" />
+                  </button>
                 </div>
               )}
 
@@ -2254,7 +2538,12 @@ const InlinePostCard = React.memo(({
                     type="text"
                     value={newComment}
                     onChange={e => setNewComment(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); } }}
+                    onKeyDown={e => { 
+                      if (e.key === 'Enter' && !e.shiftKey) { 
+                        e.preventDefault(); 
+                        handlePostComment(); 
+                      } 
+                    }}
                     className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
                     placeholder={replyTo ? `Reply to @${replyTo.userName}...` : 'drop a comment... @mention ur crew 💬'}
                   />
@@ -2262,20 +2551,30 @@ const InlinePostCard = React.memo(({
                 <button
                   onClick={handlePostComment}
                   disabled={!newComment.trim()}
-                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${newComment.trim() ? 'bg-orange-500 text-white shadow-sm hover:bg-orange-600 active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
+                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all 
+                    ${newComment.trim() 
+                      ? 'bg-orange-500 text-white shadow-sm hover:bg-orange-600 active:scale-95' 
+                      : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
                 >
                   Post
                 </button>
               </div>
             </div>
 
+            {/* Comments List */}
             <div className="px-4 py-3 border-t border-gray-100 space-y-3 max-h-96 overflow-y-auto">
               {loadingComments ? (
-                <div className="flex justify-center py-4"><LoadingSpinner size="sm" /></div>
+                <div className="flex justify-center py-4">
+                  <LoadingSpinner size="sm" />
+                </div>
               ) : visibleComments.length > 0 ? (
-                visibleComments.map(comment => <CommentRow key={comment.id} comment={comment} depth={0} />)
+                visibleComments.map(comment => (
+                  <CommentRow key={comment.id} comment={comment} depth={0} />
+                ))
               ) : (
-                <p className="text-xs text-gray-400 text-center py-4">No comments yet. Be the first!</p>
+                <p className="text-xs text-gray-400 text-center py-4">
+                  No comments yet. Be the first!
+                </p>
               )}
 
               {topLevelComments.length > 3 && (
