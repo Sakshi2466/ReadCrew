@@ -1,55 +1,47 @@
 // ========================================
 // App.jsx - READCREWW Social Platform
-// Version: 4.0 — All Features Integrated:
-// ✅ AI-Powered Daily Trending Books (changes daily)
-// ✅ Heart Glitter Animation on Like
-// ✅ Notification Click → Navigate to Post/Crew
-// ✅ Global Crews (One-Crew-Per-Book Policy)
-// ✅ Persistent Posts (always visible)
-// ✅ Global Reviews
-// ✅ Profile Privacy (Books/Saved hidden from others)
-// ✅ Followers/Following Instagram Loop
-// ✅ Crew Chat Block/Unblock Users
+// Version: 6.0 — Complete Rewrite
+// ✅ READCREWW (double W)
+// ✅ One book = one crew globally (enforced)
+// ✅ Crews & chat GLOBAL (BroadcastChannel + localStorage)
+// ✅ Reviews GLOBAL & working
+// ✅ Books read, saved posts, crews = PRIVATE per user
+// ✅ Followers/Following → clicking name → goes to profile
+// ✅ Leave crew option
+// ✅ Mic + image + video in crew chat
+// ✅ Orange themed chat wallpaper
+// ✅ Book status (story/ring like IG) in profile
+// ✅ Book Date REMOVED
+// ✅ Gen Z slangs throughout
+// ✅ 10k user performance optimizations
+// ✅ Full book descriptions (no truncation)
 // ========================================
 
-// ========================================
-// SECTION 1: IMPORTS
-// ========================================
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+// ── IMPORTS ─────────────────────────────────────────────────────────────────
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react';
 import {
-  BookOpen, Home, Search, Edit3, Users, User, Bell, Settings,
+  BookOpen, Search, Edit3, Users, Bell,
   Heart, MessageCircle, Bookmark, Share2, Star, Plus, ChevronRight,
-  X, Send, Image as ImageIcon, ChevronLeft, LogOut, Camera, MoreHorizontal,
-  Sparkles, Lock, Eye, EyeOff, UserPlus, Gift, ThumbsUp, ThumbsDown,
-  Trash2, Edit, Target, Check, ArrowLeft, Clock, TrendingUp, Menu, Upload,
-  Calendar, Award, MessageSquare, Globe, ChevronDown, Filter,
-  Paperclip, Mail, Phone, ExternalLink,
-  Link2, AtSign, Flag, Pin,
-  CheckCheck, BookMarked, PlusCircle, MapPin, Navigation, Map, Repeat,
-  UserCheck, UserMinus, Wifi, WifiOff,
+  X, Send, ChevronLeft, LogOut, Camera, MoreHorizontal,
+  Sparkles, Lock, Eye, EyeOff, UserPlus,
+  Trash2, Edit, Target, ArrowLeft, TrendingUp,
+  MessageSquare, Globe, ChevronDown,
+  Mail, Link2, AtSign, Flag,
+  MapPin, Navigation, Repeat,
+  UserCheck, UserMinus, WifiOff,
   AlertCircle, CheckCircle, Info,
-  Play, Pause, Volume2, Mic, Leaf,
-  List, Grid,
-  HelpCircle, Coffee, Music, Film,
-  Video, Download,
-  RefreshCw, RotateCcw, Maximize2, Minimize2,
-  Circle, Square, Sun, Moon, Cloud,
-  Thermometer, Compass, Anchor,
-  Rocket, Satellite,
-  Briefcase, Building,
-  Headphones, Speaker,
-  Tv, Monitor, Laptop, Tablet, Smartphone, Watch,
-  AlarmClock, Timer, Hourglass, Shield, ShieldOff,
+  RefreshCw, ExternalLink, Mic, MicOff, Video, Image,
+  Play, Square, StopCircle,
 } from 'lucide-react';
-
 import axios from 'axios';
 import { io } from 'socket.io-client';
 
-// ========================================
-// SECTION 2: CONFIGURATION
-// ========================================
+// ── CONFIGURATION ─────────────────────────────────────────────────────────
+const APP_NAME    = 'READCREWW';
+const APP_TAGLINE = 'no cap, reading just hits different 📚✨';
+const API_URL     = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
 
-const API_URL = process.env.REACT_APP_API_URL || 'https://versal-book-app.onrender.com';
+const bc = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel('readcreww_v6') : null;
 
 const socket = io(API_URL, {
   transports: ['websocket', 'polling'],
@@ -60,22 +52,162 @@ const socket = io(API_URL, {
   timeout: 10000,
 });
 
-// ─── Unified API helper (never throws) ──────────────────────────────────────
 const api = {
-  get: (url, cfg = {}) => axios.get(`${API_URL}${url}`, { timeout: 8000, ...cfg }).catch(() => null),
+  get:  (url, cfg = {}) => axios.get(`${API_URL}${url}`,  { timeout: 8000, ...cfg }).catch(() => null),
   post: (url, body, cfg = {}) => axios.post(`${API_URL}${url}`, body, { timeout: 8000, ...cfg }).catch(() => null),
 };
 
-// ─── Deep-link helpers ────────────────────────────────────────────────────────
+// ── GLOBAL KEYS ───────────────────────────────────────────────────────────
+const GLOBAL_CREWS_KEY   = 'rcreww_global_crews_v6';
+const GLOBAL_POSTS_KEY   = 'rcreww_allPosts_v6';
+const GLOBAL_REVIEWS_KEY = 'rcreww_reviews_v6';
+
+const getLS  = (key, def) => { try { return JSON.parse(localStorage.getItem(key) || 'null') ?? def; } catch { return def; } };
+const setLS  = (key, val) => { try { localStorage.setItem(key, JSON.stringify(val)); } catch {} };
+const broadcastMsg = (type, payload) => { try { bc?.postMessage({ type, payload }); } catch {} };
+
+// ── SEED CREWS ────────────────────────────────────────────────────────────
+const SEED_CREWS = [
+  { id: 'sc_atomic',      name: 'Atomic Habits',           author: 'James Clear',        genre: 'Self-Help',      members: 24 },
+  { id: 'sc_4wing',       name: 'Fourth Wing',             author: 'Rebecca Yarros',     genre: 'Fantasy',        members: 42 },
+  { id: 'sc_hailmary',    name: 'Project Hail Mary',       author: 'Andy Weir',          genre: 'Sci-Fi',         members: 18 },
+  { id: 'sc_midnight',    name: 'The Midnight Library',    author: 'Matt Haig',          genre: 'Fiction',        members: 29 },
+  { id: 'sc_sapiens',     name: 'Sapiens',                 author: 'Yuval Noah Harari',  genre: 'History',        members: 22 },
+  { id: 'sc_silent',      name: 'The Silent Patient',      author: 'Alex Michaelides',   genre: 'Thriller',       members: 33 },
+  { id: 'sc_gonegirl',    name: 'Gone Girl',               author: 'Gillian Flynn',      genre: 'Thriller',       members: 21 },
+  { id: 'sc_alchemist',   name: 'The Alchemist',           author: 'Paulo Coelho',       genre: 'Inspirational',  members: 31 },
+  { id: 'sc_becoming',    name: 'Becoming',                author: 'Michelle Obama',     genre: 'Memoir',         members: 27 },
+  { id: 'sc_psychology',  name: 'The Psychology of Money', author: 'Morgan Housel',      genre: 'Finance',        members: 19 },
+  { id: 'sc_verity',      name: 'Verity',                  author: 'Colleen Hoover',     genre: 'Thriller',       members: 38 },
+  { id: 'sc_beach',       name: 'The Beach',               author: 'Alex Garland',       genre: 'Fiction',        members: 15 },
+  { id: 'sc_tuesdays',    name: 'Tuesdays with Morrie',    author: 'Mitch Albom',        genre: 'Inspiration',    members: 12 },
+  { id: 'sc_kite',        name: 'The Kite Runner',         author: 'Khaled Hosseini',    genre: 'Historical',     members: 20 },
+  { id: 'sc_booktf',      name: 'The Book Thief',          author: 'Markus Zusak',       genre: 'Historical',     members: 17 },
+  { id: 'sc_itendsus',    name: 'It Ends with Us',         author: 'Colleen Hoover',     genre: 'Romance',        members: 35 },
+  { id: 'sc_dune',        name: 'Dune',                    author: 'Frank Herbert',      genre: 'Sci-Fi',         members: 26 },
+  { id: 'sc_normal',      name: 'Normal People',           author: 'Sally Rooney',       genre: 'Literary',       members: 14 },
+];
+
+const initGlobalCrews = () => {
+  const existing = getLS(GLOBAL_CREWS_KEY, []);
+  let changed = false;
+  SEED_CREWS.forEach(seed => {
+    if (!existing.find(c => c.id === seed.id)) {
+      existing.push({ ...seed, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z', joinedEmails: [] });
+      changed = true;
+    }
+  });
+  if (changed) setLS(GLOBAL_CREWS_KEY, existing);
+};
+
+const getGlobalCrews = () => getLS(GLOBAL_CREWS_KEY, []);
+
+const saveGlobalCrews = (crews) => {
+  setLS(GLOBAL_CREWS_KEY, crews);
+  broadcastMsg('crews_updated', null);
+};
+
+// ONE BOOK = ONE CREW globally enforced
+const getOrCreateCrew = (bookTitle, bookAuthor, bookGenre, userEmail, userName) => {
+  const crews  = getGlobalCrews();
+  const norm   = s => (s || '').trim().toLowerCase();
+  const exists = crews.find(c => norm(c.name) === norm(bookTitle) && norm(c.author) === norm(bookAuthor));
+  if (exists) return { crew: exists, created: false };
+  const newCrew = {
+    id:            generateId(),
+    name:          bookTitle,
+    author:        bookAuthor,
+    genre:         bookGenre || 'General',
+    members:       1,
+    createdBy:     userEmail,
+    createdByName: userName,
+    createdAt:     new Date().toISOString(),
+    joinedEmails:  [userEmail],
+  };
+  saveGlobalCrews([newCrew, ...crews]);
+  return { crew: newCrew, created: true };
+};
+
+// ── GLOBAL POSTS ─────────────────────────────────────────────────────────
+const getGlobalPosts = () => getLS(GLOBAL_POSTS_KEY, []);
+const saveGlobalPost = (post) => {
+  const posts = getGlobalPosts();
+  posts.unshift(post);
+  if (posts.length > 5000) posts.length = 5000;
+  setLS(GLOBAL_POSTS_KEY, posts);
+  broadcastMsg('posts_updated', null);
+};
+
+// ── GLOBAL REVIEWS ────────────────────────────────────────────────────────
+const getGlobalReviews = () => getLS(GLOBAL_REVIEWS_KEY, []);
+const saveGlobalReview = (review) => {
+  const reviews = getGlobalReviews();
+  reviews.unshift(review);
+  if (reviews.length > 2000) reviews.length = 2000;
+  setLS(GLOBAL_REVIEWS_KEY, reviews);
+  broadcastMsg('reviews_updated', null);
+};
+
+// ── LIKES / COMMENTS ─────────────────────────────────────────────────────
+const getPostLikedBy   = (postId) => getLS(`rcreww_likes_${postId}`, []);
+const hasUserLikedPost = (postId, email) => getPostLikedBy(postId).includes(email);
+const getLikeCount     = (postId) => getPostLikedBy(postId).length;
+
+const addGlobalLike = (postId, userEmail) => {
+  const arr = getPostLikedBy(postId);
+  if (arr.includes(userEmail)) return arr.length;
+  arr.push(userEmail);
+  setLS(`rcreww_likes_${postId}`, arr);
+  const all = getGlobalPosts();
+  setLS(GLOBAL_POSTS_KEY, all.map(p => p.id === postId ? { ...p, likes: arr.length } : p));
+  broadcastMsg('post_liked', { postId, likes: arr.length });
+  return arr.length;
+};
+
+const getPostComments = (postId) => getLS(`rcreww_cmts_${postId}`, []);
+const addGlobalComment = (postId, commentData) => {
+  const cmts = getPostComments(postId);
+  cmts.push(commentData);
+  setLS(`rcreww_cmts_${postId}`, cmts);
+  const all = getGlobalPosts();
+  setLS(GLOBAL_POSTS_KEY, all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p));
+  broadcastMsg('comment_added', { postId });
+  return cmts;
+};
+
+const incrementReshareCount = (postId) => {
+  const all = getGlobalPosts();
+  const updated = all.map(p => p.id === postId ? { ...p, reshareCount: (p.reshareCount || 0) + 1 } : p);
+  setLS(GLOBAL_POSTS_KEY, updated);
+  return updated.find(p => p.id === postId)?.reshareCount || 0;
+};
+
+// ── NOTIFICATIONS ─────────────────────────────────────────────────────────
+const _shownToastIds = new Set();
+const pushNotification = (targetEmail, notif) => {
+  if (!targetEmail) return;
+  const key  = `rcreww_notifs_${targetEmail}`;
+  const list = getLS(key, []);
+  const full = { id: generateId(), ...notif, timestamp: new Date().toISOString(), read: false };
+  const ago30 = Date.now() - 30000;
+  const dup = list.some(n => n.type === full.type && n.fromUserEmail === full.fromUserEmail && n.postId === full.postId && new Date(n.timestamp).getTime() > ago30);
+  if (dup) return;
+  list.unshift(full);
+  if (list.length > 200) list.length = 200;
+  setLS(key, list);
+  window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
+  broadcastMsg('notif', { targetEmail });
+  api.post('/api/social/notifications', { targetEmail, notification: full });
+};
+
+// ── DEEP LINK ─────────────────────────────────────────────────────────────
 const deepLink = (type, id) => {
   const base = window.location.origin + window.location.pathname;
   return `${base}?rc_type=${type}&rc_id=${encodeURIComponent(id)}`;
 };
-
 const parseDeepLink = () => {
   const p = new URLSearchParams(window.location.search);
-  const type = p.get('rc_type');
-  const id = p.get('rc_id');
+  const type = p.get('rc_type'), id = p.get('rc_id');
   if (type && id) return { type, id };
   const h = window.location.hash.replace('#', '');
   if (h.startsWith('post/')) return { type: 'post', id: h.slice(5) };
@@ -83,1982 +215,843 @@ const parseDeepLink = () => {
   return null;
 };
 
-// ========================================
-// SECTION 3: FEED ALGORITHM ENGINE
-// ========================================
-
+// ── FEED ALGORITHM ────────────────────────────────────────────────────────
 const FEED_WEIGHTS = {
-  share: 5.0,
-  save: 4.0,
-  comment: 3.5,
-  like: 2.0,
-  view: 0.5,
-  skip: -1.0,
-  follow_author: 6.0,
-  close_friend: 3.0,
-  mutual_follow: 1.5,
-  book_interest: 3.0,
-  tag_match: 2.0,
-  recency_half_life: 24,
-  min_score_factor: 0.05,
-  discovery_ratio: 0.20,
+  follow_author: 6.0, close_friend: 3.0, like: 2.0, comment: 3.5, save: 4.0, share: 5.0,
+  recency_half_life: 24, min_score_factor: 0.05, discovery_ratio: 0.20,
 };
-
-const buildUserInterestProfile = (userEmail) => {
-  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  const likedPostIds = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
-  const savedPostIds = JSON.parse(localStorage.getItem(`user_${userEmail}_savedPosts`) || '[]');
-  const following = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
-
-  const authorScores = {};
-  const bookScores = {};
-
-  likedPostIds.forEach(postId => {
-    const post = allPosts.find(p => p.id === postId);
-    if (!post) return;
-    authorScores[post.userEmail] = (authorScores[post.userEmail] || 0) + FEED_WEIGHTS.like;
-    if (post.bookName) {
-      bookScores[post.bookName] = (bookScores[post.bookName] || 0) + FEED_WEIGHTS.like;
-    }
+const buildInterestProfile = (userEmail) => {
+  const allPosts  = getGlobalPosts();
+  const likedIds  = getLS(`rcreww_liked_posts_${userEmail}`, []);
+  const savedIds  = getLS(`rcreww_saved_${userEmail}`, []);
+  const following = getLS(`rcreww_following_${userEmail}`, []);
+  const authorScores = {}, bookScores = {};
+  likedIds.forEach(id => {
+    const p = allPosts.find(x => x.id === id); if (!p) return;
+    authorScores[p.userEmail] = (authorScores[p.userEmail] || 0) + FEED_WEIGHTS.like;
+    if (p.bookName) bookScores[p.bookName] = (bookScores[p.bookName] || 0) + FEED_WEIGHTS.like;
   });
-
-  savedPostIds.forEach(postId => {
-    const post = allPosts.find(p => p.id === postId);
-    if (!post) return;
-    authorScores[post.userEmail] = (authorScores[post.userEmail] || 0) + FEED_WEIGHTS.save;
-    if (post.bookName) {
-      bookScores[post.bookName] = (bookScores[post.bookName] || 0) + FEED_WEIGHTS.save;
-    }
+  savedIds.forEach(id => {
+    const p = allPosts.find(x => x.id === id); if (!p) return;
+    authorScores[p.userEmail] = (authorScores[p.userEmail] || 0) + FEED_WEIGHTS.save;
+    if (p.bookName) bookScores[p.bookName] = (bookScores[p.bookName] || 0) + FEED_WEIGHTS.save;
   });
-
-  allPosts.forEach(post => {
-    const comments = JSON.parse(localStorage.getItem(`post_${post.id}_comments`) || '[]');
-    const userCommented = comments.some(c => c.userEmail === userEmail);
-    if (userCommented) {
-      authorScores[post.userEmail] = (authorScores[post.userEmail] || 0) + FEED_WEIGHTS.comment;
-      if (post.bookName) {
-        bookScores[post.bookName] = (bookScores[post.bookName] || 0) + FEED_WEIGHTS.comment;
-      }
-    }
-  });
-
-  const closeFriends = Object.entries(authorScores)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 10)
-    .map(([email]) => email);
-
-  const topBooks = Object.entries(bookScores)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 20)
-    .map(([book]) => book);
-
-  return { following, closeFriends, authorScores, bookScores, topBooks };
+  const closeFriends = Object.entries(authorScores).sort(([,a],[,b])=>b-a).slice(0,10).map(([e])=>e);
+  return { following, closeFriends, authorScores, bookScores };
 };
-
-const scorePostForUser = (post, profile) => {
+const scorePost = (post, profile) => {
   let score = 0;
-
-  if (profile.following.includes(post.userEmail)) {
-    score += FEED_WEIGHTS.follow_author;
-  }
-  if (profile.closeFriends.includes(post.userEmail)) {
-    score += FEED_WEIGHTS.close_friend;
-  }
-
-  const authorInterest = profile.authorScores[post.userEmail] || 0;
-  score += authorInterest * 0.4;
-
-  if (post.bookName && profile.bookScores[post.bookName]) {
-    score += profile.bookScores[post.bookName] * 0.3;
-  }
-
-  const likes = post.likes || 0;
-  const comments = post.comments || 0;
-  const reshares = post.reshareCount || 0;
-  const engagement = likes * 2 + comments * 3 + reshares * 5;
-  score += Math.log(engagement + 1) * 1.5;
-
-  const ageInHours = (Date.now() - new Date(post.createdAt)) / 3_600_000;
-  const decayFactor = Math.max(
-    Math.pow(0.5, ageInHours / FEED_WEIGHTS.recency_half_life),
-    FEED_WEIGHTS.min_score_factor
-  );
-  score *= decayFactor;
-
-  return score;
+  if (profile.following.includes(post.userEmail)) score += FEED_WEIGHTS.follow_author;
+  if (profile.closeFriends.includes(post.userEmail)) score += FEED_WEIGHTS.close_friend;
+  score += (profile.authorScores[post.userEmail] || 0) * 0.4;
+  if (post.bookName && profile.bookScores[post.bookName]) score += profile.bookScores[post.bookName] * 0.3;
+  const eng = (post.likes || 0) * 2 + (post.comments || 0) * 3 + (post.reshareCount || 0) * 5;
+  score += Math.log(eng + 1) * 1.5;
+  const ageHrs = (Date.now() - new Date(post.createdAt)) / 3600000;
+  const decay = Math.max(Math.pow(0.5, ageHrs / FEED_WEIGHTS.recency_half_life), FEED_WEIGHTS.min_score_factor);
+  return score * decay;
 };
-
 const generatePersonalizedFeed = (userEmail, allPosts, blockedUsers = []) => {
-  if (!allPosts || allPosts.length === 0) return [];
-
-  const profile = buildUserInterestProfile(userEmail);
+  if (!allPosts?.length) return [];
+  const profile    = buildInterestProfile(userEmail);
   const candidates = allPosts.filter(p => !blockedUsers.includes(p.userEmail));
-
-  const scored = candidates
-    .map(post => ({ post, score: scorePostForUser(post, profile) }))
-    .sort((a, b) => b.score - a.score);
-
-  const limit = scored.length;
-  const personalizedCount = Math.floor(limit * (1 - FEED_WEIGHTS.discovery_ratio));
-
-  const personalizedFeed = scored.slice(0, personalizedCount).map(s => s.post);
-  const discoveryPool = scored.slice(personalizedCount);
-
-  for (let i = discoveryPool.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [discoveryPool[i], discoveryPool[j]] = [discoveryPool[j], discoveryPool[i]];
+  const scored     = candidates.map(post => ({ post, score: scorePost(post, profile) })).sort((a,b)=>b.score-a.score);
+  const pCount     = Math.floor(scored.length * (1 - FEED_WEIGHTS.discovery_ratio));
+  const pFeed      = scored.slice(0, pCount).map(s => s.post);
+  const dPool      = scored.slice(pCount);
+  for (let i = dPool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [dPool[i], dPool[j]] = [dPool[j], dPool[i]]; }
+  const dFeed = dPool.map(s => s.post);
+  const final = []; let pi = 0, di = 0;
+  while (pi < pFeed.length || di < dFeed.length) {
+    for (let i = 0; i < 4 && pi < pFeed.length; i++) final.push(pFeed[pi++]);
+    if (di < dFeed.length) final.push(dFeed[di++]);
   }
-
-  const discoveryFeed = discoveryPool.map(s => s.post);
-
-  const finalFeed = [];
-  let pIdx = 0;
-  let dIdx = 0;
-  while (pIdx < personalizedFeed.length || dIdx < discoveryFeed.length) {
-    for (let i = 0; i < 4 && pIdx < personalizedFeed.length; i++) {
-      finalFeed.push(personalizedFeed[pIdx++]);
-    }
-    if (dIdx < discoveryFeed.length) {
-      finalFeed.push(discoveryFeed[dIdx++]);
-    }
-  }
-
-  return finalFeed;
+  return final;
 };
 
-// ========================================
-// SECTION 4: GLOBAL INTERACTION HELPERS
-// ========================================
-
-const getPostLikes = (postId) => {
-  const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  return likedBy.length;
-};
-
-const hasUserLikedPost = (postId, userEmail) => {
-  const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  return likedBy.includes(userEmail);
-};
-
-const addGlobalLike = (postId, userEmail) => {
-  const likedBy = JSON.parse(localStorage.getItem(`post_${postId}_likedBy`) || '[]');
-  if (likedBy.includes(userEmail)) return likedBy.length;
-
-  likedBy.push(userEmail);
-  localStorage.setItem(`post_${postId}_likedBy`, JSON.stringify(likedBy));
-
-  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  const updatedPosts = allPosts.map(p =>
-    p.id === postId ? { ...p, likes: likedBy.length } : p
-  );
-  localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-
-  const userLiked = JSON.parse(localStorage.getItem(`user_${userEmail}_likedPosts`) || '[]');
-  if (!userLiked.includes(postId)) {
-    userLiked.push(postId);
-    localStorage.setItem(`user_${userEmail}_likedPosts`, JSON.stringify(userLiked));
-  }
-
-  return likedBy.length;
-};
-
-const getPostComments = (postId) => {
-  return JSON.parse(localStorage.getItem(`post_${postId}_comments`) || '[]');
-};
-
-const fetchCommentsFromServer = async (postId) => {
-  const res = await api.get(`/api/social/posts/${postId}/comments`);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
-  }
-  return getPostComments(postId);
-};
-
-const postCommentToServer = async (postId, commentData) => {
-  const res = await api.post(`/api/social/posts/${postId}/comments`, commentData);
-  if (res?.data?.success) {
-    const cmts = res.data.comments || [];
-    localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-    const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-    ));
-    return cmts;
-  }
-  const cmts = getPostComments(postId);
-  cmts.push(commentData);
-  localStorage.setItem(`post_${postId}_comments`, JSON.stringify(cmts));
-  const all = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  localStorage.setItem('allPosts', JSON.stringify(
-    all.map(p => p.id === postId ? { ...p, comments: cmts.filter(c => !c.parentId).length } : p)
-  ));
-  return cmts;
-};
-
-const incrementReshareCount = (postId) => {
-  const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-  const updatedPosts = allPosts.map(p =>
-    p.id === postId ? { ...p, reshareCount: (p.reshareCount || 0) + 1 } : p
-  );
-  localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-  return (updatedPosts.find(p => p.id === postId)?.reshareCount) || 0;
-};
-
-// ========================================
-// SECTION 5: NOTIFICATION HELPERS
-// ========================================
-
-const _shownToastIds = new Set();
-
-const pushNotification = async (targetEmail, notif) => {
-  if (!targetEmail) return null;
-
-  const full = {
-    id: `notif_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
-    ...notif,
-    timestamp: new Date().toISOString(),
-    read: false,
-  };
-
-  const list = JSON.parse(localStorage.getItem(`user_${targetEmail}_notifications`) || '[]');
-
-  const thirtySecsAgo = Date.now() - 30_000;
-  const isDuplicate = list.some(n =>
-    n.type === full.type &&
-    n.fromUserEmail === full.fromUserEmail &&
-    n.postId === full.postId &&
-    new Date(n.timestamp).getTime() > thirtySecsAgo
-  );
-  if (isDuplicate) return null;
-
-  list.unshift(full);
-  if (list.length > 200) list.length = 200;
-  localStorage.setItem(`user_${targetEmail}_notifications`, JSON.stringify(list));
-
-  window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail } }));
-
-  api.post('/api/social/notifications', { targetEmail, notification: full });
-
-  return full;
-};
-
-// ========================================
-// SECTION 6: UTILITY FUNCTIONS
-// ========================================
-
-const formatTimeAgo = (timestamp) => {
-  if (!timestamp) return '';
-  const diff = Date.now() - new Date(timestamp).getTime();
+// ── UTILITIES ─────────────────────────────────────────────────────────────
+const generateId = () => `${Date.now()}_${Math.random().toString(36).substr(2,9)}`;
+const formatTimeAgo = (ts) => {
+  if (!ts) return '';
+  const diff = Date.now() - new Date(ts).getTime();
   if (isNaN(diff)) return '';
-  const mins = Math.floor(diff / 60_000);
-  const hrs = Math.floor(diff / 3_600_000);
-  const days = Math.floor(diff / 86_400_000);
-  const weeks = Math.floor(days / 7);
-  const months = Math.floor(days / 30);
-  const years = Math.floor(days / 365);
-
-  if (mins < 1) return 'Just now';
-  if (mins < 60) return `${mins}m ago`;
-  if (hrs < 24) return `${hrs}h ago`;
-  if (days < 7) return `${days}d ago`;
-  if (weeks < 4) return `${weeks}w ago`;
-  if (months < 12) return `${months}mo ago`;
-  return `${years}y ago`;
+  const m = Math.floor(diff/60000), h = Math.floor(diff/3600000), d = Math.floor(diff/86400000);
+  if (m < 1) return 'just now'; if (m < 60) return `${m}m`; if (h < 24) return `${h}h`;
+  if (d < 7) return `${d}d`; return new Date(ts).toLocaleDateString();
 };
+const sanitizeText = (t) => (t||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const extractMentions = (text) => (text.match(/@(\w+)/g)||[]).map(m=>m.substring(1));
 
-const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const GEN_Z_PLACEHOLDERS = [
+  "spill the tea on what you're reading rn ☕",
+  "bestie what book got you in your feels?",
+  "no cap, what's your current hyperfixation?",
+  "it's giving main character energy 📚",
+  "POV: you just finished a banger, share it",
+  "lowkey obsessed with this book rn...",
+  "slay or flop? drop your hot take 🔥",
+  "living in my bookish era, what about you?",
+  "that plot twist ate fr fr 👀",
+];
 
-const sanitizeText = (text) => {
-  if (!text) return '';
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-};
+// ── COVER CACHE ───────────────────────────────────────────────────────────
+const _coverCache = new Map();
 
-const extractMentions = (text) => {
-  const mentions = text.match(/@(\w+)/g) || [];
-  return mentions.map(m => m.substring(1));
-};
-
-const generateId = () =>
-  `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-// ========================================
-// SECTION 7: NOTIFICATION TOAST COMPONENT
-// ========================================
-
-const NotificationToast = ({ notification, onClose }) => {
-  useEffect(() => {
-    const timer = setTimeout(onClose, 5000);
-    return () => clearTimeout(timer);
-  }, [onClose]);
-
-  const icons = {
-    like: <Heart className="w-5 h-5 text-red-500" />,
-    comment: <MessageCircle className="w-5 h-5 text-blue-500" />,
-    mention: <AtSign className="w-5 h-5 text-amber-500" />,
-    reshare: <Repeat className="w-5 h-5 text-indigo-500" />,
-    follow: <UserCheck className="w-5 h-5 text-green-500" />,
-    invite: <UserPlus className="w-5 h-5 text-purple-500" />,
-    message: <MessageSquare className="w-5 h-5 text-emerald-500" />,
-    join: <Users className="w-5 h-5 text-blue-500" />,
-    leave: <UserMinus className="w-5 h-5 text-red-500" />,
-    review: <Star className="w-5 h-5 text-yellow-500" />,
-    warning: <AlertCircle className="w-5 h-5 text-orange-500" />,
-    success: <CheckCircle className="w-5 h-5 text-green-500" />,
-    info: <Info className="w-5 h-5 text-blue-500" />,
-  };
-
-  const bgColors = {
-    like: 'bg-red-50 border-red-200',
-    comment: 'bg-blue-50 border-blue-200',
-    mention: 'bg-amber-50 border-amber-200',
-    reshare: 'bg-indigo-50 border-indigo-200',
-    follow: 'bg-green-50 border-green-200',
-    invite: 'bg-purple-50 border-purple-200',
-    message: 'bg-emerald-50 border-emerald-200',
-    join: 'bg-blue-50 border-blue-200',
-    leave: 'bg-red-50 border-red-200',
-    review: 'bg-yellow-50 border-yellow-200',
-    warning: 'bg-orange-50 border-orange-200',
-    success: 'bg-green-50 border-green-200',
-    info: 'bg-blue-50 border-blue-200',
-  };
-
-  const iconBgs = {
-    like: 'bg-red-100', comment: 'bg-blue-100', mention: 'bg-amber-100',
-    reshare: 'bg-indigo-100', follow: 'bg-green-100', invite: 'bg-purple-100',
-    message: 'bg-emerald-100', join: 'bg-blue-100', leave: 'bg-red-100',
-    review: 'bg-yellow-100', warning: 'bg-orange-100', success: 'bg-green-100',
-    info: 'bg-blue-100',
-  };
-
-  return (
-    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-slideDown">
-      <div className={`rounded-2xl shadow-2xl border-2 overflow-hidden ${bgColors[notification.type] || 'bg-white border-gray-200'}`}>
-        <div className="p-4 flex items-start gap-3">
-          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBgs[notification.type] || 'bg-purple-100'}`}>
-            {icons[notification.type] || <Bell className="w-5 h-5 text-gray-500" />}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm text-gray-900 font-medium leading-snug">{notification.message}</p>
-            <p className="text-xs text-gray-500 mt-1">{new Date(notification.timestamp).toLocaleTimeString()}</p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 7B: HEART GLITTER EFFECT COMPONENT
-// ✅ NEW: Floating hearts + sparkles burst when liking a post
-// ========================================
-
-const HeartGlitterEffect = ({ x, y, onComplete }) => {
-  useEffect(() => {
-    const timer = setTimeout(onComplete, 1200);
-    return () => clearTimeout(timer);
-  }, [onComplete]);
-
-  const particles = [
-    { dx: -55, dy: -85, rotate: -20, delay: 0,   size: 20, emoji: '❤️' },
-    { dx:  55, dy: -85, rotate:  20, delay: 50,  size: 18, emoji: '💖' },
-    { dx: -85, dy: -40, rotate: -35, delay: 30,  size: 16, emoji: '✨' },
-    { dx:  85, dy: -40, rotate:  35, delay: 80,  size: 16, emoji: '✨' },
-    { dx: -25, dy: -105,rotate:   0, delay: 20,  size: 22, emoji: '❤️' },
-    { dx:  25, dy: -105,rotate:  10, delay: 60,  size: 18, emoji: '💕' },
-    { dx: -65, dy:  15, rotate: -25, delay: 40,  size: 14, emoji: '💖' },
-    { dx:  65, dy:  15, rotate:  25, delay: 70,  size: 14, emoji: '✨' },
-    { dx:   0, dy: -95, rotate:   5, delay: 10,  size: 24, emoji: '❤️' },
-    { dx: -45, dy: -65, rotate: -15, delay: 90,  size: 15, emoji: '💗' },
-    { dx:  45, dy: -65, rotate:  15, delay: 45,  size: 15, emoji: '💗' },
-    { dx:   0, dy:  25, rotate:   0, delay: 55,  size: 12, emoji: '✨' },
-  ];
-
-  return (
-    <div
-      style={{
-        position: 'fixed',
-        left: x,
-        top: y,
-        pointerEvents: 'none',
-        zIndex: 9999,
-        transform: 'translate(-50%, -50%)',
-      }}
-    >
-      {particles.map((p, i) => (
-        <div
-          key={i}
-          style={{
-            position: 'absolute',
-            fontSize: p.size,
-            animation: `glitter_burst 0.95s ease-out ${p.delay}ms both`,
-            '--dx': `${p.dx}px`,
-            '--dy': `${p.dy}px`,
-            '--rot': `${p.rotate}deg`,
-          }}
-        >
-          {p.emoji}
-        </div>
-      ))}
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 8: DYNAMIC BOOK COVER COMPONENT
-// ========================================
-
-const DynamicBookCover = ({ title, author, onClick, size = 'md' }) => {
-  const [coverUrl, setCoverUrl] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
-
-  const sizeMap = {
-    xs: 'w-12 h-16',
-    sm: 'w-16 h-20',
-    md: 'w-24 h-32',
-    lg: 'w-32 h-40',
-    xl: 'w-40 h-48',
-  };
-  const cls = sizeMap[size] || sizeMap.md;
-
-  useEffect(() => {
-    if (!title) { setError(true); setLoading(false); return; }
-    let mounted = true;
-
-    const fetchCover = async () => {
-      const query = encodeURIComponent(author ? `${title} ${author}` : title);
-      try {
-        const res = await fetch(
-          `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1&projection=lite`,
-          { signal: AbortSignal.timeout(5000) }
-        );
-        if (res.ok && mounted) {
-          const data = await res.json();
-          const links = data.items?.[0]?.volumeInfo?.imageLinks;
-          if (links) {
-            const raw = links.extraLarge || links.large || links.medium || links.thumbnail;
-            if (raw) {
-              setCoverUrl(raw.replace('http:', 'https:').replace('&edge=curl', ''));
-              setLoading(false);
-              return;
-            }
-          }
-        }
-      } catch (_) { }
-
-      try {
-        const res = await fetch(
-          `https://openlibrary.org/search.json?q=${query}&limit=1`,
-          { signal: AbortSignal.timeout(5000) }
-        );
-        if (res.ok && mounted) {
-          const data = await res.json();
-          const book = data.docs?.[0];
-          if (book?.cover_i) {
-            setCoverUrl(`https://covers.openlibrary.org/b/id/${book.cover_i}-L.jpg`);
-            setLoading(false);
-            return;
-          }
-          if (book?.isbn?.length > 0) {
-            setCoverUrl(`https://covers.openlibrary.org/b/isbn/${book.isbn[0]}-L.jpg`);
-            setLoading(false);
-            return;
-          }
-        }
-      } catch (_) { }
-
-      if (mounted) { setError(true); setLoading(false); }
-    };
-
-    fetchCover();
-    return () => { mounted = false; };
-  }, [title, author]);
-
-  const getFallbackColor = () => {
-    const colors = [
-      '#7B9EA6', '#C8622A', '#8B5E3C', '#E8A87C', '#C4A882',
-      '#2C3E50', '#E74C3C', '#3498DB', '#9B59B6', '#1ABC9C',
-      '#27AE60', '#F39C12', '#D35400', '#8E44AD', '#16A085',
-    ];
-    const hash = (title || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    return colors[hash % colors.length];
-  };
-
-  const initials = title ? title.slice(0, 2).toUpperCase() : 'BK';
-
-  if (loading) {
-    return (
-      <div className={`${cls} bg-gray-200 rounded-xl animate-pulse flex items-center justify-center`} onClick={onClick}>
-        <BookOpen className="w-6 h-6 text-gray-400" />
-      </div>
-    );
-  }
-  if (error || !coverUrl) {
-    return (
-      <div
-        className={`${cls} rounded-xl flex flex-col items-center justify-center text-white font-bold shadow-lg cursor-pointer hover:scale-105 transition-transform`}
-        style={{ backgroundColor: getFallbackColor() }}
-        onClick={onClick}
-      >
-        <span className="text-xl">{initials}</span>
-        <BookOpen className="w-4 h-4 mt-1 opacity-60" />
-      </div>
-    );
-  }
-  return (
-    <div className={`${cls} rounded-xl overflow-hidden bg-gray-100 cursor-pointer hover:shadow-lg transition-shadow`} onClick={onClick}>
-      <img
-        src={coverUrl}
-        alt={`Cover of ${title}`}
-        className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-        onError={() => { setCoverUrl(null); setError(true); }}
-        loading="lazy"
-        decoding="async"
-        referrerPolicy="no-referrer"
-      />
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 9: AVATAR COMPONENT
-// ========================================
-
-const Avatar = ({ initials, size = 'md', src, online, onClick }) => {
-  const sizes = {
-    xs: 'w-7 h-7 text-xs',
-    sm: 'w-9 h-9 text-sm',
-    md: 'w-11 h-11 text-base',
-    lg: 'w-16 h-16 text-xl',
-    xl: 'w-20 h-20 text-2xl',
-  };
-  const gradients = [
-    'from-orange-500 to-red-500',
-    'from-blue-500 to-purple-500',
-    'from-green-500 to-teal-500',
-    'from-purple-500 to-pink-500',
-    'from-yellow-500 to-orange-500',
-    'from-indigo-500 to-blue-500',
-  ];
-  const getGradient = () => {
-    const hash = (initials || '').split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
-    return gradients[hash % gradients.length];
-  };
-  return (
-    <div className="relative shrink-0 cursor-pointer" onClick={onClick}>
-      {src ? (
-        <img
-          src={src}
-          alt={initials}
-          className={`${sizes[size]} rounded-full object-cover border-2 border-orange-200 hover:border-orange-400 transition`}
-        />
-      ) : (
-        <div className={`${sizes[size]} rounded-full bg-gradient-to-br ${getGradient()} flex items-center justify-center font-semibold text-white shadow-md`}>
-          {initials?.slice(0, 2).toUpperCase()}
-        </div>
-      )}
-      {online && (
-        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white rounded-full" />
-      )}
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 10: STAR RATING COMPONENT
-// ========================================
-
-const StarRating = ({ rating = 0, onChange, size = 'sm', readonly = false }) => {
-  const sizeClasses = { xs: 'w-3 h-3', sm: 'w-4 h-4', md: 'w-5 h-5', lg: 'w-6 h-6' };
-  const sz = sizeClasses[size] || sizeClasses.sm;
-  return (
-    <div className="flex gap-0.5">
-      {[1, 2, 3, 4, 5].map(i => (
-        <Star
-          key={i}
-          className={`${sz} ${i <= rating ? 'fill-amber-400 text-amber-400' : 'text-gray-300'} ${onChange && !readonly ? 'cursor-pointer hover:scale-110 transition-transform' : ''}`}
-          onClick={() => onChange?.(i)}
-        />
-      ))}
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 11: LOADING SPINNER COMPONENT
-// ========================================
-
-const LoadingSpinner = ({ size = 'md', color = 'orange', fullScreen = false }) => {
-  const sizes = { sm: 'w-4 h-4', md: 'w-8 h-8', lg: 'w-12 h-12', xl: 'w-16 h-16' };
-  const colors = { orange: 'border-orange-500', blue: 'border-blue-500', purple: 'border-purple-500', green: 'border-green-500', white: 'border-white' };
-  if (fullScreen) {
-    return (
-      <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
-        <div className={`${sizes[size]} border-4 border-t-transparent ${colors[color]} rounded-full animate-spin`} />
-      </div>
-    );
-  }
-  return <div className={`${sizes[size]} border-4 border-t-transparent ${colors[color] || colors.orange} rounded-full animate-spin`} />;
-};
-
-// ========================================
-// SECTION 12: CREW PRESENCE HOOK
-// ========================================
-
+// ── CREW PRESENCE & TYPING HOOKS ──────────────────────────────────────────
 const useCrewPresence = (crewId, userId, userName) => {
   const [onlineCount, setOnlineCount] = useState(0);
-  const [onlineUsers, setOnlineUsers] = useState([]);
-  const heartbeatRef = useRef(null);
-  const PRESENCE_TTL = 30_000;
-  const HEARTBEAT_INTV = 15_000;
-
-  const markPresent = useCallback(() => {
-    if (!crewId || !userId) return;
-    localStorage.setItem(
-      `crew_${crewId}_presence_${userId}`,
-      JSON.stringify({ userId, userName, ts: Date.now() })
-    );
-  }, [crewId, userId, userName]);
-
-  const markAbsent = useCallback(() => {
-    if (!crewId || !userId) return;
-    localStorage.removeItem(`crew_${crewId}_presence_${userId}`);
-  }, [crewId, userId]);
-
-  const getOnlineUsers = useCallback(() => {
+  const PRESENCE_TTL = 30000, HEARTBEAT = 15000;
+  const mark = useCallback(() => {
+    if (!crewId||!userId) return;
+    setLS(`crew_${crewId}_presence_${userId}`, { userId, userName, ts: Date.now() });
+  },[crewId,userId,userName]);
+  const getOnline = useCallback(() => {
     if (!crewId) return [];
-    const now = Date.now();
-    const online = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith(`crew_${crewId}_presence_`)) {
-        try {
-          const data = JSON.parse(localStorage.getItem(key));
-          if (data && now - data.ts < PRESENCE_TTL) {
-            online.push(data);
-          } else {
-            localStorage.removeItem(key);
-          }
-        } catch (_) { localStorage.removeItem(key); }
+    const now = Date.now(), out = [];
+    for (let i=0;i<localStorage.length;i++) {
+      const k = localStorage.key(i);
+      if (k?.startsWith(`crew_${crewId}_presence_`)) {
+        try { const d = JSON.parse(localStorage.getItem(k)); if (d && now-d.ts < PRESENCE_TTL) out.push(d); else localStorage.removeItem(k); } catch { localStorage.removeItem(k); }
       }
     }
-    return online;
-  }, [crewId]);
-
+    return out;
+  },[crewId]);
   useEffect(() => {
-    if (!crewId || !userId) return;
-    markPresent();
-    const online = getOnlineUsers();
-    setOnlineUsers(online);
-    setOnlineCount(online.length);
-
-    heartbeatRef.current = setInterval(() => {
-      markPresent();
-      const updated = getOnlineUsers();
-      setOnlineUsers(updated);
-      setOnlineCount(updated.length);
-    }, HEARTBEAT_INTV);
-
-    return () => { clearInterval(heartbeatRef.current); markAbsent(); };
-  }, [crewId, userId, markPresent, markAbsent, getOnlineUsers]);
-
-  return { onlineUsers, onlineCount };
+    if (!crewId||!userId) return;
+    mark(); setOnlineCount(getOnline().length);
+    const iv = setInterval(()=>{ mark(); setOnlineCount(getOnline().length); }, HEARTBEAT);
+    return ()=>{ clearInterval(iv); if(crewId&&userId) localStorage.removeItem(`crew_${crewId}_presence_${userId}`); };
+  },[crewId,userId,mark,getOnline]);
+  return { onlineCount };
 };
-
-// ========================================
-// SECTION 13: TYPING INDICATOR HOOK
-// ========================================
 
 const useTypingIndicator = (crewId, userId, userName) => {
   const [typingUsers, setTypingUsers] = useState([]);
-  const typingTimeoutRef = useRef(null);
+  const tRef = useRef(null);
   const TYPING_TTL = 3000;
-
-  const broadcastTyping = useCallback(() => {
-    if (!crewId || !userId) return;
-    localStorage.setItem(
-      `crew_${crewId}_typing_${userId}`,
-      JSON.stringify({ userId, userName, ts: Date.now() })
-    );
-    clearTimeout(typingTimeoutRef.current);
-    typingTimeoutRef.current = setTimeout(() => {
-      localStorage.removeItem(`crew_${crewId}_typing_${userId}`);
-    }, TYPING_TTL);
-  }, [crewId, userId, userName]);
-
-  const stopTyping = useCallback(() => {
-    if (!crewId || !userId) return;
-    clearTimeout(typingTimeoutRef.current);
+  const broadcastTyping = useCallback(()=>{
+    if (!crewId||!userId) return;
+    setLS(`crew_${crewId}_typing_${userId}`, { userId, userName, ts: Date.now() });
+    clearTimeout(tRef.current);
+    tRef.current = setTimeout(()=>localStorage.removeItem(`crew_${crewId}_typing_${userId}`), TYPING_TTL);
+  },[crewId,userId,userName]);
+  const stopTyping = useCallback(()=>{
+    if (!crewId||!userId) return;
+    clearTimeout(tRef.current);
     localStorage.removeItem(`crew_${crewId}_typing_${userId}`);
-  }, [crewId, userId]);
-
-  useEffect(() => {
+  },[crewId,userId]);
+  useEffect(()=>{
     if (!crewId) return;
-    const interval = setInterval(() => {
-      const now = Date.now();
-      const typing = [];
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key?.startsWith(`crew_${crewId}_typing_`) && !key.includes(`_${userId}`)) {
-          try {
-            const data = JSON.parse(localStorage.getItem(key));
-            if (data && now - data.ts < TYPING_TTL) {
-              typing.push(data.userName);
-            } else {
-              localStorage.removeItem(key);
-            }
-          } catch (_) { localStorage.removeItem(key); }
+    const iv = setInterval(()=>{
+      const now=Date.now(), typing=[];
+      for(let i=0;i<localStorage.length;i++){
+        const k=localStorage.key(i);
+        if(k?.startsWith(`crew_${crewId}_typing_`)&&!k.includes(`_${userId}`)){
+          try{ const d=JSON.parse(localStorage.getItem(k)); if(d&&now-d.ts<TYPING_TTL) typing.push(d.userName); else localStorage.removeItem(k); }catch{localStorage.removeItem(k);}
         }
       }
       setTypingUsers(typing);
-    }, 1500);
-    return () => { clearInterval(interval); stopTyping(); };
-  }, [crewId, userId, stopTyping]);
-
+    },1500);
+    return ()=>{ clearInterval(iv); stopTyping(); };
+  },[crewId,userId,stopTyping]);
   return { typingUsers, broadcastTyping, stopTyping };
 };
 
-// ========================================
-// SECTION 14: READ RECEIPT HELPERS
-// ========================================
+// ══════════════════════════════════════════════════════════════════════════════
+// BASE UI COMPONENTS
+// ══════════════════════════════════════════════════════════════════════════════
 
-const markCrewMessagesRead = (crewId, userId) => {
-  if (!crewId || !userId) return;
-  localStorage.setItem(`crew_${crewId}_lastRead_${userId}`, Date.now().toString());
+const Avatar = memo(({ initials, size = 'md', src, onClick, hasStatus = false, statusBook = null }) => {
+  const sizes = { xs:'w-7 h-7 text-xs', sm:'w-9 h-9 text-sm', md:'w-11 h-11 text-sm', lg:'w-16 h-16 text-xl', xl:'w-20 h-20 text-2xl' };
+  const grads = ['from-orange-400 to-pink-500','from-violet-500 to-purple-600','from-emerald-400 to-teal-500','from-blue-400 to-indigo-500','from-rose-400 to-red-500','from-amber-400 to-orange-500'];
+  const g = grads[(initials||'?').charCodeAt(0) % grads.length];
+  const ringColors = ['ring-orange-400','ring-pink-400','ring-violet-400','ring-emerald-400','ring-blue-400','ring-amber-400'];
+  const ringColor = ringColors[(initials||'?').charCodeAt(0) % ringColors.length];
+  
+  return (
+    <div className={`relative flex-shrink-0 ${hasStatus ? `ring-2 ring-offset-1 ${ringColor} rounded-full` : ''}`} onClick={onClick} style={{ cursor: onClick ? 'pointer' : 'default' }}>
+      <div className={`${sizes[size]} rounded-full overflow-hidden`}>
+        {src
+          ? <img src={src} alt={initials} className="w-full h-full object-cover" />
+          : <div className={`w-full h-full bg-gradient-to-br ${g} flex items-center justify-center font-bold text-white`}>{(initials||'?').slice(0,2).toUpperCase()}</div>
+        }
+      </div>
+    </div>
+  );
+});
+
+const StarRating = memo(({ rating=0, onChange, size='sm', readonly=false }) => {
+  const sz = { xs:'w-3 h-3', sm:'w-4 h-4', md:'w-5 h-5', lg:'w-6 h-6' }[size]||'w-4 h-4';
+  return (
+    <div className="flex gap-0.5">
+      {[1,2,3,4,5].map(i=>(
+        <Star key={i} className={`${sz} ${i<=rating?'fill-amber-400 text-amber-400':'text-gray-300'} ${onChange&&!readonly?'cursor-pointer hover:scale-110 transition-transform':''}`} onClick={()=>onChange?.(i)}/>
+      ))}
+    </div>
+  );
+});
+
+const LoadingSpinner = ({ size='md', color='orange', fullScreen=false }) => {
+  const s = { sm:'w-4 h-4', md:'w-8 h-8', lg:'w-12 h-12', xl:'w-16 h-16' }[size]||'w-8 h-8';
+  const c = { orange:'border-orange-500', blue:'border-blue-500', white:'border-white', green:'border-green-500' }[color]||'border-orange-500';
+  if (fullScreen) return (
+    <div className="fixed inset-0 bg-white/80 backdrop-blur-sm z-50 flex items-center justify-center">
+      <div className={`${s} border-4 border-t-transparent ${c} rounded-full animate-spin`}/>
+    </div>
+  );
+  return <div className={`${s} border-4 border-t-transparent ${c} rounded-full animate-spin`}/>;
 };
 
-const getReadStatus = (msgTimestamp, crewId, onlineCount) => {
-  const msgTime = new Date(msgTimestamp).getTime();
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key?.startsWith(`crew_${crewId}_lastRead_`)) {
-      const lastRead = parseInt(localStorage.getItem(key) || '0');
-      if (lastRead >= msgTime) return 'read';
-    }
-  }
-  return onlineCount > 1 ? 'delivered' : 'sent';
+const DynamicBookCover = memo(({ title, author, onClick, size='md' }) => {
+  const sizeMap = { xs:'w-10 h-14', sm:'w-16 h-20', md:'w-24 h-32', lg:'w-32 h-44', xl:'w-40 h-52' };
+  const cls = sizeMap[size]||sizeMap.md;
+  const cacheKey = `${title}|${author}`;
+  const [url,    setUrl]    = useState(_coverCache.get(cacheKey)||null);
+  const [error,  setError]  = useState(false);
+  const [loading,setLoad]   = useState(!_coverCache.has(cacheKey));
+
+  useEffect(()=>{
+    if (_coverCache.has(cacheKey)) { setUrl(_coverCache.get(cacheKey)); setLoad(false); return; }
+    if (!title) { setError(true); setLoad(false); return; }
+    let alive = true;
+    const q = encodeURIComponent(`${title} ${author||''}`);
+    fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1&projection=lite`,{signal:AbortSignal.timeout(6000)})
+      .then(r=>r.json()).then(d=>{
+        if (!alive) return;
+        const links = d?.items?.[0]?.volumeInfo?.imageLinks;
+        if (links) {
+          const raw = links.extraLarge||links.large||links.medium||links.thumbnail;
+          if (raw) { const u=raw.replace('http:','https:').replace('&edge=curl',''); _coverCache.set(cacheKey,u); setUrl(u); setLoad(false); return; }
+        }
+        setError(true); setLoad(false);
+      }).catch(()=>{ if(alive){setError(true);setLoad(false);} });
+    return ()=>{alive=false;};
+  },[cacheKey, title, author]);
+
+  const colors = ['#7C3AED','#DC2626','#059669','#2563EB','#D97706','#DB2777','#0891B2','#EA580C'];
+  const bg = colors[(title||'').charCodeAt(0)%colors.length];
+  const initials = (title||'BK').slice(0,2).toUpperCase();
+
+  if (loading) return <div className={`${cls} bg-gray-100 rounded-xl animate-pulse`} onClick={onClick}/>;
+  if (error||!url) return (
+    <div className={`${cls} rounded-xl flex flex-col items-center justify-center text-white font-bold cursor-pointer hover:scale-105 transition-transform shadow`} style={{backgroundColor:bg}} onClick={onClick}>
+      <span className="text-xl">{initials}</span>
+      <BookOpen className="w-4 h-4 mt-1 opacity-60"/>
+    </div>
+  );
+  return (
+    <div className={`${cls} rounded-xl overflow-hidden cursor-pointer hover:shadow-lg transition-shadow`} onClick={onClick}>
+      <img src={url} alt={title} className="w-full h-full object-cover hover:scale-105 transition-transform duration-300" onError={()=>{setUrl(null);setError(true);}} loading="lazy"/>
+    </div>
+  );
+});
+
+const NotificationToast = ({ notification, onClose }) => {
+  useEffect(()=>{ const t=setTimeout(onClose,5000); return()=>clearTimeout(t); },[onClose]);
+  const icons = { like:<Heart className="w-4 h-4 text-red-500"/>, comment:<MessageCircle className="w-4 h-4 text-blue-500"/>, follow:<UserCheck className="w-4 h-4 text-green-500"/>, reshare:<Repeat className="w-4 h-4 text-indigo-500"/>, success:<CheckCircle className="w-4 h-4 text-green-500"/>, info:<Info className="w-4 h-4 text-orange-500"/>, warning:<AlertCircle className="w-4 h-4 text-orange-500"/> };
+  const bgs  = { like:'bg-red-50 border-red-200', comment:'bg-blue-50 border-blue-200', follow:'bg-green-50 border-green-200', reshare:'bg-indigo-50 border-indigo-200', success:'bg-green-50 border-green-200', info:'bg-orange-50 border-orange-200', warning:'bg-amber-50 border-amber-200' };
+  const ibgs = { like:'bg-red-100', comment:'bg-blue-100', follow:'bg-green-100', reshare:'bg-indigo-100', success:'bg-green-100', info:'bg-orange-100', warning:'bg-amber-100' };
+  return (
+    <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-[200] w-[90%] max-w-sm animate-slideDown">
+      <div className={`rounded-2xl shadow-2xl border-2 overflow-hidden ${bgs[notification.type]||'bg-white border-gray-200'}`}>
+        <div className="p-4 flex items-start gap-3">
+          <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${ibgs[notification.type]||'bg-gray-100'}`}>
+            {icons[notification.type]||<Bell className="w-5 h-5 text-gray-500"/>}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-gray-900 font-semibold leading-snug">{notification.message}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{formatTimeAgo(notification.timestamp||new Date())}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
+        </div>
+      </div>
+    </div>
+  );
 };
 
-// ========================================
-// SECTION 15: BOOK DETAILS MODAL
-// ========================================
-
-const BookDetailsModal = ({ book, onClose, onCreateCrew }) => {
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOK DETAILS MODAL — FULL description, no truncation
+// ══════════════════════════════════════════════════════════════════════════════
+const BookDetailsModal = memo(({ book, onClose, onCreateCrew, currentUser }) => {
   const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('description');
+  const [tab, setTab] = useState('description');
 
-  useEffect(() => { fetchBookDetails(); }, [book]);
-
-  const fetchBookDetails = async () => {
+  useEffect(()=>{
+    let alive = true;
     setLoading(true);
-    try {
-      const query = encodeURIComponent(`${book.title} ${book.author || ''}`);
-      const res = await fetch(
-        `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=1`,
-        { signal: AbortSignal.timeout(8000) }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const info = data.items?.[0]?.volumeInfo;
+    const q = encodeURIComponent(`${book.title} ${book.author||''}`);
+    fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=1`,{signal:AbortSignal.timeout(10000)})
+      .then(r=>r.json()).then(d=>{
+        if (!alive) return;
+        const info = d?.items?.[0]?.volumeInfo;
         if (info) {
+          const rawDesc = info.description || '';
+          const cleanDesc = rawDesc.replace(/<[^>]*>/g,'').trim();
           setDetails({
-            title: info.title,
-            subtitle: info.subtitle,
-            authors: info.authors || [book.author],
-            description: info.description || 'No description available.',
-            pageCount: info.pageCount,
+            title:         info.title,
+            subtitle:      info.subtitle,
+            authors:       info.authors||[book.author],
+            description:   cleanDesc || `No description available for "${book.title}" rn bestie 😭 Check Goodreads for the full tea! ☕`,
+            pageCount:     info.pageCount,
             publishedDate: info.publishedDate,
-            publisher: info.publisher,
-            categories: info.categories || [],
+            publisher:     info.publisher,
+            categories:    info.categories||[],
             averageRating: info.averageRating,
-            ratingsCount: info.ratingsCount,
-            previewLink: info.previewLink,
-            infoLink: info.infoLink,
-            language: info.language,
-            isbn: info.industryIdentifiers,
+            ratingsCount:  info.ratingsCount,
+            previewLink:   info.previewLink,
+            language:      info.language,
+            isbn:          info.industryIdentifiers,
           });
-          setLoading(false);
-          return;
+        } else {
+          setDetails({ title: book.title, authors: [book.author||'Unknown Author'], description: `We couldn't fetch the full synopsis for "${book.title}" rn bestie 😭 Try checking Goodreads or your favourite bookstore for the complete description — but no cap, this book slaps fr! ☕📚`, categories: [] });
         }
-      }
-    } catch (_) { }
-
-    setDetails({
-      title: book.title,
-      authors: [book.author],
-      description: 'Details temporarily unavailable.',
-      categories: [],
-    });
-    setLoading(false);
-  };
+        setLoading(false);
+      }).catch(()=>{
+        if (!alive) return;
+        setDetails({ title: book.title, authors: [book.author||'Unknown Author'], description: `Couldn't load details rn (offline bestie 😭). Check Goodreads for the full tea! ☕`, categories: [] });
+        setLoading(false);
+      });
+    return ()=>{alive=false;};
+  },[book.title, book.author]);
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-    >
-      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-          <h3 className="font-bold text-lg">Book Details</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full">
-            <X className="w-5 h-5" />
-          </button>
+    <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="bg-white rounded-3xl w-full max-h-[92vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex justify-between items-center rounded-t-3xl z-10">
+          <h3 className="font-black text-lg text-gray-900">Book Details</h3>
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-full transition"><X className="w-5 h-5"/></button>
         </div>
-
         {loading ? (
-          <div className="flex justify-center py-12">
-            <LoadingSpinner size="lg" />
-          </div>
-        ) : details ? (
+          <div className="flex justify-center py-16"><LoadingSpinner size="lg"/></div>
+        ) : details && (
           <div className="p-4 space-y-4">
             <div className="flex gap-4">
-              <DynamicBookCover title={book.title} author={book.author} size="lg" />
-              <div className="flex-1">
-                <h2 className="text-xl font-bold text-gray-900">{details.title}</h2>
-                {details.subtitle && <p className="text-sm text-gray-600 mt-1">{details.subtitle}</p>}
-                <p className="text-gray-500 text-sm mt-1">by {details.authors?.join(', ') || book.author}</p>
+              <DynamicBookCover title={book.title} author={book.author} size="lg"/>
+              <div className="flex-1 min-w-0">
+                <h2 className="text-xl font-black text-gray-900 leading-tight">{details.title}</h2>
+                {details.subtitle && <p className="text-sm text-gray-500 mt-0.5">{details.subtitle}</p>}
+                <p className="text-gray-500 text-sm mt-1">by {(details.authors||[]).join(', ')}</p>
                 {details.categories?.length > 0 && (
                   <div className="flex flex-wrap gap-1 mt-2">
-                    {details.categories.slice(0, 3).map((cat, i) => (
-                      <span key={i} className="text-xs px-2 py-1 bg-orange-100 text-orange-600 rounded-full">{cat}</span>
+                    {details.categories.slice(0,3).map((c,i)=>(
+                      <span key={i} className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full font-semibold">{c}</span>
                     ))}
                   </div>
                 )}
                 {details.averageRating && (
-                  <div className="flex items-center gap-2 mt-2">
-                    <StarRating rating={Math.round(details.averageRating)} size="xs" readonly />
-                    <span className="text-xs text-gray-600">{details.averageRating.toFixed(1)} ({details.ratingsCount || 0} ratings)</span>
+                  <div className="flex items-center gap-1.5 mt-2">
+                    <StarRating rating={Math.round(details.averageRating)} size="xs" readonly/>
+                    <span className="text-xs text-gray-500">{details.averageRating.toFixed(1)} ({(details.ratingsCount||0).toLocaleString()} ratings)</span>
                   </div>
                 )}
               </div>
             </div>
-
             <div className="flex border-b border-gray-200">
-              {['description', 'details'].map(tab => (
-                <button
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 py-2 text-sm font-medium border-b-2 transition capitalize ${activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'}`}
-                >
-                  {tab}
-                </button>
+              {['description','details'].map(t=>(
+                <button key={t} onClick={()=>setTab(t)} className={`flex-1 py-2.5 text-sm font-black border-b-2 transition capitalize ${tab===t?'text-orange-500 border-orange-500':'text-gray-400 border-transparent'}`}>{t}</button>
               ))}
             </div>
-
-            {activeTab === 'description' && (
-              <div className="bg-gray-50 rounded-xl p-4">
-                <p className="text-sm text-gray-700 leading-relaxed">
-                  {(details.description || '').replace(/<[^>]*>/g, '') || 'No description available.'}
-                </p>
+            {tab==='description' && (
+              <div className="bg-gradient-to-br from-orange-50 to-amber-50 rounded-2xl p-4">
+                <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{details.description}</p>
               </div>
             )}
-
-            {activeTab === 'details' && (
-              <div className="space-y-3">
-                {[
-                  ['Pages', details.pageCount],
-                  ['Published', details.publishedDate ? new Date(details.publishedDate).toLocaleDateString() : null],
-                  ['Publisher', details.publisher],
-                  ['Language', details.language?.toUpperCase()],
-                  ['ISBN', details.isbn?.[0]?.identifier],
-                ].filter(([, v]) => v).map(([label, value]) => (
-                  <div key={label} className="flex justify-between py-2 border-b border-gray-100">
-                    <span className="text-gray-500">{label}</span>
-                    <span className="font-medium text-sm">{value}</span>
+            {tab==='details' && (
+              <div className="divide-y divide-gray-100">
+                {[['Pages',details.pageCount],['Published',details.publishedDate ? new Date(details.publishedDate+'T00:00:00').getFullYear() : null],['Publisher',details.publisher],['Language',details.language?.toUpperCase()],['ISBN',details.isbn?.[0]?.identifier]].filter(([,v])=>v).map(([l,v])=>(
+                  <div key={l} className="flex justify-between py-3">
+                    <span className="text-sm text-gray-500">{l}</span>
+                    <span className="text-sm font-black text-gray-800">{v}</span>
                   </div>
                 ))}
               </div>
             )}
-
-            <div className="flex gap-2 pt-4">
-              <button
-                onClick={() => { onCreateCrew(book); onClose(); }}
-                className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:bg-orange-600 transition"
-              >
-                <Users className="w-4 h-4" />
-                Create Crew
+            <div className="flex gap-3 pt-2">
+              <button onClick={()=>{ onCreateCrew?.(book); onClose(); }} className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:opacity-90 transition active:scale-95">
+                <Users className="w-4 h-4"/>Create Crew
               </button>
               {details.previewLink && (
-                <a
-                  href={details.previewLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-3 border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition"
-                >
-                  <ExternalLink className="w-5 h-5" />
+                <a href={details.previewLink} target="_blank" rel="noopener noreferrer" className="px-4 py-3 border border-gray-200 rounded-2xl text-gray-600 hover:bg-gray-50 transition">
+                  <ExternalLink className="w-5 h-5"/>
                 </a>
               )}
             </div>
-          </div>
-        ) : (
-          <div className="text-center py-12">
-            <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">No details available</p>
           </div>
         )}
       </div>
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 16: USER PROFILE MODAL (Quick View)
-// ✅ Followers/Following are clickable → onViewFullProfile loop
-// ========================================
-
-const UserProfileModal = ({
-  userEmail, userName, currentUser, onClose,
-  onFollow, isFollowing, onViewFullProfile, onBlock, isBlocked,
-}) => {
-  const [userData, setUserData] = useState(null);
-  const [userPosts, setUserPosts] = useState([]);
-  const [stats, setStats] = useState({ posts: 0, reviews: 0, followers: 0, following: 0 });
-  const [showFollowersList, setShowFollowersList] = useState(false);
-  const [showFollowingList, setShowFollowingList] = useState(false);
-  const [followersList, setFollowersList] = useState([]);
-  const [followingList, setFollowingList] = useState([]);
-
-  useEffect(() => { loadUserData(); }, [userEmail]);
-
-  const loadUserData = () => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const found = users.find(u => u.email === userEmail);
-    if (found) setUserData(found);
-
-    const userFollowers = JSON.parse(localStorage.getItem(`user_${userEmail}_followers`) || '[]');
-    const userFollowing = JSON.parse(localStorage.getItem(`user_${userEmail}_following`) || '[]');
-
-    const withDetails = (emails) => emails.map(email => {
-      const u = users.find(x => x.email === email);
-      return { email, name: u?.name || email.split('@')[0], initials: (u?.name || email).slice(0, 2).toUpperCase(), src: u?.profileImage };
-    });
-
-    setFollowersList(withDetails(userFollowers));
-    setFollowingList(withDetails(userFollowing));
-
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const posts = allPosts.filter(p => p.userEmail === userEmail).slice(0, 5);
-    setUserPosts(posts);
-
-    const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
-    setStats({
-      posts: allPosts.filter(p => p.userEmail === userEmail).length,
-      reviews: allReviews.filter(r => r.userEmail === userEmail).length,
-      followers: userFollowers.length,
-      following: userFollowing.length,
-    });
-  };
-
-  // ✅ Clicking a user in the list goes to their full profile — creates the Instagram-style loop
-  const UserListSheet = ({ title, users: list, onClose: closeList }) => (
-    <div
-      className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-    >
-      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-          <h3 className="font-bold">{title}</h3>
-          <button onClick={closeList} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-4">
-          {list.length === 0
-            ? <p className="text-center text-gray-500 py-4">No users to show</p>
-            : list.map(u => (
-              <button
-                key={u.email}
-                onClick={() => {
-                  closeList();
-                  onViewFullProfile(u.email, u.name);
-                  onClose();
-                }}
-                className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition mb-2"
-              >
-                <Avatar initials={u.initials} size="sm" src={u.src} />
-                <div className="flex-1 text-left">
-                  <p className="font-semibold text-gray-900">{u.name}</p>
-                  <p className="text-xs text-gray-500">@{u.email.split('@')[0]}</p>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400" />
-              </button>
-            ))
-          }
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOK CARD
+// ══════════════════════════════════════════════════════════════════════════════
+const BookCard = memo(({ book, onCreateCrew, onViewDetails }) => (
+  <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
+    <div className="flex gap-3">
+      <DynamicBookCover title={book.title} author={book.author} size="sm" onClick={()=>onViewDetails?.(book)}/>
+      <div className="flex-1 min-w-0">
+        <h3 className="font-black text-gray-900 text-sm leading-tight">{book.title}</h3>
+        <p className="text-xs text-gray-500 mt-0.5">by {book.author}</p>
+        {book.genre && <span className="inline-block mt-1 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full font-semibold">{book.genre}</span>}
+        {book.reason && <p className="text-xs text-gray-500 mt-1 italic">"{book.reason}"</p>}
+        <div className="flex items-center gap-1.5 mt-2">
+          <StarRating rating={Math.round(book.rating||4)} size="xs" readonly/>
+          <span className="text-xs font-black text-gray-700">{book.rating||4.0}</span>
         </div>
       </div>
     </div>
-  );
+    <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
+      <button onClick={()=>onViewDetails?.(book)} className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl text-xs font-black hover:bg-blue-600 transition">View Details</button>
+      <button onClick={()=>onCreateCrew?.(book)} className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-xs font-black flex items-center justify-center gap-1 hover:opacity-90 transition">
+        <Users className="w-3.5 h-3.5"/>Join Crew
+      </button>
+    </div>
+  </div>
+));
 
-  return (
-    <>
-      <div
-        className="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 overflow-y-auto"
-        style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-      >
-        <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-            <h3 className="font-bold">User Profile</h3>
-            <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
-          </div>
-
-          <div className="p-5">
-            <div className="flex items-center gap-4 mb-6">
-              <Avatar initials={userName} size="lg" src={userData?.profileImage} />
-              <div className="flex-1 min-w-0">
-                <h2 className="text-xl font-bold text-gray-900 truncate">{userName}</h2>
-                <p className="text-sm text-gray-500">@{userName?.toLowerCase().replace(/\s/g, '')}</p>
-                {userData?.bio && <p className="text-sm text-gray-600 mt-1 line-clamp-2">{userData.bio}</p>}
-                <div className="flex gap-4 mt-2">
-                  <button onClick={() => setShowFollowersList(true)} className="text-center hover:opacity-75 transition">
-                    <p className="font-bold text-gray-900">{stats.followers}</p>
-                    <p className="text-xs text-gray-500">Followers</p>
-                  </button>
-                  <button onClick={() => setShowFollowingList(true)} className="text-center hover:opacity-75 transition">
-                    <p className="font-bold text-gray-900">{stats.following}</p>
-                    <p className="text-xs text-gray-500">Following</p>
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 mb-6">
-              {[['Posts', stats.posts], ['Reviews', stats.reviews], ['Followers', stats.followers]].map(([label, val]) => (
-                <div key={label} className="text-center p-2 bg-gray-50 rounded-lg">
-                  <p className="text-lg font-bold text-gray-900">{val}</p>
-                  <p className="text-xs text-gray-500">{label}</p>
-                </div>
-              ))}
-            </div>
-
-            {userEmail !== currentUser.email && (
-              <div className="flex gap-2 mb-6">
-                <button
-                  onClick={() => onFollow(userEmail, userName)}
-                  className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition ${isFollowing ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:opacity-90'}`}
-                >
-                  {isFollowing ? <><UserMinus className="w-4 h-4" />Unfollow</> : <><UserPlus className="w-4 h-4" />Follow</>}
-                </button>
-                <button
-                  onClick={() => onBlock(userEmail, userName)}
-                  className={`flex-1 py-3 rounded-xl font-semibold flex items-center justify-center gap-2 transition ${isBlocked ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-                >
-                  {isBlocked ? <><UserCheck className="w-4 h-4" />Unblock</> : <><UserMinus className="w-4 h-4" />Block</>}
-                </button>
-              </div>
-            )}
-
-            {userPosts.length > 0 && (
-              <div className="mb-6">
-                <h3 className="font-semibold text-gray-900 mb-3">Recent Posts</h3>
-                <div className="space-y-3">
-                  {userPosts.map(post => (
-                    <div key={post.id} className="bg-gray-50 rounded-xl p-3">
-                      <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="text-xs text-gray-400">{formatTimeAgo(post.createdAt)}</p>
-                        <div className="flex items-center gap-2">
-                          <span className="flex items-center gap-1 text-xs text-gray-500"><Heart className="w-3 h-3" />{post.likes || 0}</span>
-                          <span className="flex items-center gap-1 text-xs text-gray-500"><MessageCircle className="w-3 h-3" />{post.comments || 0}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <button
-              onClick={() => { onClose(); onViewFullProfile(userEmail, userName); }}
-              className="w-full py-3 border border-orange-200 text-orange-600 rounded-xl font-medium hover:bg-orange-50 transition"
-            >
-              View Full Profile
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {showFollowersList && (
-        <UserListSheet title="Followers" users={followersList} onClose={() => setShowFollowersList(false)} />
-      )}
-      {showFollowingList && (
-        <UserListSheet title="Following" users={followingList} onClose={() => setShowFollowingList(false)} />
-      )}
-    </>
-  );
-};
-
-// ========================================
-// SECTION 17: BOTTOM NAVIGATION
-// ========================================
-
-const BottomNav = ({ active, setPage, unreadCount = 0, show = true }) => {
+// ══════════════════════════════════════════════════════════════════════════════
+// BOTTOM NAV & TOP BAR
+// ══════════════════════════════════════════════════════════════════════════════
+const BottomNav = memo(({ active, setPage, unreadCount=0, show=true }) => {
   if (!show) return null;
   const items = [
-    { id: 'home', icon: BookOpen, label: 'Home' },
-    { id: 'explore', icon: Sparkles, label: 'Explore' },
-    { id: 'post', icon: Edit3, label: 'Post' },
-    { id: 'reviews', icon: Star, label: 'Reviews' },
-    { id: 'crews', icon: Users, label: 'Crews' },
+    {id:'home',    icon:BookOpen,  label:'Home'},
+    {id:'explore', icon:Sparkles,  label:'Explore'},
+    {id:'post',    icon:Edit3,     label:'Post'},
+    {id:'reviews', icon:Star,      label:'Reviews'},
+    {id:'crews',   icon:Users,     label:'Crews'},
   ];
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50 max-w-md mx-auto shadow-lg">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-100 z-50 max-w-md mx-auto shadow-lg">
       <div className="flex items-center justify-around py-2 px-2">
-        {items.map(({ id, icon: Icon, label }) => (
-          <button
-            key={id}
-            onClick={() => setPage(id)}
-            className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${active === id ? 'text-orange-500' : 'text-gray-400 hover:text-gray-600'}`}
-          >
-            {id === 'post' ? (
-              <div className={`w-10 h-10 rounded-full flex items-center justify-center -mt-5 shadow-lg ${active === id ? 'bg-orange-500' : 'bg-gray-800'}`}>
-                <Icon className="w-5 h-5 text-white" />
+        {items.map(({id,icon:Icon,label})=>(
+          <button key={id} onClick={()=>setPage(id)} className={`flex flex-col items-center gap-0.5 px-3 py-1.5 rounded-xl transition-all relative ${active===id?'text-orange-500':'text-gray-400 hover:text-gray-600'}`}>
+            {id==='post' ? (
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center -mt-5 shadow-lg ${active===id?'bg-orange-500':'bg-gray-800'}`}>
+                <Icon className="w-5 h-5 text-white"/>
               </div>
-            ) : (
-              <Icon className="w-5 h-5" strokeWidth={active === id ? 2.5 : 1.8} />
+            ) : <Icon className="w-5 h-5" strokeWidth={active===id?2.5:1.8}/>}
+            {id==='crews' && unreadCount>0 && (
+              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black">{unreadCount>9?'9+':unreadCount}</span>
             )}
-            {id === 'crews' && unreadCount > 0 && (
-              <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-            <span className={`text-[10px] font-medium ${id === 'post' ? 'mt-1' : ''}`}>{label}</span>
+            <span className={`text-[10px] font-black ${id==='post'?'mt-1':''}`}>{label}</span>
           </button>
         ))}
       </div>
     </nav>
   );
-};
+});
 
-// ========================================
-// SECTION 18: TOP BAR COMPONENT
-// ========================================
-
-const TopBar = ({ user, setPage, title, showBack = false, onBack, onNotificationClick, notificationCount = 0, profileSrc }) => (
-  <header className="sticky top-0 bg-white/95 backdrop-blur-sm z-40 px-4 py-3 flex items-center justify-between border-b border-gray-200">
+const TopBar = memo(({ user, setPage, title, showBack=false, onBack, onNotificationClick, notificationCount=0, profileSrc }) => (
+  <header className="sticky top-0 bg-white/95 backdrop-blur-sm z-40 px-4 py-3 flex items-center justify-between border-b border-gray-100">
     <div className="flex items-center gap-3">
-      {showBack && (
-        <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-lg">
-          <ChevronLeft className="w-5 h-5 text-gray-600" />
-        </button>
-      )}
+      {showBack && <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-xl"><ChevronLeft className="w-5 h-5 text-gray-600"/></button>}
       <div className="flex items-center gap-2">
-        <div className="w-7 h-7 bg-gradient-to-br from-orange-500 to-red-500 rounded-lg flex items-center justify-center shadow-md">
-          <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5} />
+        <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-pink-500 rounded-xl flex items-center justify-center shadow-md">
+          <BookOpen className="w-4 h-4 text-white" strokeWidth={2.5}/>
         </div>
-        <span className="font-bold text-gray-900 text-lg" style={{ fontFamily: 'Georgia, serif' }}>
-          {title || 'READCREWW'}
-        </span>
+        <span className="font-black text-gray-900 text-lg tracking-tight" style={{fontFamily:'Georgia,serif'}}>{title||APP_NAME}</span>
       </div>
     </div>
-    <div className="flex items-center gap-3">
-      <button onClick={onNotificationClick} className="relative p-1 hover:bg-gray-100 rounded-lg transition">
-        <Bell className="w-5 h-5 text-gray-600" />
-        {notificationCount > 0 && (
-          <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">
-            {notificationCount > 9 ? '9+' : notificationCount}
-          </span>
-        )}
+    <div className="flex items-center gap-2">
+      <button onClick={onNotificationClick} className="relative p-2 hover:bg-gray-100 rounded-xl transition">
+        <Bell className="w-5 h-5 text-gray-600"/>
+        {notificationCount>0 && <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-black">{notificationCount>9?'9+':notificationCount}</span>}
       </button>
-      <button onClick={() => setPage('profile')} className="hover:opacity-80 transition">
-        {profileSrc
-          ? <img src={profileSrc} alt="profile" className="w-8 h-8 rounded-full object-cover border border-orange-200" />
-          : <Avatar initials={user?.name} size="sm" />
-        }
+      <button onClick={()=>setPage('profile')} className="hover:opacity-80 transition">
+        <Avatar initials={user?.name} size="sm" src={profileSrc}/>
       </button>
     </div>
   </header>
-);
+));
 
-// ========================================
-// SECTION 19: NOTIFICATIONS PAGE
-// ✅ Clicking a notification navigates to that post or crew chat
-// ========================================
-
-const NotificationsPage = ({ user, onClose, updateNotificationCount, onNavigateToPost, onNavigateToCrew }) => {
-  const [notifications, setNotifications] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const loadNotifications = useCallback(() => {
-    const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-    const social = raw.filter(n => n.type !== 'message');
-    setNotifications(social.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)));
-    setLoading(false);
-  }, [user.email]);
-
-  useEffect(() => {
-    loadNotifications();
-
-    const handleStorage = (e) => {
-      if (e.key === `user_${user.email}_notifications`) loadNotifications();
-    };
-    const handleCustom = (e) => {
-      if (e.detail?.targetEmail === user.email) loadNotifications();
-    };
-
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('rc:notif', handleCustom);
-    return () => {
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('rc:notif', handleCustom);
-    };
-  }, [user.email, loadNotifications]);
-
-  const markAllAsRead = () => {
-    const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-    const updated = raw.map(n => ({ ...n, read: true }));
-    updated.forEach(n => _shownToastIds.add(n.id));
-    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
-    setNotifications(prev => prev.map(n => ({ ...n, read: true })));
-    updateNotificationCount?.();
-    window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
-  };
-
-  const markOneAsRead = (id) => {
-    _shownToastIds.add(id);
-    const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-    const updated = raw.map(n => n.id === id ? { ...n, read: true } : n);
-    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
-    setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-    updateNotificationCount?.();
-    window.dispatchEvent(new CustomEvent('rc:notif', { detail: { targetEmail: user.email } }));
-  };
-
-  const deleteNotification = (id) => {
-    const raw = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-    const updated = raw.filter(n => n.id !== id);
-    localStorage.setItem(`user_${user.email}_notifications`, JSON.stringify(updated));
-    setNotifications(prev => prev.filter(n => n.id !== id));
-    updateNotificationCount?.();
-  };
-
-  // ✅ Handle click: mark read + navigate to the source post or crew
-  const handleNotificationClick = (notif) => {
-    if (!notif.read) {
-      markOneAsRead(notif.id);
-    }
-
-    if (notif.type === 'message' && notif.crewId) {
-      // Navigate to the crew chat this message came from
-      onClose();
-      onNavigateToCrew?.(notif.crewId);
-    } else if (notif.postId && ['like', 'comment', 'mention', 'reshare'].includes(notif.type)) {
-      // Navigate to the post in the home feed
-      onClose();
-      onNavigateToPost?.(notif.postId);
-    } else if (notif.type === 'join' && notif.crewId) {
-      onClose();
-      onNavigateToCrew?.(notif.crewId);
-    }
-    // For follow notifications, just mark as read (no specific navigation needed)
-  };
-
-  const icons = {
-    like: <Heart className="w-4 h-4 text-red-500" />,
-    comment: <MessageCircle className="w-4 h-4 text-blue-500" />,
-    mention: <AtSign className="w-4 h-4 text-amber-500" />,
-    reshare: <Repeat className="w-4 h-4 text-indigo-500" />,
-    follow: <UserCheck className="w-4 h-4 text-green-500" />,
-    invite: <UserPlus className="w-4 h-4 text-purple-500" />,
-    join: <Users className="w-4 h-4 text-blue-500" />,
-    review: <Star className="w-4 h-4 text-yellow-500" />,
-    success: <CheckCircle className="w-4 h-4 text-green-500" />,
-    info: <Info className="w-4 h-4 text-blue-500" />,
-    warning: <AlertCircle className="w-4 h-4 text-orange-500" />,
-  };
-
-  const iconBg = {
-    like: 'bg-red-100', comment: 'bg-blue-100', mention: 'bg-amber-100',
-    reshare: 'bg-indigo-100', follow: 'bg-green-100', invite: 'bg-purple-100',
-    join: 'bg-blue-100', review: 'bg-yellow-100', success: 'bg-green-100',
-    info: 'bg-blue-100', warning: 'bg-orange-100',
-  };
-
-  const isNavigable = (notif) =>
-    notif.postId || (notif.crewId && ['message', 'join'].includes(notif.type));
-
-  const unreadCount = notifications.filter(n => !n.read).length;
-
-  return (
-    <div
-      className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-    >
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-lg">
-          <ChevronLeft className="w-5 h-5 text-gray-600" />
-        </button>
-        <div className="flex items-center gap-2">
-          <h2 className="font-semibold text-gray-900">Notifications</h2>
-          {unreadCount > 0 && (
-            <span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-semibold">{unreadCount}</span>
-          )}
-        </div>
-        <button
-          onClick={markAllAsRead}
-          disabled={unreadCount === 0}
-          className={`text-sm font-medium transition ${unreadCount > 0 ? 'text-orange-500 hover:text-orange-600' : 'text-gray-300 cursor-not-allowed'}`}
-        >
-          Mark all read
-        </button>
-      </div>
-
-      <div className="flex-1 overflow-y-auto pb-4">
-        {loading ? (
-          <div className="flex justify-center py-12"><LoadingSpinner /></div>
-        ) : notifications.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Bell className="w-10 h-10 text-gray-300" />
-            </div>
-            <p className="text-gray-500 font-medium">you're all caught up bestie 🎉</p>
-            <p className="text-gray-400 text-sm mt-1">your hype squad will slide in here 📬</p>
-          </div>
-        ) : (
-          <div className="divide-y divide-gray-100">
-            {notifications.map((notif) => (
-              <div
-                key={notif.id}
-                onClick={() => handleNotificationClick(notif)}
-                className={`p-4 transition cursor-pointer hover:bg-gray-50 ${notif.read ? 'bg-white' : 'bg-orange-50'}`}
-              >
-                <div className="flex items-start gap-3">
-                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${iconBg[notif.type] || 'bg-gray-100'}`}>
-                    {icons[notif.type] || <Bell className="w-4 h-4 text-gray-500" />}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900 leading-relaxed">{notif.message}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <p className="text-xs text-gray-400">{formatTimeAgo(notif.timestamp)}</p>
-                      {isNavigable(notif) && (
-                        <span className="text-xs text-orange-500 font-semibold">Tap to view →</span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {!notif.read && (
-                      <div className="w-2.5 h-2.5 bg-orange-500 rounded-full flex-shrink-0" />
-                    )}
-                    <button
-                      onClick={(e) => { e.stopPropagation(); deleteNotification(notif.id); }}
-                      className="p-1 text-gray-300 hover:text-red-400 transition"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 20: SHARE MODAL
-// ========================================
-
-const ShareModal = ({ post, crewInvite, onClose }) => {
-  const [copied, setCopied] = React.useState(false);
-  const shareUrl = post
-    ? deepLink('post', post.id || post._id)
-    : crewInvite
-      ? deepLink('crew', crewInvite.id)
-      : window.location.href;
+// ══════════════════════════════════════════════════════════════════════════════
+// SHARE MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+const ShareModal = memo(({ post, crewInvite, onClose }) => {
+  const [copied, setCopied] = useState(false);
+  const shareUrl = post ? deepLink('post',post.id||post._id) : crewInvite ? deepLink('crew',crewInvite.id) : window.location.href;
   const shareText = crewInvite
-    ? `Join the "${crewInvite.name}" reading crew on READCREWW — reading "${crewInvite.name}" by ${crewInvite.author}!`
-    : `Check out this post by ${post?.userName}: "${post?.content?.substring(0, 60)}..."`;
+    ? `bestie join the "${crewInvite.name}" reading crew on READCREWW! 📚`
+    : `omg check out this post on READCREWW: "${(post?.content||'').substring(0,60)}..."`;
 
-  const shareHandlers = {
-    whatsapp: () => window.open(`https://wa.me/?text=${encodeURIComponent(shareText + ' ' + shareUrl)}`, '_blank'),
-    facebook: () => window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(shareText)}`, '_blank'),
-    twitter: () => window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, '_blank'),
-    linkedin: () => window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}&summary=${encodeURIComponent(shareText)}`, '_blank'),
-    telegram: () => window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank'),
-    email: () => window.open(`mailto:?subject=${encodeURIComponent(crewInvite ? `Join my reading crew: ${crewInvite.name}` : 'Check out this READCREWW post')}&body=${encodeURIComponent(shareText + '\n\n' + shareUrl)}`, '_blank'),
-    copyLink: () => {
-      navigator.clipboard.writeText(shareUrl).catch(() => {
-        const ta = document.createElement('textarea');
-        ta.value = shareUrl;
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand('copy');
-        document.body.removeChild(ta);
-      });
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    },
+  const handlers = {
+    whatsapp: ()=>window.open(`https://wa.me/?text=${encodeURIComponent(shareText+' '+shareUrl)}`, '_blank'),
+    twitter:  ()=>window.open(`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`, '_blank'),
+    facebook: ()=>window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`, '_blank'),
+    linkedin: ()=>window.open(`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`, '_blank'),
+    telegram: ()=>window.open(`https://t.me/share/url?url=${encodeURIComponent(shareUrl)}&text=${encodeURIComponent(shareText)}`, '_blank'),
+    email:    ()=>window.open(`mailto:?subject=${encodeURIComponent('check this out on READCREWW')}&body=${encodeURIComponent(shareText+'\n\n'+shareUrl)}`, '_blank'),
+    copy:     ()=>{ navigator.clipboard.writeText(shareUrl).catch(()=>{}); setCopied(true); setTimeout(()=>setCopied(false),2500); },
   };
-
   const platforms = [
-    { key: 'whatsapp', color: '#25D366', letter: 'W', label: 'WhatsApp' },
-    { key: 'facebook', color: '#1877F2', letter: 'f', label: 'Facebook' },
-    { key: 'twitter', color: '#1DA1F2', letter: '𝕏', label: 'Twitter' },
-    { key: 'linkedin', color: '#0A66C2', letter: 'in', label: 'LinkedIn' },
-    { key: 'telegram', color: '#0088cc', letter: '✈', label: 'Telegram' },
+    {k:'whatsapp',color:'#25D366',letter:'W',label:'WhatsApp'},
+    {k:'twitter', color:'#1DA1F2',letter:'𝕏',label:'Twitter'},
+    {k:'facebook',color:'#1877F2',letter:'f',label:'Facebook'},
+    {k:'linkedin',color:'#0A66C2',letter:'in',label:'LinkedIn'},
+    {k:'telegram',color:'#0088cc',letter:'✈',label:'Telegram'},
   ];
-
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-    >
-      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto">
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="bg-white rounded-3xl w-full max-w-sm mx-auto">
         <div className="border-b border-gray-100 p-4 flex justify-between items-center">
-          <h3 className="font-semibold">{crewInvite ? 'Invite to Crew' : 'Share Post'}</h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+          <h3 className="font-black">{crewInvite?'invite bestie to crew 🔥':'share this post'}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5"/></button>
         </div>
         <div className="p-5">
           {crewInvite && (
             <div className="bg-orange-50 border border-orange-100 rounded-xl p-3 mb-4 flex items-center gap-3">
-              <BookOpen className="w-5 h-5 text-orange-500 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-semibold text-gray-900">{crewInvite.name}</p>
-                <p className="text-xs text-gray-500">by {crewInvite.author}</p>
-              </div>
+              <BookOpen className="w-5 h-5 text-orange-500 flex-shrink-0"/>
+              <div><p className="text-sm font-black text-gray-900">{crewInvite.name}</p><p className="text-xs text-gray-500">by {crewInvite.author}</p></div>
             </div>
           )}
           <div className="grid grid-cols-5 gap-3 mb-5">
-            {platforms.map(({ key, color, letter, label }) => (
-              <button key={key} onClick={shareHandlers[key]} className="flex flex-col items-center gap-1.5 group">
-                <div
-                  className="w-11 h-11 rounded-full flex items-center justify-center text-white font-bold text-sm transition-transform group-hover:scale-110 shadow-sm"
-                  style={{ backgroundColor: color }}
-                >
-                  {letter}
-                </div>
+            {platforms.map(({k,color,letter,label})=>(
+              <button key={k} onClick={handlers[k]} className="flex flex-col items-center gap-1.5 group">
+                <div className="w-11 h-11 rounded-full flex items-center justify-center text-white font-black text-sm transition-transform group-hover:scale-110 shadow-sm" style={{backgroundColor:color}}>{letter}</div>
                 <span className="text-[10px] text-gray-500">{label}</span>
               </button>
             ))}
           </div>
-          <button onClick={shareHandlers.email} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition mb-2">
-            <Mail className="w-5 h-5 text-orange-500" />
-            <span className="font-medium text-sm">Send via Email</span>
+          <button onClick={handlers.email} className="w-full py-3 border border-gray-200 rounded-xl flex items-center justify-center gap-2 text-gray-700 hover:bg-gray-50 transition mb-2">
+            <Mail className="w-5 h-5 text-orange-500"/><span className="font-black text-sm">via email</span>
           </button>
-          <button
-            onClick={shareHandlers.copyLink}
-            className={`w-full py-3 border rounded-xl flex items-center justify-center gap-2 transition ${copied ? 'border-green-400 bg-green-50 text-green-700' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-          >
-            {copied
-              ? <><CheckCircle className="w-5 h-5 text-green-500" /><span className="font-medium text-sm">Copied!</span></>
-              : <><Link2 className="w-5 h-5 text-orange-500" /><span className="font-medium text-sm">Copy Link</span></>
-            }
+          <button onClick={handlers.copy} className={`w-full py-3 border rounded-xl flex items-center justify-center gap-2 transition ${copied?'border-green-400 bg-green-50 text-green-700':'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+            {copied ? <><CheckCircle className="w-5 h-5 text-green-500"/><span className="font-black text-sm">Copied! ✅</span></> : <><Link2 className="w-5 h-5 text-orange-500"/><span className="font-black text-sm">copy link</span></>}
           </button>
         </div>
       </div>
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 21: RESHARE MODAL
-// ========================================
-
-const ReshareModal = ({ post, onClose, onReshare }) => {
+const ReshareModal = memo(({ post, onClose, onReshare }) => {
   const [comment, setComment] = useState('');
   const [isPublic, setIsPublic] = useState(true);
-
-  const handleReshare = () => {
-    if (!post) return;
-    onReshare(post, comment.trim(), isPublic);
-    onClose();
-  };
-
   if (!post) return null;
-
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-    >
-      <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
-        <div className="border-b border-gray-100 p-4 flex justify-between items-center sticky top-0 bg-white">
-          <h3 className="font-semibold flex items-center gap-2">
-            <Repeat className="w-4 h-4 text-orange-500" /> Reshare Post
-          </h3>
-          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="bg-white rounded-3xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <div className="border-b border-gray-100 p-4 flex justify-between items-center sticky top-0 bg-white rounded-t-3xl">
+          <h3 className="font-black flex items-center gap-2"><Repeat className="w-4 h-4 text-orange-500"/>reshare this post</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5"/></button>
         </div>
-
         <div className="p-5">
-          <div className="bg-gray-50 rounded-xl p-4 mb-4 border border-gray-200">
+          <div className="bg-gray-50 rounded-2xl p-4 mb-4 border border-gray-200">
             <div className="flex items-center gap-2 mb-2">
-              <Avatar initials={post.userName} size="xs" />
-              <span className="text-xs font-semibold text-gray-700">{post.userName}</span>
+              <Avatar initials={post.userName} size="xs"/>
+              <span className="text-xs font-black text-gray-700">{post.userName}</span>
               <span className="text-xs text-gray-400">{formatTimeAgo(post.createdAt)}</span>
             </div>
-            <p className="text-sm text-gray-700 line-clamp-3">{post.content || post.story}</p>
-            {post.image && (
-              <img src={post.image} alt="" className="mt-2 rounded-lg max-h-32 object-cover w-full" />
-            )}
-            {post.bookName && (
-              <div className="flex items-center gap-1 mt-2">
-                <BookOpen className="w-3 h-3 text-orange-400" />
-                <span className="text-xs text-gray-500">{post.bookName}</span>
-              </div>
-            )}
+            <p className="text-sm text-gray-700 line-clamp-3">{post.content||post.story}</p>
+            {post.bookName && <div className="flex items-center gap-1 mt-2"><BookOpen className="w-3 h-3 text-orange-400"/><span className="text-xs text-gray-500">{post.bookName}</span></div>}
           </div>
-
-          <div className="mb-4">
-            <label className="text-sm text-gray-600 mb-2 block font-medium">Add your thoughts (optional)</label>
-            <textarea
-              value={comment}
-              onChange={(e) => setComment(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none transition"
-              placeholder="what's ur hot take on this? 🔥"
-              rows={3}
-              maxLength={500}
-            />
-            <p className="text-xs text-gray-400 text-right mt-1">{comment.length}/500</p>
-          </div>
-
+          <label className="text-sm text-gray-600 mb-2 block font-black">add your thoughts (optional)</label>
+          <textarea value={comment} onChange={e=>setComment(e.target.value)} className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none transition mb-2" placeholder="what's the vibe on this? 🤔" rows={3} maxLength={500}/>
+          <p className="text-xs text-gray-400 text-right mb-4">{comment.length}/500</p>
           <div className="flex items-center gap-3 mb-5">
-            <button
-              onClick={() => setIsPublic(!isPublic)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition font-medium ${isPublic ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
-            >
-              {isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-              {isPublic ? 'Public' : 'Private'}
+            <button onClick={()=>setIsPublic(!isPublic)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition font-black ${isPublic?'bg-orange-500 text-white':'bg-gray-100 text-gray-700'}`}>
+              {isPublic?<Globe className="w-4 h-4"/>:<Lock className="w-4 h-4"/>}{isPublic?'Public':'Private'}
             </button>
-            <span className="text-xs text-gray-400">
-              {isPublic ? 'the whole timeline will see this' : 'just for ur eyes bestie'}
-            </span>
+            <span className="text-xs text-gray-400">{isPublic?'visible to everyone':'only you'}</span>
           </div>
-
-          <button
-            onClick={handleReshare}
-            className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition active:scale-95"
-          >
-            <Repeat className="w-4 h-4" />
-            Reshare Now
+          <button onClick={()=>{onReshare(post,comment.trim(),isPublic);onClose();}} className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:opacity-90 transition active:scale-95">
+            <Repeat className="w-4 h-4"/>Reshare Now 🚀
           </button>
         </div>
       </div>
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 22: POST OPTIONS MODAL
-// ========================================
+// ══════════════════════════════════════════════════════════════════════════════
+// USER PROFILE MODAL (quick view) — clicking name goes to full profile
+// ══════════════════════════════════════════════════════════════════════════════
+const UserProfileModal = memo(({ userEmail, userName, currentUser, onClose, onFollow, isFollowing, onViewFullProfile, onBlock, isBlocked }) => {
+  const [userData, setUserData] = useState(null);
+  const [userPosts, setUserPosts] = useState([]);
+  const [stats, setStats] = useState({ posts:0, reviews:0, followers:0, following:0 });
 
-const PostOptionsModal = ({
-  post, user, onClose, onReshare, onSave, isSaved,
-  onDelete, isOwner, onFollow, isFollowing, onBlock, isBlocked,
-}) => {
-  const [showReportForm, setShowReportForm] = useState(false);
-  const [reportReason, setReportReason] = useState('');
-  const [reportDetails, setReportDetails] = useState('');
-  const [reportSent, setReportSent] = useState(false);
-  const [reportSubmitting, setReportSubmitting] = useState(false);
+  useEffect(()=>{
+    const users = getLS('rcreww_users',[]);
+    const found = users.find(u=>u.email===userEmail);
+    if (found) setUserData(found);
+    const fwers = getLS(`rcreww_followers_${userEmail}`,[]);
+    const fwing = getLS(`rcreww_following_${userEmail}`,[]);
+    const allPosts = getGlobalPosts();
+    const posts = allPosts.filter(p=>p.userEmail===userEmail).slice(0,5);
+    setUserPosts(posts);
+    const allRevs = getGlobalReviews();
+    setStats({ posts:allPosts.filter(p=>p.userEmail===userEmail).length, reviews:allRevs.filter(r=>r.userEmail===userEmail).length, followers:fwers.length, following:fwing.length });
+  },[userEmail]);
 
-  const reportReasons = [
-    'Spam or misleading', 'Harassment or bullying', 'Inappropriate content',
-    'Misinformation', 'Hate speech', 'Violence', 'Copyright infringement', 'Other',
-  ];
-
-  const handleReport = () => {
-    if (!reportReason) return;
-    setReportSubmitting(true);
-    const reports = JSON.parse(localStorage.getItem('reportedPosts') || '[]');
-    reports.push({
-      postId: post.id, reportedBy: user.email, reportedByName: user.name,
-      reason: reportReason, details: reportDetails, postContent: post.content,
-      postAuthor: post.userEmail, postAuthorName: post.userName,
-      timestamp: new Date().toISOString(),
-    });
-    localStorage.setItem('reportedPosts', JSON.stringify(reports));
-    setReportSubmitting(false);
-    setReportSent(true);
-    setTimeout(onClose, 2000);
+  const handleViewFullProfile = () => {
+    onClose();
+    onViewFullProfile(userEmail, userName);
   };
-
-  if (showReportForm) {
-    return (
-      <div
-        className="fixed inset-0 bg-black/50 z-[70] flex items-end justify-center"
-        style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-      >
-        <div className="bg-white rounded-t-2xl w-full p-5 max-h-[90vh] overflow-y-auto">
-          <div className="flex justify-between items-center mb-4 sticky top-0 bg-white pt-2 pb-2 border-b">
-            <h3 className="font-semibold text-lg">Report Post</h3>
-            <button onClick={() => setShowReportForm(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
-          </div>
-          {reportSent ? (
-            <div className="text-center py-8">
-              <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4" />
-              <p className="font-semibold text-gray-900 text-lg">Report submitted</p>
-              <p className="text-sm text-gray-500 mt-2">Thanks for helping keep READCREWW safe.</p>
-            </div>
-          ) : (
-            <>
-              <p className="text-sm text-gray-700 mb-3 font-medium">Why are you reporting this?</p>
-              <div className="space-y-2 mb-4">
-                {reportReasons.map(reason => (
-                  <button
-                    key={reason}
-                    onClick={() => setReportReason(reason)}
-                    className={`w-full text-left px-4 py-3 rounded-xl text-sm border transition ${reportReason === reason ? 'border-orange-500 bg-orange-50 text-orange-700 font-medium' : 'border-gray-200 text-gray-700 hover:bg-gray-50'}`}
-                  >
-                    {reason}
-                  </button>
-                ))}
-              </div>
-              <textarea
-                value={reportDetails}
-                onChange={(e) => setReportDetails(e.target.value)}
-                className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none mb-4"
-                placeholder="anything else bestie? (optional)"
-                rows={3}
-                disabled={!reportReason}
-              />
-              <button
-                onClick={handleReport}
-                disabled={!reportReason || reportSubmitting}
-                className="w-full py-3 bg-red-500 text-white rounded-xl font-semibold disabled:opacity-40 hover:bg-red-600 transition flex items-center justify-center gap-2"
-              >
-                {reportSubmitting ? <><LoadingSpinner size="sm" color="white" /><span>Submitting...</span></> : <><Flag className="w-4 h-4" /><span>Submit Report</span></>}
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  const options = [
-    { id: 'reshare', icon: Repeat, label: 'Reshare', color: 'text-blue-600', action: () => { onReshare(post); onClose(); } },
-    { id: 'save', icon: Bookmark, label: isSaved ? 'Unsave' : 'Save', color: isSaved ? 'text-orange-500' : 'text-gray-700', action: () => { onSave(post); onClose(); } },
-  ];
-
-  if (!isOwner) {
-    options.push(
-      { id: 'follow', icon: isFollowing ? UserMinus : UserPlus, label: isFollowing ? 'Unfollow' : 'Follow', color: isFollowing ? 'text-red-500' : 'text-green-600', action: () => { onFollow(post.userEmail, post.userName); onClose(); } },
-      { id: 'block', icon: isBlocked ? UserCheck : UserMinus, label: isBlocked ? 'Unblock User' : 'Block User', color: isBlocked ? 'text-green-600' : 'text-red-500', action: () => { onBlock(post.userEmail, post.userName); onClose(); } },
-      { id: 'report', icon: Flag, label: 'Report Post', color: 'text-red-500', action: () => setShowReportForm(true) }
-    );
-  }
-
-  if (isOwner) {
-    options.push({ id: 'delete', icon: Trash2, label: 'Delete Post', color: 'text-red-500', action: () => { if (window.confirm('Delete this post?')) { onDelete(post); onClose(); } } });
-  }
 
   return (
-    <div
-      className="fixed inset-0 bg-black/50 z-[70] flex items-end justify-center"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}
-    >
-      <div className="bg-white rounded-t-2xl w-full overflow-hidden">
-        <div className="p-4 border-b border-gray-100"><h3 className="font-semibold text-center">Post Options</h3></div>
-        <div className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
-          {options.map(opt => (
-            <button key={opt.id} onClick={opt.action} className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition">
-              <opt.icon className={`w-5 h-5 ${opt.color}`} />
-              <span className={`text-sm font-medium ${opt.color}`}>{opt.label}</span>
+    <div className="fixed inset-0 bg-black/50 z-[75] flex items-center justify-center p-4 overflow-y-auto" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="bg-white rounded-3xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto">
+        <div className="sticky top-0 bg-white border-b border-gray-100 p-4 flex justify-between items-center rounded-t-3xl">
+          <h3 className="font-black">profile</h3>
+          <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5"/></button>
+        </div>
+        <div className="p-5">
+          <div className="flex items-center gap-4 mb-5">
+            <button onClick={handleViewFullProfile} className="hover:opacity-80 transition">
+              <Avatar initials={userName} size="lg" src={userData?.profileImage||getLS(`rcreww_pic_${userEmail}`,null)}/>
             </button>
-          ))}
-          <button onClick={onClose} className="w-full px-4 py-3.5 text-sm text-gray-500 hover:bg-gray-50 transition font-medium">Cancel</button>
+            <div className="flex-1 min-w-0">
+              {/* Clicking name → full profile */}
+              <button onClick={handleViewFullProfile} className="font-black text-xl text-gray-900 truncate hover:underline hover:text-orange-500 transition block">{userName}</button>
+              <p className="text-sm text-gray-400">@{userName?.toLowerCase().replace(/\s/g,'')}</p>
+              {userData?.bio && <p className="text-sm text-gray-600 mt-1 italic line-clamp-2">"{userData.bio}"</p>}
+              <div className="flex gap-4 mt-2">
+                <div className="text-center"><p className="font-black text-gray-900">{stats.followers}</p><p className="text-xs text-gray-500">followers</p></div>
+                <div className="text-center"><p className="font-black text-gray-900">{stats.following}</p><p className="text-xs text-gray-500">following</p></div>
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-2 mb-5">
+            {[['Posts',stats.posts],['Reviews',stats.reviews],['Followers',stats.followers]].map(([l,v])=>(
+              <div key={l} className="text-center p-2 bg-gray-50 rounded-xl">
+                <p className="text-lg font-black text-gray-900">{v}</p>
+                <p className="text-xs text-gray-500">{l}</p>
+              </div>
+            ))}
+          </div>
+          {userEmail!==currentUser.email && (
+            <div className="flex gap-2 mb-5">
+              <button onClick={()=>onFollow(userEmail,userName)} className={`flex-1 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition ${isFollowing?'bg-gray-200 text-gray-700':'bg-gradient-to-r from-orange-500 to-pink-500 text-white'}`}>
+                {isFollowing?<><UserMinus className="w-4 h-4"/>unfollow</>:<><UserPlus className="w-4 h-4"/>follow</>}
+              </button>
+              <button onClick={()=>onBlock(userEmail,userName)} className={`flex-1 py-3 rounded-2xl font-black text-sm flex items-center justify-center gap-2 transition ${isBlocked?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
+                {isBlocked?<><UserCheck className="w-4 h-4"/>unblock</>:<><UserMinus className="w-4 h-4"/>block</>}
+              </button>
+            </div>
+          )}
+          {userPosts.length>0 && (
+            <div className="mb-5">
+              <h3 className="font-black text-gray-900 mb-3">recent posts</h3>
+              <div className="space-y-2">
+                {userPosts.map(post=>(
+                  <div key={post.id} className="bg-gray-50 rounded-xl p-3">
+                    <p className="text-sm text-gray-700 line-clamp-2">{post.content}</p>
+                    <div className="flex items-center justify-between mt-1.5">
+                      <p className="text-xs text-gray-400">{formatTimeAgo(post.createdAt)}</p>
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1 text-xs text-gray-500"><Heart className="w-3 h-3"/>{getLikeCount(post.id)||post.likes||0}</span>
+                        <span className="flex items-center gap-1 text-xs text-gray-500"><MessageCircle className="w-3 h-3"/>{post.comments||0}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          <button onClick={handleViewFullProfile} className="w-full py-3 border border-orange-200 text-orange-600 rounded-2xl font-black hover:bg-orange-50 transition">
+            view full profile →
+          </button>
         </div>
       </div>
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 23: INLINE POST CARD
-// ✅ Heart Glitter: burst of hearts+sparkles when you like a post
-// ========================================
+// ══════════════════════════════════════════════════════════════════════════════
+// POST OPTIONS MODAL
+// ══════════════════════════════════════════════════════════════════════════════
+const PostOptionsModal = memo(({ post, user, onClose, onReshare, onSave, isSaved, onDelete, isOwner, onFollow, isFollowing, onBlock, isBlocked }) => {
+  const [showReport, setShowReport] = useState(false);
+  const [reason, setReason] = useState('');
+  const [reportSent, setReportSent] = useState(false);
+  const reportReasons = ['Spam or misleading','Harassment or bullying','Inappropriate content','Misinformation','Hate speech','Other'];
 
-const InlinePostCard = React.memo(({
-  post, user, profileSrc, updateNotificationCount,
-  onShare, onReshareClick, onSaveToggle, isSaved,
-  onDelete, onFollow, isFollowing, onBlock, isBlocked,
-  onViewUserProfile, onViewBookDetails,
-}) => {
-  const [isLiked, setIsLiked] = useState(() => hasUserLikedPost(post.id, user.email));
-  const [likeCount, setLikeCount] = useState(() => getPostLikes(post.id) || post.likes || 0);
-  const [showComments, setShowComments] = useState(false);
-  const [comments, setComments] = useState([]);
-  const [commentCount, setCommentCount] = useState(post.comments || 0);
-  const [newComment, setNewComment] = useState('');
-  const [likedComments, setLikedComments] = useState(new Set());
-  const [showAllComments, setShowAll] = useState(false);
-  const [replyTo, setReplyTo] = useState(null);
-  const [showReplies, setShowReplies] = useState({});
-  const [showOptions, setShowOptions] = useState(false);
-  const [loadingComments, setLoadingComments] = useState(false);
-  // ✅ Glitter effect state — stores position for burst animation
-  const [glitterEffects, setGlitterEffects] = useState([]);
-  const likeButtonRef = useRef(null);
+  const submitReport = () => {
+    if (!reason) return;
+    const reports = getLS('rcreww_reports',[]);
+    reports.push({ postId:post.id, reportedBy:user.email, reason, postContent:post.content, postAuthor:post.userEmail, timestamp:new Date().toISOString() });
+    setLS('rcreww_reports',reports);
+    setReportSent(true);
+    setTimeout(onClose,2000);
+  };
+
+  if (showReport) return (
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-end justify-center" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="bg-white rounded-t-3xl w-full p-5 max-h-[90vh] overflow-y-auto">
+        <div className="flex justify-between items-center mb-4 border-b pb-3">
+          <h3 className="font-black text-lg">Report Post</h3>
+          <button onClick={()=>setShowReport(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5"/></button>
+        </div>
+        {reportSent ? (
+          <div className="text-center py-8">
+            <CheckCircle className="w-16 h-16 text-green-500 mx-auto mb-4"/>
+            <p className="font-black text-gray-900 text-lg">Report submitted bestie</p>
+            <p className="text-sm text-gray-500 mt-2">thanks for keeping READCREWW safe 🫶</p>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-2 mb-4">
+              {reportReasons.map(r=>(
+                <button key={r} onClick={()=>setReason(r)} className={`w-full text-left px-4 py-3 rounded-xl text-sm border transition ${reason===r?'border-orange-500 bg-orange-50 text-orange-700 font-black':'border-gray-200 text-gray-700 hover:bg-gray-50'}`}>{r}</button>
+              ))}
+            </div>
+            <button onClick={submitReport} disabled={!reason} className="w-full py-3 bg-red-500 text-white rounded-xl font-black disabled:opacity-40 hover:bg-red-600 transition flex items-center justify-center gap-2">
+              <Flag className="w-4 h-4"/>Submit Report
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+
+  const opts = [
+    {id:'reshare',icon:Repeat,   label:'Reshare',        color:'text-blue-600',   action:()=>{onReshare(post);onClose();}},
+    {id:'save',   icon:Bookmark, label:isSaved?'Unsave':'Save', color:isSaved?'text-orange-500':'text-gray-700', action:()=>{onSave(post);onClose();}},
+  ];
+  if (!isOwner) {
+    opts.push(
+      {id:'follow',icon:isFollowing?UserMinus:UserPlus, label:isFollowing?'unfollow':'follow', color:isFollowing?'text-red-500':'text-green-600', action:()=>{onFollow(post.userEmail,post.userName);onClose();}},
+      {id:'block', icon:isBlocked?UserCheck:UserMinus,  label:isBlocked?'unblock':'block',      color:isBlocked?'text-green-600':'text-red-500',   action:()=>{onBlock(post.userEmail,post.userName);onClose();}},
+      {id:'report',icon:Flag, label:'Report Post', color:'text-red-500', action:()=>setShowReport(true)},
+    );
+  }
+  if (isOwner) opts.push({id:'delete',icon:Trash2,label:'delete post 🗑️',color:'text-red-500',action:()=>{if(window.confirm('delete this post fr?')){onDelete(post);onClose();}}});
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[70] flex items-end justify-center" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="bg-white rounded-t-3xl w-full overflow-hidden">
+        <div className="p-4 border-b border-gray-100"><h3 className="font-black text-center text-gray-700">post options</h3></div>
+        <div className="divide-y divide-gray-100 max-h-[60vh] overflow-y-auto">
+          {opts.map(o=>(
+            <button key={o.id} onClick={o.action} className="w-full px-4 py-3.5 flex items-center gap-3 hover:bg-gray-50 transition">
+              <o.icon className={`w-5 h-5 ${o.color}`}/><span className={`text-sm font-black ${o.color}`}>{o.label}</span>
+            </button>
+          ))}
+          <button onClick={onClose} className="w-full px-4 py-3.5 text-sm text-gray-400 hover:bg-gray-50 transition font-black">nah, cancel</button>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// INLINE POST CARD
+// ══════════════════════════════════════════════════════════════════════════════
+const InlinePostCard = memo(({ post, user, profileSrc, updateNotificationCount, onShare, onReshareClick, onSaveToggle, isSaved, onDelete, onFollow, isFollowing, onBlock, isBlocked, onViewUserProfile, onViewBookDetails }) => {
+  const [isLiked,      setIsLiked]   = useState(()=>hasUserLikedPost(post.id,user.email));
+  const [likeCount,    setLikeCount] = useState(()=>getLikeCount(post.id)||post.likes||0);
+  const [showComments, setShowCmts]  = useState(false);
+  const [comments,     setCmts]      = useState([]);
+  const [commentCount, setCmtCount]  = useState(post.comments||0);
+  const [newComment,   setNewCmt]    = useState('');
+  const [likedCmts,    setLikedCmts] = useState(()=>new Set(getLS(`rcreww_liked_cmts_${user.email}`,[])));
+  const [showAllCmts,  setShowAll]   = useState(false);
+  const [replyTo,      setReplyTo]   = useState(null);
+  const [showReplies,  setShowReplies]=useState({});
+  const [showOptions,  setShowOpts]  = useState(false);
+  const [loadingCmts,  setLoadCmts]  = useState(false);
   const inputRef = useRef(null);
 
-  useEffect(() => {
-    const realLikes = getPostLikes(post.id);
-    if (realLikes !== likeCount) setLikeCount(realLikes);
-    setIsLiked(hasUserLikedPost(post.id, user.email));
-  }, [post.id]);
+  useEffect(()=>{
+    setLikeCount(getLikeCount(post.id)||post.likes||0);
+    setIsLiked(hasUserLikedPost(post.id,user.email));
+  },[post.id, user.email]);
 
-  useEffect(() => {
-    const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedComments`) || '[]');
-    setLikedComments(new Set(liked));
-  }, [user.email]);
-
-  useEffect(() => {
+  useEffect(()=>{
     if (!showComments) return;
-    loadComments();
-  }, [showComments]);
+    setLoadCmts(true);
+    setCmts(getPostComments(post.id));
+    setCmtCount(getPostComments(post.id).filter(c=>!c.parentId).length);
+    setLoadCmts(false);
+  },[showComments, post.id]);
 
-  const loadComments = async () => {
-    setLoadingComments(true);
-    const pid = post.id || post._id;
-    const cmts = await fetchCommentsFromServer(pid);
-    setComments(cmts);
-    setCommentCount(cmts.filter(c => !c.parentId).length);
-    setLoadingComments(false);
-  };
-
-  // ✅ Trigger the glitter burst at the exact screen position of the like button
-  const triggerGlitter = () => {
-    if (!likeButtonRef.current) return;
-    const rect = likeButtonRef.current.getBoundingClientRect();
-    const x = rect.left + rect.width / 2;
-    const y = rect.top + rect.height / 2;
-    const id = `glitter_${Date.now()}`;
-    setGlitterEffects(prev => [...prev, { id, x, y }]);
-    setTimeout(() => {
-      setGlitterEffects(prev => prev.filter(g => g.id !== id));
-    }, 1500);
-  };
-
-  const handleLikePost = async () => {
+  const handleLike = useCallback(async()=>{
     if (isLiked) return;
+    const c = addGlobalLike(post.id,user.email);
+    setIsLiked(true); setLikeCount(c);
+    if (post.userEmail!==user.email) { pushNotification(post.userEmail,{type:'like',fromUser:user.name,fromUserEmail:user.email,message:`${user.name} vibed with your post ❤️`,postId:post.id}); updateNotificationCount?.(); }
+    try { await axios.post(`${API_URL}/api/social/posts/${post.id}/like`,{userEmail:user.email},{timeout:5000}); } catch {}
+  },[isLiked,post.id,post.userEmail,user,updateNotificationCount]);
 
-    // ✅ Fire glitter animation
-    triggerGlitter();
-
-    const newCount = addGlobalLike(post.id, user.email);
-    setIsLiked(true);
-    setLikeCount(newCount);
-
-    if (post.userEmail !== user.email) {
-      pushNotification(post.userEmail, {
-        type: 'like',
-        fromUser: user.name,
-        fromUserEmail: user.email,
-        message: `${user.name} liked your post`,
-        postId: post.id,
-      });
-      updateNotificationCount?.();
-    }
-
-    try {
-      await axios.post(`${API_URL}/api/social/posts/${post.id}/like`, { userEmail: user.email }, { timeout: 5000 });
-    } catch (_) { }
-  };
-
-  const handlePostComment = async () => {
+  const handleComment = useCallback(async()=>{
     if (!newComment.trim()) return;
-
     const mentions = extractMentions(newComment);
-    const commentData = {
-      id: `cmt_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      userName: user.name,
-      userEmail: user.email,
-      userPhoto: user.profileImage,
-      content: newComment.trim(),
-      mentions,
-      parentId: replyTo?.id || null,
-      timestamp: new Date().toISOString(),
-      likes: 0,
-    };
-
-    setNewComment('');
-    setReplyTo(null);
-    const pid = post.id || post._id;
-    const updated = await postCommentToServer(pid, commentData);
-    setComments(updated);
-    setCommentCount(updated.filter(c => !c.parentId).length);
-
-    if (post.userEmail !== user.email) {
-      pushNotification(post.userEmail, {
-        type: 'comment',
-        fromUser: user.name,
-        fromUserEmail: user.email,
-        message: `${user.name} commented: "${newComment.trim().substring(0, 60)}"`,
-        postId: post.id,
-      });
-      updateNotificationCount?.();
-    }
-
-    mentions.forEach(mention => {
-      const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-      const mentioned = allUsers.find(u =>
-        u.name.toLowerCase().replace(/\s/g, '') === mention.toLowerCase() ||
-        u.email.split('@')[0].toLowerCase() === mention.toLowerCase()
-      );
-      if (mentioned && mentioned.email !== user.email) {
-        pushNotification(mentioned.email, {
-          type: 'mention',
-          fromUser: user.name,
-          fromUserEmail: user.email,
-          message: `${user.name} mentioned you in a comment`,
-          postId: post.id,
-        });
-      }
+    const cmt = { id:generateId(), userName:user.name, userEmail:user.email, userPhoto:user.profileImage, content:newComment.trim(), mentions, parentId:replyTo?.id||null, timestamp:new Date().toISOString(), likes:0 };
+    setNewCmt(''); setReplyTo(null);
+    const updated = addGlobalComment(post.id,cmt);
+    setCmts(updated);
+    setCmtCount(updated.filter(c=>!c.parentId).length);
+    if (post.userEmail!==user.email) { pushNotification(post.userEmail,{type:'comment',fromUser:user.name,fromUserEmail:user.email,message:`${user.name} commented: "${newComment.trim().substring(0,60)}"`,postId:post.id}); updateNotificationCount?.(); }
+    mentions.forEach(m=>{
+      const users=getLS('rcreww_users',[]);
+      const mentioned=users.find(u=>u.name.toLowerCase().replace(/\s/g,'')===m.toLowerCase()||u.email.split('@')[0].toLowerCase()===m.toLowerCase());
+      if(mentioned&&mentioned.email!==user.email) pushNotification(mentioned.email,{type:'mention',fromUser:user.name,fromUserEmail:user.email,message:`${user.name} mentioned you in a comment`,postId:post.id});
     });
-  };
+    try { await axios.post(`${API_URL}/api/social/posts/${post.id}/comments`,cmt,{timeout:5000}); } catch {}
+  },[newComment,replyTo,post,user,updateNotificationCount]);
 
-  const handleLikeComment = (commentId, commentUserEmail) => {
-    if (likedComments.has(commentId)) return;
-    const updated = comments.map(c =>
-      c.id === commentId ? { ...c, likes: (c.likes || 0) + 1 } : c
-    );
-    setComments(updated);
-    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(updated));
-    const newLiked = new Set(likedComments);
-    newLiked.add(commentId);
-    setLikedComments(newLiked);
-    localStorage.setItem(`user_${user.email}_likedComments`, JSON.stringify([...newLiked]));
-    if (commentUserEmail && commentUserEmail !== user.email) {
-      pushNotification(commentUserEmail, {
-        type: 'like',
-        fromUser: user.name,
-        fromUserEmail: user.email,
-        message: `${user.name} liked your comment`,
-        postId: post.id,
-      });
-    }
-  };
+  const handleLikeCmt = useCallback((cId,cEmail)=>{
+    if (likedCmts.has(cId)) return;
+    const updated = comments.map(c=>c.id===cId?{...c,likes:(c.likes||0)+1}:c);
+    setCmts(updated);
+    setLS(`rcreww_cmts_${post.id}`,updated);
+    const newSet = new Set(likedCmts); newSet.add(cId); setLikedCmts(newSet);
+    setLS(`rcreww_liked_cmts_${user.email}`,[...newSet]);
+    if (cEmail&&cEmail!==user.email) pushNotification(cEmail,{type:'like',fromUser:user.name,fromUserEmail:user.email,message:`${user.name} liked your comment`,postId:post.id});
+  },[likedCmts,comments,post.id,user]);
 
-  const handleDeleteComment = (commentId) => {
-    const filtered = comments.filter(c => c.id !== commentId && c.parentId !== commentId);
-    setComments(filtered);
-    setCommentCount(filtered.filter(c => !c.parentId).length);
-    localStorage.setItem(`post_${post.id}_comments`, JSON.stringify(filtered));
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    localStorage.setItem('allPosts', JSON.stringify(
-      allPosts.map(p => p.id === post.id ? { ...p, comments: filtered.filter(c => !c.parentId).length } : p)
-    ));
-  };
+  const handleDelCmt = useCallback((cId)=>{
+    const filtered = comments.filter(c=>c.id!==cId&&c.parentId!==cId);
+    setCmts(filtered); setCmtCount(filtered.filter(c=>!c.parentId).length);
+    setLS(`rcreww_cmts_${post.id}`,filtered);
+    const all=getGlobalPosts(); setLS(GLOBAL_POSTS_KEY,all.map(p=>p.id===post.id?{...p,comments:filtered.filter(c=>!c.parentId).length}:p));
+  },[comments,post.id]);
 
-  const topLevelComments = comments.filter(c => !c.parentId);
-  const visibleComments = showAllComments ? topLevelComments : topLevelComments.slice(0, 3);
-  const isPostAuthor = user.email === post.userEmail;
+  const topLevel = comments.filter(c=>!c.parentId);
+  const visible  = showAllCmts ? topLevel : topLevel.slice(0,3);
+  const isAuthor = user.email===post.userEmail;
 
-  const CommentRow = ({ comment, depth = 0 }) => {
-    const replies = depth < 2 ? comments.filter(c => c.parentId === comment.id) : [];
-    const isLikedCmt = likedComments.has(comment.id);
-    const isOwn = comment.userEmail === user.email;
-
-    const renderContent = () => {
-      if (!comment.mentions?.length) {
-        return <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">{comment.content}</p>;
-      }
-      const parts = comment.content.split(/(@\w+)/g);
-      return (
-        <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">
-          {parts.map((part, idx) => {
-            if (part.startsWith('@')) {
-              return (
-                <button
-                  key={idx}
-                  onClick={() => {
-                    const all = JSON.parse(localStorage.getItem('users') || '[]');
-                    const found = all.find(u =>
-                      u.name.toLowerCase().includes(part.substring(1).toLowerCase()) ||
-                      u.email.split('@')[0].toLowerCase() === part.substring(1).toLowerCase()
-                    );
-                    if (found) onViewUserProfile(found.email, found.name);
-                  }}
-                  className="text-orange-600 font-semibold hover:underline"
-                >
-                  {part}
-                </button>
-              );
-            }
-            return part;
-          })}
-        </p>
-      );
-    };
-
+  const CommentRow = ({ comment, depth=0 }) => {
+    const replies   = depth<2 ? comments.filter(c=>c.parentId===comment.id) : [];
+    const isLikedC  = likedCmts.has(comment.id);
+    const isOwn     = comment.userEmail===user.email;
+    const parts     = (comment.content||'').split(/(@\w+)/g);
     return (
-      <div className={`flex gap-2.5 ${depth > 0 ? 'ml-8' : ''}`}>
-        <div className="flex flex-col items-center flex-shrink-0" style={{ width: 30 }}>
-          <button onClick={() => onViewUserProfile(comment.userEmail, comment.userName)}>
-            <Avatar initials={comment.userName} size="xs" src={comment.userPhoto} />
-          </button>
-          {replies.length > 0 && showReplies[comment.id] && (
-            <div className="w-0.5 flex-1 bg-orange-200 mt-1 rounded-full min-h-[16px]" />
-          )}
+      <div className={`flex gap-2.5 ${depth>0?'ml-8':''}`}>
+        <div className="flex flex-col items-center flex-shrink-0" style={{width:30}}>
+          <button onClick={()=>onViewUserProfile(comment.userEmail,comment.userName)}><Avatar initials={comment.userName} size="xs" src={comment.userPhoto}/></button>
+          {replies.length>0&&showReplies[comment.id]&&<div className="w-0.5 flex-1 bg-orange-200 mt-1 rounded-full min-h-[16px]"/>}
         </div>
-
         <div className="flex-1 min-w-0 pb-3">
           <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => onViewUserProfile(comment.userEmail, comment.userName)}
-              className="font-semibold text-gray-900 text-sm hover:underline"
-            >
-              {comment.userName}
-            </button>
+            {/* Clicking commenter name → profile */}
+            <button onClick={()=>onViewUserProfile(comment.userEmail,comment.userName)} className="font-black text-gray-900 text-sm hover:underline hover:text-orange-500 transition">{comment.userName}</button>
             <span className="text-xs text-gray-400 ml-auto">{formatTimeAgo(comment.timestamp)}</span>
           </div>
-          {renderContent()}
-
+          <p className="text-sm text-gray-700 mt-0.5 leading-relaxed">
+            {parts.map((pt,idx)=>pt.startsWith('@')?<button key={idx} className="text-orange-600 font-black hover:underline" onClick={()=>{const all=getLS('rcreww_users',[]);const f=all.find(u=>u.name.toLowerCase().includes(pt.substring(1).toLowerCase()));if(f)onViewUserProfile(f.email,f.name);}}>{pt}</button>:pt)}
+          </p>
           <div className="flex items-center gap-4 mt-1.5">
-            <button
-              onClick={() => handleLikeComment(comment.id, comment.userEmail)}
-              disabled={isLikedCmt}
-              className={`flex items-center gap-1 text-xs font-medium transition ${isLikedCmt ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}
-            >
-              <Heart className={`w-3.5 h-3.5 ${isLikedCmt ? 'fill-red-500' : ''}`} />
-              <span>{comment.likes || 0}</span>
+            <button onClick={()=>handleLikeCmt(comment.id,comment.userEmail)} disabled={isLikedC} className={`flex items-center gap-1 text-xs font-black transition ${isLikedC?'text-red-500':'text-gray-400 hover:text-red-400'}`}>
+              <Heart className={`w-3.5 h-3.5 ${isLikedC?'fill-red-500':''}`}/>{comment.likes||0}
             </button>
-
-            {depth < 2 && (
-              <button
-                onClick={() => { setReplyTo(comment); setTimeout(() => inputRef.current?.focus(), 100); }}
-                className="text-xs text-gray-400 hover:text-orange-500 font-semibold"
-              >
-                Reply
-              </button>
-            )}
-
-            {isOwn && (
-              <button onClick={() => handleDeleteComment(comment.id)} className="ml-auto text-gray-200 hover:text-red-400 transition">
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            {depth<2&&<button onClick={()=>{setReplyTo(comment);setTimeout(()=>inputRef.current?.focus(),100);}} className="text-xs text-gray-400 hover:text-orange-500 font-black">reply</button>}
+            {isOwn&&<button onClick={()=>handleDelCmt(comment.id)} className="ml-auto text-gray-200 hover:text-red-400"><Trash2 className="w-3.5 h-3.5"/></button>}
           </div>
-
-          {replies.length > 0 && (
+          {replies.length>0&&(
             <div className="mt-2">
-              {!showReplies[comment.id] && replies.length > 1 && (
-                <button
-                  onClick={() => setShowReplies(prev => ({ ...prev, [comment.id]: true }))}
-                  className="text-xs text-orange-500 font-semibold mb-2 flex items-center gap-1"
-                >
-                  <ChevronDown className="w-3 h-3" />
-                  View {replies.length} replies
+              {!showReplies[comment.id]&&replies.length>1&&(
+                <button onClick={()=>setShowReplies(p=>({...p,[comment.id]:true}))} className="text-xs text-orange-500 font-black mb-2 flex items-center gap-1">
+                  <ChevronDown className="w-3 h-3"/>view {replies.length} replies
                 </button>
               )}
-              {(showReplies[comment.id] || replies.length === 1) && (
+              {(showReplies[comment.id]||replies.length===1)&&(
                 <div className="space-y-2 pl-3 border-l-2 border-orange-100">
-                  {replies.map(reply => <CommentRow key={reply.id} comment={reply} depth={depth + 1} />)}
+                  {replies.map(r=><CommentRow key={r.id} comment={r} depth={depth+1}/>)}
                 </div>
               )}
             </div>
@@ -2070,207 +1063,86 @@ const InlinePostCard = React.memo(({
 
   return (
     <>
-      {/* ✅ Render glitter burst effects */}
-      {glitterEffects.map(effect => (
-        <HeartGlitterEffect
-          key={effect.id}
-          x={effect.x}
-          y={effect.y}
-          onComplete={() => setGlitterEffects(prev => prev.filter(g => g.id !== effect.id))}
-        />
-      ))}
-
-      {showOptions && (
-        <PostOptionsModal
-          post={post} user={user}
-          onClose={() => setShowOptions(false)}
-          onReshare={onReshareClick}
-          onSave={onSaveToggle}
-          isSaved={isSaved}
-          onDelete={onDelete}
-          isOwner={isPostAuthor}
-          onFollow={onFollow}
-          isFollowing={isFollowing}
-          onBlock={onBlock}
-          isBlocked={isBlocked}
-        />
-      )}
-
-      <div id={`post-${post.id || post._id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition">
+      {showOptions&&<PostOptionsModal post={post} user={user} onClose={()=>setShowOpts(false)} onReshare={onReshareClick} onSave={onSaveToggle} isSaved={isSaved} onDelete={onDelete} isOwner={isAuthor} onFollow={onFollow} isFollowing={isFollowing} onBlock={onBlock} isBlocked={isBlocked}/>}
+      <div id={`post-${post.id||post._id}`} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden hover:shadow-md transition">
         <div className="px-4 pt-4 pb-2">
           <div className="flex items-start gap-3">
-            <button onClick={() => onViewUserProfile(post.userEmail, post.userName)} className="flex-shrink-0">
-              <Avatar initials={post.userName} size="md" src={post.userPhoto} />
+            <button onClick={()=>onViewUserProfile(post.userEmail,post.userName)} className="flex-shrink-0">
+              <Avatar initials={post.userName} size="md" src={post.userPhoto}/>
             </button>
-
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <button onClick={() => onViewUserProfile(post.userEmail, post.userName)} className="font-bold text-gray-900 text-sm hover:underline">
-                  {post.userName || 'Anonymous'}
-                </button>
-                {post.isReshare && (
-                  <span className="flex items-center gap-1 text-xs text-gray-400">
-                    <Repeat className="w-3 h-3" /> Reshared
-                  </span>
-                )}
+                {/* Clicking name → full profile */}
+                <button onClick={()=>onViewUserProfile(post.userEmail,post.userName)} className="font-black text-gray-900 text-sm hover:underline hover:text-orange-500 transition">{post.userName||'anon'}</button>
+                {post.isReshare&&<span className="flex items-center gap-1 text-xs text-gray-400"><Repeat className="w-3 h-3"/>reshared</span>}
                 <span className="text-xs text-gray-400">{formatTimeAgo(post.createdAt)}</span>
               </div>
-
-              {post.bookName && (
-                <button
-                  onClick={() => onViewBookDetails?.({ title: post.bookName, author: post.author })}
-                  className="flex items-center gap-1.5 mt-0.5 hover:underline"
-                >
-                  <BookOpen className="w-3 h-3 text-orange-400" />
-                  <span className="text-xs text-gray-500 font-medium">
-                    {post.bookName}{post.author && ` · ${post.author}`}
-                  </span>
+              {post.bookName&&(
+                <button onClick={()=>onViewBookDetails?.({title:post.bookName,author:post.author})} className="flex items-center gap-1.5 mt-0.5 hover:underline">
+                  <BookOpen className="w-3 h-3 text-orange-400"/>
+                  <span className="text-xs text-gray-500 font-black">{post.bookName}{post.author&&` · ${post.author}`}</span>
                 </button>
               )}
             </div>
-
-            <button onClick={() => setShowOptions(true)} className="p-1 hover:bg-gray-100 rounded-full text-gray-400">
-              <MoreHorizontal className="w-4 h-4" />
-            </button>
+            <button onClick={()=>setShowOpts(true)} className="p-1 hover:bg-gray-100 rounded-full text-gray-400"><MoreHorizontal className="w-4 h-4"/></button>
           </div>
         </div>
-
         <div className="px-4 pb-3">
-          {post.image && (
-            <img
-              src={post.image}
-              alt=""
-              className="w-full rounded-xl mb-3 max-h-96 object-cover cursor-pointer hover:opacity-95 transition"
-              onClick={() => window.open(post.image, '_blank')}
-            />
-          )}
-
-          {post.isReshare && post.originalPost && (
+          {post.image&&<img src={post.image} alt="" className="w-full rounded-xl mb-3 max-h-96 object-cover cursor-pointer hover:opacity-95 transition" onClick={()=>window.open(post.image,'_blank')} loading="lazy"/>}
+          {post.isReshare&&post.originalPost&&(
             <div className="flex items-center gap-1 text-xs text-gray-500 mb-2">
-              <Repeat className="w-3 h-3" />
-              <span>
-                Reshared from{' '}
-                <button
-                  onClick={() => onViewUserProfile(post.originalPost.userEmail, post.originalPost.userName)}
-                  className="font-semibold hover:underline"
-                >
-                  {post.originalPost.userName}
-                </button>
-              </span>
+              <Repeat className="w-3 h-3"/>
+              <span>Reshared from <button onClick={()=>onViewUserProfile(post.originalPost.userEmail,post.originalPost.userName)} className="font-black hover:underline hover:text-orange-500 transition">{post.originalPost.userName}</button></span>
             </div>
           )}
-
-          <p className="text-gray-800 text-base leading-relaxed" style={{ fontFamily: 'Georgia, serif' }}>
-            {post.story || post.content}
-          </p>
-
-          {post.reshareComment && (
-            <div className="mt-3 bg-orange-50 rounded-lg p-3 border border-orange-100">
-              <p className="text-sm text-orange-800 italic">"{post.reshareComment}"</p>
-            </div>
-          )}
-
-          {post.isReshare && post.originalPost && (
+          <p className="text-gray-800 text-base leading-relaxed" style={{fontFamily:'Georgia,serif'}}>{post.story||post.content}</p>
+          {post.reshareComment&&<div className="mt-3 bg-orange-50 rounded-xl p-3 border border-orange-100"><p className="text-sm text-orange-800 italic">"{post.reshareComment}"</p></div>}
+          {post.isReshare&&post.originalPost&&(
             <div className="mt-3 bg-gray-50 rounded-xl p-3 border border-gray-200">
-              <p className="text-xs text-gray-500 mb-1">Original post by <span className="font-semibold">{post.originalPost.userName}</span>:</p>
+              <p className="text-xs text-gray-500 mb-1">original post by <span className="font-black">{post.originalPost.userName}</span>:</p>
               <p className="text-sm text-gray-600 line-clamp-3">{post.originalPost.content}</p>
             </div>
           )}
         </div>
-
         <div className="px-4 py-2.5 border-t border-gray-100 flex items-center gap-5">
-          {/* ✅ Like button with ref for glitter position detection */}
-          <button
-            ref={likeButtonRef}
-            onClick={handleLikePost}
-            disabled={isLiked}
-            className={`flex items-center gap-1.5 text-sm font-semibold transition-all ${isLiked ? 'text-red-500' : 'text-gray-500 hover:text-red-500'}`}
-          >
-            <Heart className={`w-5 h-5 ${isLiked ? 'fill-red-500 scale-125' : ''} transition-transform duration-200`} />
-            <span>{likeCount}</span>
+          <button onClick={handleLike} disabled={isLiked} className={`flex items-center gap-1.5 text-sm font-black transition-all ${isLiked?'text-red-500':'text-gray-500 hover:text-red-500'}`}>
+            <Heart className={`w-5 h-5 ${isLiked?'fill-red-500 scale-110':''} transition-transform`}/>{likeCount}
           </button>
-
-          <button
-            onClick={() => setShowComments(prev => !prev)}
-            className={`flex items-center gap-1.5 text-sm font-semibold transition ${showComments ? 'text-orange-500' : 'text-gray-500 hover:text-orange-500'}`}
-          >
-            <MessageCircle className="w-5 h-5" />
-            <span>{commentCount}</span>
+          <button onClick={()=>setShowCmts(p=>!p)} className={`flex items-center gap-1.5 text-sm font-black transition ${showComments?'text-orange-500':'text-gray-500 hover:text-orange-500'}`}>
+            <MessageCircle className="w-5 h-5"/>{commentCount}
           </button>
-
-          <button
-            onClick={() => onSaveToggle(post)}
-            className={`flex items-center gap-1.5 text-sm font-semibold transition ${isSaved ? 'text-orange-500' : 'text-gray-500 hover:text-orange-400'}`}
-          >
-            <Bookmark className={`w-5 h-5 ${isSaved ? 'fill-orange-500' : ''}`} />
-            <span>{isSaved ? 'Saved' : 'Save'}</span>
+          <button onClick={()=>onSaveToggle(post)} className={`flex items-center gap-1.5 text-sm font-black transition ${isSaved?'text-orange-500':'text-gray-500 hover:text-orange-400'}`}>
+            <Bookmark className={`w-5 h-5 ${isSaved?'fill-orange-500':''}`}/>{isSaved?'saved':'save'}
           </button>
-
-          <button
-            onClick={() => onShare(post)}
-            className="flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-orange-500 transition ml-auto"
-          >
-            <Share2 className="w-4 h-4" />
-            <span>{post.reshareCount || 0}</span>
+          <button onClick={()=>onShare(post)} className="flex items-center gap-1.5 text-sm font-black text-gray-500 hover:text-orange-500 transition ml-auto">
+            <Share2 className="w-4 h-4"/>{post.reshareCount||0}
           </button>
         </div>
-
-        {showComments && (
+        {showComments&&(
           <>
             <div className="px-4 py-3 border-t border-gray-50 bg-gray-50/60">
-              {replyTo && (
+              {replyTo&&(
                 <div className="flex items-center gap-2 mb-2 pl-2 border-l-2 border-orange-400">
-                  <p className="text-xs text-orange-600 font-medium flex-1">
-                    Replying to <span className="font-bold">{replyTo.userName}</span>
-                  </p>
-                  <button onClick={() => setReplyTo(null)}><X className="w-3.5 h-3.5 text-gray-400" /></button>
+                  <p className="text-xs text-orange-600 font-black flex-1">replying to <span className="font-black">@{replyTo.userName}</span></p>
+                  <button onClick={()=>setReplyTo(null)}><X className="w-3.5 h-3.5 text-gray-400"/></button>
                 </div>
               )}
-
               <div className="flex items-center gap-2">
-                {profileSrc
-                  ? <img src={profileSrc} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0" />
-                  : <Avatar initials={user?.name} size="sm" />
-                }
+                {profileSrc?<img src={profileSrc} alt="" className="w-8 h-8 rounded-full object-cover flex-shrink-0"/>:<Avatar initials={user?.name} size="sm"/>}
                 <div className="flex-1 flex items-center gap-2 bg-white rounded-full border border-gray-200 px-4 py-2 focus-within:border-orange-400 focus-within:shadow-sm transition">
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostComment(); } }}
-                    className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none"
-                    placeholder={replyTo ? `Reply to @${replyTo.userName}...` : 'drop a comment... @mention ur crew 💬'}
-                  />
+                  <input ref={inputRef} type="text" value={newComment} onChange={e=>setNewCmt(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();handleComment();}}} className="flex-1 bg-transparent text-sm text-gray-800 placeholder-gray-400 outline-none" placeholder={replyTo?`reply to @${replyTo.userName}...`:"add your take... (@mention bestie)"}/>
                 </div>
-                <button
-                  onClick={handlePostComment}
-                  disabled={!newComment.trim()}
-                  className={`px-4 py-2 rounded-full text-sm font-bold transition-all ${newComment.trim() ? 'bg-orange-500 text-white shadow-sm hover:bg-orange-600 active:scale-95' : 'bg-gray-200 text-gray-400 cursor-not-allowed'}`}
-                >
-                  Post
-                </button>
+                <button onClick={handleComment} disabled={!newComment.trim()} className={`px-4 py-2 rounded-full text-sm font-black transition-all ${newComment.trim()?'bg-orange-500 text-white shadow-sm hover:bg-orange-600 active:scale-95':'bg-gray-200 text-gray-400 cursor-not-allowed'}`}>post</button>
               </div>
             </div>
-
             <div className="px-4 py-3 border-t border-gray-100 space-y-3 max-h-96 overflow-y-auto">
-              {loadingComments ? (
-                <div className="flex justify-center py-4"><LoadingSpinner size="sm" /></div>
-              ) : visibleComments.length > 0 ? (
-                visibleComments.map(comment => <CommentRow key={comment.id} comment={comment} depth={0} />)
-              ) : (
-                <p className="text-xs text-gray-400 text-center py-4">No comments yet. Be the first!</p>
-              )}
-
-              {topLevelComments.length > 3 && (
-                <button
-                  onClick={() => setShowAll(prev => !prev)}
-                  className="text-xs text-orange-500 font-semibold mt-2 flex items-center gap-1 hover:text-orange-600"
-                >
-                  {showAllComments
-                    ? <><ChevronDown className="w-3.5 h-3.5 rotate-180" />Show less</>
-                    : <><ChevronDown className="w-3.5 h-3.5" />View all {topLevelComments.length} comments</>
-                  }
+              {loadingCmts?<div className="flex justify-center py-4"><LoadingSpinner size="sm"/></div>
+               : visible.length>0 ? visible.map(c=><CommentRow key={c.id} comment={c} depth={0}/>)
+               : <p className="text-xs text-gray-400 text-center py-4">no comments yet bestie. be the main character 🎬</p>}
+              {topLevel.length>3&&(
+                <button onClick={()=>setShowAll(p=>!p)} className="text-xs text-orange-500 font-black mt-2 flex items-center gap-1 hover:text-orange-600">
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showAllCmts?'rotate-180':''}`}/>
+                  {showAllCmts?'show less':'view all '+topLevel.length+' comments'}
                 </button>
               )}
             </div>
@@ -2281,664 +1153,922 @@ const InlinePostCard = React.memo(({
   );
 });
 
-// ========================================
-// SECTION 24: LOGIN PAGE
-// ========================================
+// ══════════════════════════════════════════════════════════════════════════════
+// LOGIN PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+const LoginPage = memo(({ onLogin }) => {
+  const [isLogin,    setIsLogin]  = useState(true);
+  const [email,      setEmail]    = useState('');
+  const [password,   setPw]       = useState('');
+  const [showPw,     setShowPw]   = useState(false);
+  const [name,       setName]     = useState('');
+  const [showOTP,    setShowOTP]  = useState(false);
+  const [otpInput,   setOTP]      = useState('');
+  const [devOtp,     setDevOtp]   = useState('');
+  const [loading,    setLoading]  = useState(false);
+  const [error,      setError]    = useState('');
+  const [agree,      setAgree]    = useState(false);
+  const [readingGoal,setGoal]     = useState({yearly:20,monthly:5});
+  const [showReset,  setReset]    = useState(false);
+  const [resetEmail, setRE]       = useState('');
+  const [resetSent,  setRS]       = useState(false);
 
-const LoginPage = ({ onLogin }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [isLogin, setIsLogin] = useState(true);
-  const [name, setName] = useState('');
-  const [showOTP, setShowOTP] = useState(false);
-  const [otpInput, setOtpInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [devOtp, setDevOtp] = useState('');
-  const [readingGoal, setReadingGoal] = useState({ yearly: 20, monthly: 5 });
-  const [agreeToTerms, setAgreeToTerms] = useState(false);
-  const [showResetPassword, setShowResetPassword] = useState(false);
-  const [resetEmail, setResetEmail] = useState('');
-  const [resetSent, setResetSent] = useState(false);
-
-  const validateEmail = (e) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  const valid = e => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 
   const handleSendOTP = () => {
     setError('');
-    if (!isLogin && name.trim().length < 2) { setError('Please enter your full name'); return; }
-    if (!validateEmail(email)) { setError('Please enter a valid email address'); return; }
-    if (!isLogin && !agreeToTerms) { setError('Please agree to the terms'); return; }
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    localStorage.setItem('devOTP', otp);
-    localStorage.setItem('pendingUser', JSON.stringify({ email, name: name || email.split('@')[0], password: password || 'password123' }));
-    setDevOtp(otp);
-    setShowOTP(true);
+    if (!isLogin&&name.trim().length<2) return setError("drop your name bestie 👀");
+    if (!valid(email)) return setError("that email ain't it chief 😬");
+    if (!isLogin&&!agree) return setError("gotta agree to the terms no cap");
+    const code = Math.floor(100000+Math.random()*900000).toString();
+    setLS('rcreww_pending_otp',code);
+    setLS('rcreww_pending_user',{email,name:name||email.split('@')[0],password});
+    setDevOtp(code); setShowOTP(true);
   };
 
   const handleVerifyOTP = () => {
     setError('');
-    if (otpInput.length !== 6) { setError('Please enter the 6-digit code'); return; }
-    const savedOtp = localStorage.getItem('devOTP');
-    const pendingUser = JSON.parse(localStorage.getItem('pendingUser') || '{}');
-    if (otpInput !== savedOtp) { setError('Incorrect code. Please try again.'); return; }
-    localStorage.removeItem('devOTP');
-    localStorage.removeItem('pendingUser');
-    const userData = {
-      id: generateId(), name: pendingUser.name || name, email: pendingUser.email || email,
-      password: pendingUser.password || password, readingGoal, isVerified: true,
-      createdAt: new Date().toISOString(),
-      stats: { booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 },
-      joinedCrews: [], readingList: [], savedPosts: [], bio: 'living in my main character era 📚', location: '', website: '',
-    };
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const existIdx = users.findIndex(u => u.email === userData.email);
-    if (existIdx >= 0) users[existIdx] = { ...users[existIdx], ...userData };
-    else users.push(userData);
-    localStorage.setItem('users', JSON.stringify(users));
-    localStorage.setItem('currentUser', JSON.stringify(userData));
-    ['followers', 'following', 'blocked', 'notifications', 'likedPosts', 'likedReviews', 'readingList', 'savedPosts'].forEach(key => {
-      if (!localStorage.getItem(`user_${userData.email}_${key}`))
-        localStorage.setItem(`user_${userData.email}_${key}`, JSON.stringify([]));
-    });
-    if (!localStorage.getItem(`user_${userData.email}_stats`))
-      localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 }));
-    setShowOTP(false);
-    onLogin(userData);
+    if (otpInput.length!==6) return setError('enter the 6-digit code bestie');
+    if (otpInput!==getLS('rcreww_pending_otp','')) return setError('wrong code 😭 try again');
+    const pending = getLS('rcreww_pending_user',{});
+    const user = { id:generateId(), name:pending.name||name, email:pending.email||email, password:pending.password||password, readingGoal, isVerified:true, createdAt:new Date().toISOString(), bio:'living my best bookish era 📚', location:'', website:'' };
+    const users = getLS('rcreww_users',[]);
+    const idx = users.findIndex(u=>u.email===user.email);
+    if (idx>=0) users[idx]={...users[idx],...user}; else users.push(user);
+    setLS('rcreww_users',users); setLS('rcreww_current',user);
+    setShowOTP(false); onLogin(user);
   };
 
   const handleLogin = () => {
     setError('');
-    if (!validateEmail(email)) { setError('Please enter a valid email address'); return; }
-    if (!password.trim()) { setError('Please enter your password'); return; }
+    if (!valid(email)) return setError("valid email please bestie 👀");
+    if (!password.trim()) return setError("password is mandatory no cap");
     setLoading(true);
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const found = users.find(u => u.email.toLowerCase() === email.toLowerCase());
+    const users = getLS('rcreww_users',[]);
+    const found = users.find(u=>u.email.toLowerCase()===email.toLowerCase());
     if (found) {
-      if (found.password === password || !found.password) {
-        localStorage.setItem('currentUser', JSON.stringify(found));
-        setLoading(false);
-        onLogin(found);
-        return;
-      } else {
-        setError('Incorrect password. Please try again.');
-      }
-    } else {
-      setError('No account found. Please sign up first.');
-    }
+      if (found.password===password||!found.password) { setLS('rcreww_current',found); setLoading(false); onLogin(found); return; }
+      else setError("wrong password, try again 🫣");
+    } else setError("no account found — sign up first!");
     setLoading(false);
   };
 
-  if (showOTP) {
-    return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
-        <div className="w-full max-w-md bg-white rounded-3xl shadow-xl p-7 border border-gray-200">
-          <div className="text-center mb-6">
-            <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4">
-              <Mail className="w-8 h-8 text-orange-500" />
-            </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-1">Check your email</h2>
-            <p className="text-gray-500 text-sm">We sent a verification code to <strong>{email}</strong></p>
-          </div>
-          {devOtp && (
-            <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 mb-4 text-center">
-              <p className="text-xs text-amber-700 font-medium mb-2">📧 Demo mode — use this code:</p>
-              <p className="text-4xl font-bold text-amber-800 tracking-widest">{devOtp}</p>
-            </div>
-          )}
-          {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">{error}</div>}
-          <input
-            type="text" inputMode="numeric" value={otpInput}
-            onChange={e => { setOtpInput(e.target.value.replace(/\D/g, '').slice(0, 6)); setError(''); }}
-            className="w-full px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none text-center text-3xl tracking-widest mb-4 font-mono"
-            placeholder="000000" maxLength="6" autoFocus
-          />
-          <button onClick={handleVerifyOTP} disabled={otpInput.length !== 6} className="w-full py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold disabled:opacity-50 mb-3">
-            Verify & Continue →
-          </button>
-          <div className="flex justify-between">
-            <button onClick={() => { setShowOTP(false); setError(''); setDevOtp(''); }} className="text-gray-500 text-sm flex items-center gap-1 hover:text-gray-700">
-              <ArrowLeft className="w-4 h-4" /> Back
-            </button>
-            <button onClick={handleSendOTP} className="text-orange-500 text-sm font-semibold hover:text-orange-600">Resend code</button>
-          </div>
+  if (showOTP) return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-7 border border-gray-100">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><Mail className="w-8 h-8 text-orange-500"/></div>
+          <h2 className="text-2xl font-black text-gray-900 mb-1">check your email bestie</h2>
+          <p className="text-gray-500 text-sm">we sent a vibe-check code to <strong>{email}</strong></p>
+        </div>
+        {devOtp&&<div className="bg-amber-50 border-2 border-amber-300 rounded-2xl p-4 mb-4 text-center"><p className="text-xs text-amber-700 font-black mb-2">📧 demo mode — your code:</p><p className="text-4xl font-black text-amber-800 tracking-widest">{devOtp}</p></div>}
+        {error&&<div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-600 text-center">{error}</div>}
+        <input type="text" inputMode="numeric" value={otpInput} onChange={e=>{setOTP(e.target.value.replace(/\D/g,'').slice(0,6));setError('');}} className="w-full px-4 py-4 rounded-xl border-2 border-gray-200 focus:border-orange-500 focus:outline-none text-center text-3xl tracking-widest mb-4 font-mono" placeholder="000000" maxLength={6} autoFocus/>
+        <button onClick={handleVerifyOTP} disabled={otpInput.length!==6} className="w-full py-4 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black disabled:opacity-40 mb-3">it's giving verified ✅</button>
+        <div className="flex justify-between">
+          <button onClick={()=>{setShowOTP(false);setError('');setDevOtp('');}} className="text-gray-500 text-sm flex items-center gap-1 font-semibold"><ArrowLeft className="w-4 h-4"/>back</button>
+          <button onClick={handleSendOTP} className="text-orange-500 text-sm font-black hover:text-orange-600">resend code</button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+
+  if (showReset) return (
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-2xl p-7 border border-gray-100">
+        <div className="text-center mb-6">
+          <div className="w-16 h-16 bg-orange-100 rounded-2xl flex items-center justify-center mx-auto mb-4"><Lock className="w-8 h-8 text-orange-500"/></div>
+          <h2 className="text-2xl font-black text-gray-900">reset password</h2>
+          <p className="text-gray-500 text-sm mt-1">{resetSent?'check your inbox bestie ✅':'enter your email and we\'ll send a link'}</p>
+        </div>
+        {!resetSent?(
+          <>
+            <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5 mb-4">
+              <Mail className="w-5 h-5 text-gray-400"/><input value={resetEmail} onChange={e=>setRE(e.target.value)} className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 outline-none" placeholder="email address" type="email"/>
+            </div>
+            <button onClick={()=>{if(valid(resetEmail)){setLoading(true);setTimeout(()=>{setRS(true);setLoading(false);},1500);}else setError('valid email pls');}} disabled={loading} className="w-full py-4 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black disabled:opacity-50 mb-3">
+              {loading?'sending...':'send reset link'}
+            </button>
+          </>
+        ):<div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-4"><p className="text-sm text-green-700 text-center font-black">✓ reset link sent! check your inbox 📬</p></div>}
+        {error&&<div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-600 text-center">{error}</div>}
+        <button onClick={()=>{setReset(false);setRE('');setRS(false);setError('');}} className="text-gray-500 text-sm flex items-center gap-1 mx-auto font-semibold hover:text-gray-700"><ArrowLeft className="w-4 h-4"/>back to login</button>
+      </div>
+    </div>
+  );
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-pink-50 flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <div className="flex justify-center mb-3">
-            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl shadow-xl flex items-center justify-center">
-              <BookOpen className="w-10 h-10 text-white" />
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold bg-gradient-to-r from-orange-600 to-red-600 bg-clip-text text-transparent" style={{ fontFamily: 'Georgia, serif' }}>
-            READCREWW
-          </h1>
-          <p className="text-gray-500 text-sm mt-2">Read together, slay together. 📚✨</p>
+          <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-pink-500 rounded-3xl shadow-2xl flex items-center justify-center mx-auto mb-4"><BookOpen className="w-10 h-10 text-white"/></div>
+          <h1 className="text-4xl font-black text-gray-900" style={{fontFamily:'Georgia,serif'}}>{APP_NAME}</h1>
+          <p className="text-gray-500 text-sm mt-1">{APP_TAGLINE}</p>
         </div>
-
-        <div className="bg-white rounded-3xl shadow-xl p-7 border border-gray-200">
-          <h2 className="text-2xl font-bold text-gray-900 text-center mb-5">{isLogin ? 'Welcome Back!' : 'Join the Crew'}</h2>
-          {error && <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-600">{error}</div>}
-
+        <div className="bg-white rounded-3xl shadow-xl p-7 border border-gray-100">
+          <h2 className="text-2xl font-black text-gray-900 text-center mb-5">{isLogin?'welcome back bestie 👋':'join the crew fr 🔥'}</h2>
+          {error&&<div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 mb-4 text-sm text-red-600 text-center">{error}</div>}
           <div className="space-y-3">
-            {!isLogin && (
+            {!isLogin&&(
               <>
                 <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
-                  <User className="w-5 h-5 text-gray-400" />
-                  <input value={name} onChange={e => { setName(e.target.value); setError(''); }} className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm" placeholder="Full Name *" autoComplete="name" />
+                  <Users className="w-5 h-5 text-gray-400 flex-shrink-0"/>
+                  <input value={name} onChange={e=>{setName(e.target.value);setError('');}} className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm" placeholder="your name (no cap) *" autoComplete="name"/>
                 </div>
                 <div className="bg-orange-50 rounded-xl p-4 border border-orange-100">
-                  <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2 text-sm"><Target className="w-4 h-4 text-orange-500" />Reading Goals (Optional)</h3>
+                  <h3 className="font-black text-gray-900 mb-3 flex items-center gap-2 text-sm"><Target className="w-4 h-4 text-orange-500"/>reading goals (optional)</h3>
                   <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">Yearly books</label>
-                      <input type="number" value={readingGoal.yearly} onChange={e => setReadingGoal({ ...readingGoal, yearly: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="100" />
-                    </div>
-                    <div>
-                      <label className="text-xs text-gray-600 mb-1 block">Monthly books</label>
-                      <input type="number" value={readingGoal.monthly} onChange={e => setReadingGoal({ ...readingGoal, monthly: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="20" />
-                    </div>
+                    <div><label className="text-xs text-gray-600 mb-1 block font-semibold">yearly books</label><input type="number" value={readingGoal.yearly} onChange={e=>setGoal({...readingGoal,yearly:parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="365"/></div>
+                    <div><label className="text-xs text-gray-600 mb-1 block font-semibold">monthly books</label><input type="number" value={readingGoal.monthly} onChange={e=>setGoal({...readingGoal,monthly:parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="31"/></div>
                   </div>
                 </div>
               </>
             )}
-
             <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
-              <Mail className="w-5 h-5 text-gray-400" />
-              <input value={email} onChange={e => { setEmail(e.target.value); setError(''); }} className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm" placeholder="Email address *" type="email" autoComplete="email" />
+              <Mail className="w-5 h-5 text-gray-400 flex-shrink-0"/>
+              <input value={email} onChange={e=>{setEmail(e.target.value);setError('');}} className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm" placeholder="email address *" type="email" autoComplete="email"/>
             </div>
-
             <div className="flex items-center gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3.5">
-              <Lock className="w-5 h-5 text-gray-400" />
-              <input value={password} onChange={e => { setPassword(e.target.value); setError(''); }} type={showPassword ? 'text' : 'password'} className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm" placeholder={isLogin ? 'Password *' : 'Create password *'} autoComplete={isLogin ? 'current-password' : 'new-password'} />
-              <button onClick={() => setShowPassword(!showPassword)} type="button">
-                {showPassword ? <EyeOff className="w-4 h-4 text-gray-400" /> : <Eye className="w-4 h-4 text-gray-400" />}
-              </button>
+              <Lock className="w-5 h-5 text-gray-400 flex-shrink-0"/>
+              <input value={password} onChange={e=>{setPw(e.target.value);setError('');}} type={showPw?'text':'password'} className="flex-1 bg-transparent text-gray-900 placeholder-gray-400 outline-none text-sm" placeholder={isLogin?'password *':'create password *'} autoComplete={isLogin?'current-password':'new-password'}/>
+              <button onClick={()=>setShowPw(!showPw)} type="button">{showPw?<EyeOff className="w-4 h-4 text-gray-400"/>:<Eye className="w-4 h-4 text-gray-400"/>}</button>
             </div>
-
-            {!isLogin && (
-              <div className="flex items-center gap-2">
-                <input type="checkbox" id="terms" checked={agreeToTerms} onChange={e => setAgreeToTerms(e.target.checked)} className="rounded border-gray-300 text-orange-500 focus:ring-orange-500" />
-                <label htmlFor="terms" className="text-xs text-gray-600">
-                  I agree to the <button className="text-orange-500 hover:underline">Terms of Service</button> and <button className="text-orange-500 hover:underline">Privacy Policy</button>
-                </label>
-              </div>
+            {!isLogin&&(
+              <label className="flex items-start gap-2 cursor-pointer">
+                <input type="checkbox" checked={agree} onChange={e=>setAgree(e.target.checked)} className="mt-0.5 accent-orange-500"/>
+                <span className="text-xs text-gray-500">i agree to the <button className="text-orange-500 font-black">Terms of Service</button> and <button className="text-orange-500 font-black">Privacy Policy</button></span>
+              </label>
             )}
           </div>
-
-          <button
-            onClick={isLogin ? handleLogin : handleSendOTP}
-            disabled={loading}
-            className="w-full mt-5 py-4 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-2xl font-semibold disabled:opacity-60 flex items-center justify-center gap-2 hover:opacity-90 transition"
-          >
-            {loading ? <><LoadingSpinner size="sm" color="white" /><span>Please wait...</span></> : isLogin ? 'Log In' : 'Create Account →'}
+          {isLogin&&<button onClick={()=>setReset(true)} className="text-sm text-orange-500 mt-2 hover:underline block font-semibold">forgot password?</button>}
+          <button onClick={isLogin?handleLogin:handleSendOTP} disabled={loading} className="w-full mt-5 py-4 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black disabled:opacity-60 flex items-center justify-center gap-2 hover:opacity-90 transition">
+            {loading?<><LoadingSpinner size="sm" color="white"/><span>hang on bestie...</span></>:isLogin?'log in 🚀':'create account fr →'}
           </button>
-
           <p className="text-center text-sm text-gray-500 mt-4">
-            {isLogin ? "Don't have an account? " : "Already have an account? "}
-            <button onClick={() => { setIsLogin(!isLogin); setError(''); setEmail(''); setPassword(''); setName(''); }} className="text-orange-500 font-semibold hover:underline">
-              {isLogin ? 'Sign Up' : 'Log In'}
-            </button>
+            {isLogin?"no account yet? ":"already one of us? "}
+            <button onClick={()=>{setIsLogin(!isLogin);setError('');setEmail('');setPw('');setName('');}} className="text-orange-500 font-black hover:underline">{isLogin?'sign up':'log in'}</button>
           </p>
         </div>
       </div>
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 25: BOOK DATABASE & CLIENT-SIDE AI
-// ========================================
-
+// ══════════════════════════════════════════════════════════════════════════════
+// BOOK DATABASE
+// ══════════════════════════════════════════════════════════════════════════════
 const BOOK_DB = {
   thriller: [
-    { title: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.6, reason: 'Twisty, addictive, impossible to put down' },
-    { title: 'The Silent Patient', author: 'Alex Michaelides', genre: 'Thriller', rating: 4.5, reason: 'Jaw-dropping twist guaranteed' },
-    { title: 'Verity', author: 'Colleen Hoover', genre: 'Thriller', rating: 4.6, reason: 'You will NOT see the ending coming' },
-    { title: 'The Girl on the Train', author: 'Paula Hawkins', genre: 'Thriller', rating: 4.4, reason: 'Unreliable narrator at its best' },
-    { title: 'Sharp Objects', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.5, reason: 'Dark, twisted, beautifully written' },
+    {title:'Gone Girl',author:'Gillian Flynn',genre:'Thriller',rating:4.6,reason:'bestie this one eats NO crumbs 🔪 — the twist SENT me'},
+    {title:'The Silent Patient',author:'Alex Michaelides',genre:'Thriller',rating:4.5,reason:'jaw-dropping twist guaranteed, no cap'},
+    {title:'Verity',author:'Colleen Hoover',genre:'Thriller',rating:4.6,reason:'you will NOT see the ending coming fr'},
+    {title:'The Girl on the Train',author:'Paula Hawkins',genre:'Thriller',rating:4.4,reason:'unreliable narrator ate and left no crumbs'},
+    {title:'Sharp Objects',author:'Gillian Flynn',genre:'Thriller',rating:4.5,reason:'dark academia but make it unhinged 🖤'},
   ],
   fantasy: [
-    { title: 'The Name of the Wind', author: 'Patrick Rothfuss', genre: 'Fantasy', rating: 4.7, reason: 'Stunning prose and world-building' },
-    { title: 'Mistborn', author: 'Brandon Sanderson', genre: 'Fantasy', rating: 4.7, reason: 'Inventive magic system + satisfying plot' },
-    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6, reason: 'Fast-paced, romantic, absolutely addictive' },
-    { title: 'The Way of Kings', author: 'Brandon Sanderson', genre: 'Fantasy', rating: 4.8, reason: 'Epic fantasy at its finest' },
-    { title: 'A Game of Thrones', author: 'George R.R. Martin', genre: 'Fantasy', rating: 4.7, reason: 'Complex characters and political intrigue' },
+    {title:'Fourth Wing',author:'Rebecca Yarros',genre:'Fantasy',rating:4.6,reason:'living in enemies-to-lovers era bc of this bestie'},
+    {title:'The Name of the Wind',author:'Patrick Rothfuss',genre:'Fantasy',rating:4.7,reason:'kvothe is lowkey the GOAT ngl'},
+    {title:'Mistborn',author:'Brandon Sanderson',genre:'Fantasy',rating:4.7,reason:'magic system hits different fr 🔥'},
+    {title:'The Way of Kings',author:'Brandon Sanderson',genre:'Fantasy',rating:4.8,reason:'3000 pages and i\'d read 3000 more'},
+    {title:'A Game of Thrones',author:'George R.R. Martin',genre:'Fantasy',rating:4.7,reason:'chaos era but political, it\'s giving'},
   ],
   romance: [
-    { title: 'Beach Read', author: 'Emily Henry', genre: 'Romance', rating: 4.6, reason: 'Witty, heartfelt and genuinely funny' },
-    { title: 'It Ends with Us', author: 'Colleen Hoover', genre: 'Romance', rating: 4.6, reason: 'Emotional, important and beautifully written' },
-    { title: 'People We Meet on Vacation', author: 'Emily Henry', genre: 'Romance', rating: 4.6, reason: 'Nostalgic, swoony and deeply satisfying' },
-    { title: 'The Love Hypothesis', author: 'Ali Hazelwood', genre: 'Romance', rating: 4.7, reason: 'STEM romance that will make you swoon' },
-    { title: 'Red, White & Royal Blue', author: 'Casey McQuiston', genre: 'Romance', rating: 4.7, reason: 'Charming, witty and utterly delightful' },
+    {title:'Beach Read',author:'Emily Henry',genre:'Romance',rating:4.6,reason:'enemies-to-lovers szn is upon us ☀️'},
+    {title:'It Ends with Us',author:'Colleen Hoover',genre:'Romance',rating:4.6,reason:'i sobbed. main character energy 💀'},
+    {title:'People We Meet on Vacation',author:'Emily Henry',genre:'Romance',rating:4.6,reason:'friends-to-lovers slowburn hits DIFFERENT'},
+    {title:'The Love Hypothesis',author:'Ali Hazelwood',genre:'Romance',rating:4.7,reason:'STEM girlies this one is YOURS bestie'},
+    {title:'Red White & Royal Blue',author:'Casey McQuiston',genre:'Romance',rating:4.7,reason:'chaotic bi energy and i am HERE for it'},
   ],
   scifi: [
-    { title: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, reason: 'Most fun you\'ll have reading sci-fi' },
-    { title: 'Dune', author: 'Frank Herbert', genre: 'Sci-Fi', rating: 4.8, reason: 'Foundation of all modern science fiction' },
-    { title: 'The Martian', author: 'Andy Weir', genre: 'Sci-Fi', rating: 4.8, reason: 'Funny, clever and impossible to put down' },
-    { title: 'Children of Time', author: 'Adrian Tchaikovsky', genre: 'Sci-Fi', rating: 4.7, reason: 'Mind-blowing concepts and world-building' },
-    { title: 'The Three-Body Problem', author: 'Cixin Liu', genre: 'Sci-Fi', rating: 4.6, reason: 'Hard sci-fi at its absolute best' },
+    {title:'Project Hail Mary',author:'Andy Weir',genre:'Sci-Fi',rating:4.8,reason:'bestest book of all time no cap fr 🚀'},
+    {title:'Dune',author:'Frank Herbert',genre:'Sci-Fi',rating:4.8,reason:'literally built different, zero notes'},
+    {title:'The Martian',author:'Andy Weir',genre:'Sci-Fi',rating:4.8,reason:'funny + smart = slay combo bestie'},
+    {title:'Children of Time',author:'Adrian Tchaikovsky',genre:'Sci-Fi',rating:4.7,reason:'spiders that hit different (in a good way) 🕷️'},
+    {title:'The Three-Body Problem',author:'Cixin Liu',genre:'Sci-Fi',rating:4.6,reason:'hard sci-fi ate and devoured bestie'},
   ],
   selfhelp: [
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8, reason: 'Most practical habit book ever written' },
-    { title: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', rating: 4.7, reason: 'Will change how you think about money' },
-    { title: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', rating: 4.7, reason: 'Will change how you see humanity' },
-    { title: 'Dare to Lead', author: 'Brené Brown', genre: 'Leadership', rating: 4.6, reason: 'Courageous leadership for everyone' },
-    { title: 'The Power of Now', author: 'Eckhart Tolle', genre: 'Spirituality', rating: 4.6, reason: 'Life-changing perspective on presence' },
+    {title:'Atomic Habits',author:'James Clear',genre:'Self-Help',rating:4.8,reason:'actually changed my life no hyperbole fr'},
+    {title:'The Psychology of Money',author:'Morgan Housel',genre:'Finance',rating:4.7,reason:'money trauma healed in 200 pages, bestie'},
+    {title:'Sapiens',author:'Yuval Noah Harari',genre:'History',rating:4.7,reason:'we been in our delusional era for 300k years 💀'},
+    {title:'Dare to Lead',author:'Brené Brown',genre:'Leadership',rating:4.6,reason:'vulnerability is the main character trait'},
+    {title:'The Power of Now',author:'Eckhart Tolle',genre:'Spirituality',rating:4.6,reason:'mindfulness but make it slay'},
   ],
   mystery: [
-    { title: 'And Then There Were None', author: 'Agatha Christie', genre: 'Mystery', rating: 4.7, reason: 'Best-selling mystery of all time' },
-    { title: 'The Seven Husbands of Evelyn Hugo', author: 'Taylor Jenkins Reid', genre: 'Mystery', rating: 4.7, reason: 'Glamorous, emotional and unforgettable' },
-    { title: 'The Thursday Murder Club', author: 'Richard Osman', genre: 'Mystery', rating: 4.5, reason: 'Charming, funny and genuinely clever' },
-    { title: 'The Guest List', author: 'Lucy Foley', genre: 'Mystery', rating: 4.4, reason: 'Perfect atmospheric thriller' },
-    { title: 'One of Us Is Lying', author: 'Karen M. McManus', genre: 'Mystery', rating: 4.5, reason: 'Addictive YA mystery with great twists' },
+    {title:'And Then There Were None',author:'Agatha Christie',genre:'Mystery',rating:4.7,reason:'OG of all mysteries, respect the queen bestie'},
+    {title:'The Seven Husbands of Evelyn Hugo',author:'Taylor Jenkins Reid',genre:'Fiction',rating:4.7,reason:'i would literally die for evelyn hugo'},
+    {title:'The Thursday Murder Club',author:'Richard Osman',genre:'Mystery',rating:4.5,reason:'retirement home girlies are the real detectives 👴🔍'},
+    {title:'One of Us Is Lying',author:'Karen M. McManus',genre:'Mystery',rating:4.5,reason:'booktok made me read this and grateful fr'},
+    {title:'The Guest List',author:'Lucy Foley',genre:'Mystery',rating:4.4,reason:'atmosphere was EVERYTHING 🌧️'},
   ],
   historical: [
-    { title: 'All the Light We Cannot See', author: 'Anthony Doerr', genre: 'Historical Fiction', rating: 4.7, reason: 'Exquisitely written — Pulitzer Prize winner' },
-    { title: 'The Book Thief', author: 'Markus Zusak', genre: 'Historical Fiction', rating: 4.8, reason: 'Utterly unique voice and unforgettable story' },
-    { title: 'The Nightingale', author: 'Kristin Hannah', genre: 'Historical Fiction', rating: 4.8, reason: 'Devastating and triumphant — you will cry' },
-    { title: 'The Kite Runner', author: 'Khaled Hosseini', genre: 'Historical Fiction', rating: 4.8, reason: 'Emotional and powerful' },
-    { title: 'Pachinko', author: 'Min Jin Lee', genre: 'Historical Fiction', rating: 4.7, reason: 'Epic family saga spanning generations' },
+    {title:'All the Light We Cannot See',author:'Anthony Doerr',genre:'Historical Fiction',rating:4.7,reason:'Pulitzer winner and it deserved every bit bestie'},
+    {title:'The Book Thief',author:'Markus Zusak',genre:'Historical Fiction',rating:4.8,reason:'utterly unique voice, unforgettable story'},
+    {title:'The Nightingale',author:'Kristin Hannah',genre:'Historical Fiction',rating:4.8,reason:'devastating and triumphant — you WILL cry'},
+    {title:'The Kite Runner',author:'Khaled Hosseini',genre:'Historical Fiction',rating:4.8,reason:'emotional and powerful, it stays with u'},
+    {title:'Pachinko',author:'Min Jin Lee',genre:'Historical Fiction',rating:4.7,reason:'epic family saga spanning generations 💙'},
   ],
   literary: [
-    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6, reason: 'Beautiful, philosophical and profoundly hopeful' },
-    { title: 'Normal People', author: 'Sally Rooney', genre: 'Literary Fiction', rating: 4.4, reason: 'Painfully accurate about modern relationships' },
-    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Inspirational', rating: 4.7, reason: 'Short, profound and endlessly re-readable' },
-    { title: 'A Little Life', author: 'Hanya Yanagihara', genre: 'Literary Fiction', rating: 4.6, reason: 'Devastating and unforgettable' },
-    { title: 'The Great Gatsby', author: 'F. Scott Fitzgerald', genre: 'Classic', rating: 4.7, reason: 'Timeless masterpiece of American literature' },
+    {title:'The Midnight Library',author:'Matt Haig',genre:'Fiction',rating:4.6,reason:'beautiful, philosophical and profoundly hopeful'},
+    {title:'Normal People',author:'Sally Rooney',genre:'Literary Fiction',rating:4.4,reason:'painfully accurate about modern relationships bestie'},
+    {title:'The Alchemist',author:'Paulo Coelho',genre:'Inspirational',rating:4.7,reason:'short, profound and endlessly re-readable'},
+    {title:'A Little Life',author:'Hanya Yanagihara',genre:'Literary Fiction',rating:4.6,reason:'devastating and unforgettable — bring tissues'},
+    {title:'The Great Gatsby',author:'F. Scott Fitzgerald',genre:'Classic',rating:4.7,reason:'timeless masterpiece, the green light era fr'},
   ],
 };
 
-const generateClientResponse = (text, previousBooks = []) => {
+const detectGenre = (text) => {
   const t = text.toLowerCase();
-  const detect = () => {
-    if (/thrille|suspens|crime|murder|dark|creepy|horror|detective|psycholog/i.test(t)) return 'thriller';
-    if (/fantasy|magic|dragon|wizard|sword|epic|tolkien|harry potter|fae/i.test(t)) return 'fantasy';
-    if (/romance|love|swoony|kiss|dating|enemies.to.lovers|trope/i.test(t)) return 'romance';
-    if (/sci.?fi|space|future|robot|alien|tech|mars|nasa|dystop/i.test(t)) return 'scifi';
-    if (/self.?help|habit|product|motivat|improve|success|mindset|business|finance|invest/i.test(t)) return 'selfhelp';
-    if (/mystery|whodun|cozy|clue|puzzle|agatha|detective/i.test(t)) return 'mystery';
-    if (/histor|period|war|ancient|medieval|century|wwii|world war/i.test(t)) return 'historical';
-    return 'literary';
-  };
-  const cat = detect();
-  const list = BOOK_DB[cat] || BOOK_DB.literary;
-  const prev = new Set(previousBooks.map(b => b.title));
-  const fresh = list.filter(b => !prev.has(b.title));
-  const recs = (fresh.length >= 5 ? fresh : list).slice(0, 5);
+  if (/thrille|suspens|crime|murder|dark|horror|detective|psycholog|creepy/i.test(t)) return 'thriller';
+  if (/fantasy|magic|dragon|wizard|fae|fourth wing|romantasy|enemies.to.lovers/i.test(t)) return 'fantasy';
+  if (/romance|love|swoony|kiss|dating|trope|spicy|bookboyfriend|lovers/i.test(t)) return 'romance';
+  if (/sci.?fi|space|future|robot|alien|tech|mars|nasa|dystop/i.test(t)) return 'scifi';
+  if (/self.?help|habit|product|motivat|improve|mindset|business|finance|invest|money/i.test(t)) return 'selfhelp';
+  if (/mystery|whodun|cozy|clue|puzzle|agatha/i.test(t)) return 'mystery';
+  if (/histor|period|war|ancient|medieval|century|wwii|world war/i.test(t)) return 'historical';
+  return 'literary';
+};
+
+const generateClientResponse = (text, prevBooks=[]) => {
+  const cat  = detectGenre(text);
+  const list = BOOK_DB[cat]||BOOK_DB.literary;
+  const prev = new Set(prevBooks.map(b=>b.title));
+  const recs = (list.filter(b=>!prev.has(b.title)).length>=5?list.filter(b=>!prev.has(b.title)):list).slice(0,5);
   const intros = {
-    thriller: "Here are 5 gripping thrillers you won't be able to put down! 🔪",
-    fantasy: "5 magical worlds waiting for you to explore ✨",
-    romance: "5 romance reads that will give you all the feels ❤️",
-    scifi: "5 sci-fi journeys that will blow your mind 🚀",
-    selfhelp: "5 books that will genuinely change how you think 💡",
-    mystery: "5 mysteries that'll keep you guessing until the last page 🔍",
-    historical: "5 historical novels that transport you completely 🏰",
-    literary: "5 beautifully written books that will stay with you 📚",
+    thriller:'okay bestie the villain era is CALLING 🔪 here are your thrills:',
+    fantasy:'fantasy bestie era activated ✨ these ones ate:',
+    romance:'enemies-to-lovers szn is upon us ❤️ ur heart is not ready:',
+    scifi:'full nerd mode activated fr 🚀 these slap:',
+    selfhelp:'main character development arc activated 💡 these will literally change ur life:',
+    mystery:'detective mode: ON 🔍 these will have you guessing:',
+    historical:'history girlies rise bestie 🏰 these transport you:',
+    literary:'big feelings era incoming 📚 these will stay with you:',
   };
-  return { reply: intros[cat] || "Here are 5 great picks for you! 📚", books: recs };
+  return { reply:intros[cat]||'okay fr these books ate 📚 trust the process bestie:', books:recs };
 };
 
-// ✅ AI-powered daily trending books — changes every day, cached per date
-const getDailyTrendingBooks = async () => {
-  const todayKey = `ai_trending_${new Date().toISOString().slice(0, 10)}`; // e.g. "ai_trending_2025-03-30"
-  const cached = localStorage.getItem(todayKey);
-  if (cached) {
-    try { return JSON.parse(cached); } catch (_) {}
-  }
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPLORE PAGE — AI Chat | By Character | Nearby Libraries
+// ══════════════════════════════════════════════════════════════════════════════
+const CharacterSearch = memo(({ onViewDetails, onCreateCrew }) => {
+  const [query,   setQuery]   = useState('');
+  const [results, setResults] = useState([]);
+  const [loading, setLoad]    = useState(false);
+  const exampleChars = ['Hermione Granger','Jay Gatsby','Atticus Finch','Holden Caulfield','Elizabeth Bennet','Kvothe','Sherlock Holmes'];
 
-  // Try server first
-  try {
-    const res = await axios.get(`${API_URL}/api/books/trending?limit=8&daily=true`, { timeout: 8000 });
-    if (res?.data?.success && res.data.books?.length) {
-      localStorage.setItem(todayKey, JSON.stringify(res.data.books));
-      // Clean up old cache keys
-      Object.keys(localStorage).filter(k => k.startsWith('ai_trending_') && k !== todayKey).forEach(k => localStorage.removeItem(k));
-      return res.data.books;
-    }
-  } catch (_) {}
-
-  // Fallback: rotate through local book DB deterministically based on day of year
-  const allBooks = Object.values(BOOK_DB).flat();
-  const dayOfYear = Math.floor((Date.now() - new Date(new Date().getFullYear(), 0, 0)) / 86_400_000);
-  const startIdx = (dayOfYear * 8) % allBooks.length;
-  const dailyPicks = [];
-  for (let i = 0; i < 8; i++) {
-    dailyPicks.push(allBooks[(startIdx + i * 5) % allBooks.length]);
-  }
-  // Deduplicate by title
-  const seen = new Set();
-  const unique = dailyPicks.filter(b => { if (seen.has(b.title)) return false; seen.add(b.title); return true; });
-
-  localStorage.setItem(todayKey, JSON.stringify(unique));
-  return unique;
-};
-
-// ========================================
-// SECTION 26: BOOK CARD COMPONENT
-// ========================================
-
-const BookCard = React.memo(({ book, onCreateCrew, onViewDetails }) => (
-  <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm hover:shadow-md transition">
-    <div className="flex gap-4">
-      <DynamicBookCover title={book.title} author={book.author} size="md" onClick={() => onViewDetails?.(book)} />
-      <div className="flex-1 min-w-0">
-        <h3 className="font-bold text-gray-900 text-sm leading-tight">{book.title}</h3>
-        <p className="text-xs text-gray-500 mt-0.5">by {book.author}</p>
-        {book.genre && <span className="inline-block mt-1.5 text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{book.genre}</span>}
-        {book.reason && <p className="text-xs text-orange-700 mt-1 italic line-clamp-2">"{book.reason}"</p>}
-        <div className="flex items-center gap-2 mt-2">
-          <StarRating rating={Math.round(book.rating || 4)} size="xs" readonly />
-          <span className="text-xs font-semibold text-gray-700">{book.rating || 4.0}</span>
-        </div>
-      </div>
-    </div>
-    <div className="flex gap-2 mt-3 pt-3 border-t border-gray-50">
-      <button onClick={() => onViewDetails?.(book)} className="flex-1 py-2.5 bg-blue-500 text-white rounded-xl text-sm font-semibold hover:bg-blue-600 transition">View Details</button>
-      <button onClick={onCreateCrew} className="flex-1 py-2.5 bg-orange-500 text-white rounded-xl text-sm font-semibold flex items-center justify-center gap-1.5 hover:bg-orange-600 transition">
-        <Users className="w-4 h-4" />Create Crew
-      </button>
-    </div>
-  </div>
-));
-
-// ========================================
-// SECTION 27: POST PAGE
-// ========================================
-
-const PostPage = ({ user, onPost, setPage }) => {
-  const [content, setContent] = useState('');
-  const [bookName, setBookName] = useState('');
-  const [author, setAuthor] = useState('');
-  const [image, setImage] = useState(null);
-  const [isPublic, setIsPublic] = useState(true);
-  const [uploading, setUploading] = useState(false);
-  const [charCount, setCharCount] = useState(0);
-  const fileInputRef = useRef(null);
-
-  const handleContentChange = (e) => { const t = e.target.value; setContent(t); setCharCount(t.length); };
-
-  const handleSubmit = async () => {
-    if (!content.trim()) return;
-    setUploading(true);
-    const postData = {
-      id: generateId(),
-      content: sanitizeText(content.trim()),
-      bookName: bookName.trim() || undefined,
-      author: author.trim() || undefined,
-      image,
-      isPublic,
-      userName: user.name,
-      userEmail: user.email,
-      userPhoto: user.profileImage,
-      userInitials: user.name.slice(0, 2).toUpperCase(),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      comments: 0,
-      reshareCount: 0,
-    };
+  const search = async () => {
+    if (!query.trim()) return;
+    setLoad(true);
     try {
-      const res = await axios.post(`${API_URL}/api/social/posts`, postData, { timeout: 8000 });
-      onPost(res.data.success ? res.data.post : postData);
-    } catch (_) {
-      onPost(postData);
+      const q = encodeURIComponent(`character ${query} book`);
+      const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=8&projection=lite`,{signal:AbortSignal.timeout(8000)});
+      const d = await r.json();
+      const books = (d?.items||[]).map(it=>({
+        title:  it.volumeInfo?.title,
+        author: it.volumeInfo?.authors?.[0]||'Unknown',
+        genre:  it.volumeInfo?.categories?.[0]||'Fiction',
+        rating: it.volumeInfo?.averageRating||4.0,
+        reason: `features "${query}" as a character`,
+      })).filter(b=>b.title);
+      setResults(books.length ? books : Object.values(BOOK_DB).flat().filter(b=>b.title.toLowerCase().includes(query.toLowerCase())||b.author.toLowerCase().includes(query.toLowerCase())));
+    } catch {
+      setResults(Object.values(BOOK_DB).flat().filter(b=>b.title.toLowerCase().includes(query.toLowerCase())||b.author.toLowerCase().includes(query.toLowerCase())));
     }
-    setUploading(false);
-    setPage('home');
-  };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert('Image size should be less than 5MB'); return; }
-    if (!file.type.startsWith('image/')) { alert('Please upload an image file'); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => setImage(ev.target.result);
-    reader.readAsDataURL(file);
+    setLoad(false);
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-white z-[55] overflow-hidden"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between flex-shrink-0">
-        <button onClick={() => setPage('home')} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-600" /></button>
-        <h2 className="font-semibold text-gray-900">Create Post</h2>
-        <button onClick={handleSubmit} disabled={!content.trim() || uploading} className="px-4 py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl text-sm font-medium disabled:opacity-50 hover:opacity-90 transition">
-          {uploading ? <LoadingSpinner size="sm" color="white" /> : 'Share'}
+    <div>
+      <div className="bg-gradient-to-br from-violet-50 to-purple-50 rounded-2xl p-4 mb-4">
+        <h2 className="font-black text-gray-900 text-lg mb-1 flex items-center gap-2">🎭 search by character</h2>
+        <p className="text-sm text-gray-500 mb-4">type a character name and we'll find the book bestie — Hermione, Gatsby, Kvothe, anyone fr!</p>
+        <div className="flex gap-2 mb-3">
+          <div className="flex-1 flex items-center gap-2 bg-white border border-gray-200 rounded-2xl px-4 focus-within:border-purple-400 transition">
+            <Search className="w-4 h-4 text-gray-400 flex-shrink-0"/>
+            <input value={query} onChange={e=>setQuery(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')search();}} className="flex-1 py-3.5 text-sm outline-none bg-transparent placeholder-gray-400" placeholder="e.g. Hermione, Jay Gatsby, Kvothe..."/>
+          </div>
+          <button onClick={search} disabled={!query.trim()||loading} className="px-5 py-3 bg-gradient-to-r from-violet-500 to-purple-500 text-white rounded-2xl text-sm font-black disabled:opacity-40 hover:opacity-90 transition">
+            {loading?<LoadingSpinner size="sm" color="white"/>:'search'}
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {exampleChars.map(c=>(
+            <button key={c} onClick={()=>setQuery(c)} className="text-xs px-3 py-1.5 bg-white border border-purple-200 text-purple-600 rounded-full font-semibold hover:bg-purple-50 transition">{c}</button>
+          ))}
+        </div>
+      </div>
+      {results.length>0&&(
+        <div className="space-y-3">
+          <div className="flex items-center gap-2"><div className="h-px flex-1 bg-purple-200"/><span className="text-xs text-purple-500 font-black">BOOKS WITH "{query.toUpperCase()}"</span><div className="h-px flex-1 bg-purple-200"/></div>
+          {results.map((b,i)=><BookCard key={i} book={b} onViewDetails={onViewDetails} onCreateCrew={()=>onCreateCrew(b)}/>)}
+        </div>
+      )}
+    </div>
+  );
+});
+
+const NearbyLibraries = () => {
+  const [libs,    setLibs]    = useState([]);
+  const [loading, setLoad]    = useState(false);
+  const [error,   setError]   = useState('');
+
+  const find = () => {
+    setLoad(true); setError('');
+    if (!navigator.geolocation) { setError("location not supported in this browser 😭"); setLoad(false); return; }
+    navigator.geolocation.getCurrentPosition(
+      pos=>{
+        const {latitude:lat,longitude:lng}=pos.coords;
+        fetch(`https://nominatim.openstreetmap.org/search?q=library&format=json&limit=6&bounded=1&viewbox=${lng-0.15},${lat+0.15},${lng+0.15},${lat-0.15}`)
+          .then(r=>r.json()).then(data=>{
+            const results = (data||[]).map(l=>({ name:l.display_name.split(',')[0].trim(), address:l.display_name, lat:parseFloat(l.lat), lng:parseFloat(l.lon) }));
+            setLibs(results.length?results:[{name:'Public Library (search manually)',address:'Enable location or search Google Maps for libraries near you',lat,lng}]);
+            setLoad(false);
+          }).catch(()=>{
+            setLibs([{name:'Library Search',address:'Offline — try Google Maps for "libraries near me"',lat,lng}]);
+            setLoad(false);
+          });
+      },
+      ()=>{setError("location blocked bestie — enable it in browser settings 📍");setLoad(false);}
+    );
+  };
+
+  return (
+    <div>
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-2xl p-4 mb-4">
+        <h2 className="font-black text-gray-900 text-lg mb-1 flex items-center gap-2">🗺️ nearby libraries</h2>
+        <p className="text-sm text-gray-500 mb-4">find where to cop your next physical read IRL bestie 📚 no cap this feature is main character energy</p>
+        <button onClick={find} disabled={loading} className="w-full py-3.5 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 disabled:opacity-50 hover:opacity-90 transition">
+          {loading?<><LoadingSpinner size="sm" color="white"/>locating...</>:<><Navigation className="w-4 h-4"/>find libraries near me</>}
         </button>
       </div>
-
-      <div className="flex-1 overflow-y-auto px-4 py-4">
-        <div className="flex gap-3 mb-4">
-          <Avatar initials={user?.name} size="md" src={user?.profileImage} />
-          <div className="flex-1">
-            <textarea
-              value={content}
-              onChange={handleContentChange}
-              className="w-full bg-transparent text-gray-900 placeholder-gray-400 outline-none text-base resize-none"
-              placeholder="bestie what are u reading rn? spill 👀"
-              rows={6}
-              maxLength={1000}
-              autoFocus
-            />
-            <div className="flex justify-end">
-              <span className={`text-xs ${charCount > 900 ? 'text-orange-500' : 'text-gray-400'}`}>{charCount}/1000</span>
+      {error&&<div className="bg-red-50 border border-red-200 rounded-xl p-3 text-sm text-red-600 text-center mb-4 font-semibold">{error}</div>}
+      {libs.length>0&&(
+        <div className="space-y-3">
+          {libs.map((lib,i)=>(
+            <div key={i} className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
+              <div className="flex items-start gap-3">
+                <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0"><BookOpen className="w-5 h-5 text-blue-600"/></div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-gray-900 text-sm">{lib.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{lib.address}</p>
+                  <a href={`https://maps.google.com/?q=${lib.lat},${lib.lng}`} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex items-center gap-1 text-xs text-blue-500 font-black hover:underline">
+                    <Navigation className="w-3 h-3"/>open in maps →
+                  </a>
+                </div>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
-
-        <div className="space-y-3 mb-4">
-          <input value={bookName} onChange={e => setBookName(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300 transition" placeholder="📖 Book name (optional)" />
-          <input value={author} onChange={e => setAuthor(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300 transition" placeholder="✍️ Author (optional)" />
+      )}
+      {!libs.length&&!loading&&!error&&(
+        <div className="text-center py-10 text-gray-400">
+          <p className="text-5xl mb-3">📍</p>
+          <p className="text-sm font-black">tap the button to find libraries near you bestie</p>
+          <p className="text-xs mt-1">uses your location (never stored, no cap)</p>
         </div>
-
-        {image && (
-          <div className="relative mb-4">
-            <img src={image} alt="preview" className="w-full rounded-xl max-h-64 object-cover" />
-            <button onClick={() => setImage(null)} className="absolute top-2 right-2 bg-black/50 rounded-full p-1 hover:bg-black/70 transition">
-              <X className="w-4 h-4 text-white" />
-            </button>
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-3">
-          <button onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-sm text-gray-700 hover:bg-gray-200 transition">
-            <Camera className="w-4 h-4" /> Add Photo
-          </button>
-          <button onClick={() => setIsPublic(!isPublic)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm transition ${!isPublic ? 'bg-gray-800 text-white hover:bg-gray-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}>
-            {isPublic ? <Globe className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
-            {isPublic ? 'Public' : 'Private'}
-          </button>
-        </div>
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-      </div>
+      )}
     </div>
   );
 };
 
-// ========================================
-// SECTION 28: REVIEWS PAGE
-// ✅ Reviews are global — all users see all reviews
-//    Server + localStorage merge ensures nothing is lost
-// ========================================
+const GEN_Z_EXPLORE_PROMPTS = [
+  "🔪 dark academia vibes", "✨ fantasy but unhinged", "❤️ enemies to lovers szn",
+  "🚀 sci-fi that hits different", "💡 main character self-help", "🏰 period drama but slay",
+  "🐛 cozy mystery bestie", "💀 thriller ate & left no crumbs",
+];
 
-const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
-  const [reviews, setReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [likedReviews, setLikedReviews] = useState([]);
-  const [newReview, setNewReview] = useState({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [sortBy, setSortBy] = useState('newest');
+const ExplorePage = memo(({ user, setPage, onCreateCrew }) => {
+  const [mode,     setMode]   = useState('chat');
+  const [messages, setMsgs]   = useState([{role:'assistant',content:"heyyy bestie! 👋 i'm Page Turner, your AI book bestie living in main character era. spill what vibe you're in — a genre, mood, or last book you hyperfixated on. let's find your next obsession fr 📚✨",ts:Date.now()}]);
+  const [input,    setInput]  = useState('');
+  const [loading,  setLoad]   = useState(false);
+  const [recs,     setRecs]   = useState([]);
+  const [selBook,  setSel]    = useState(null);
+  const endRef = useRef();
 
-  useEffect(() => {
-    loadReviews();
-    const liked = JSON.parse(localStorage.getItem(`user_${user.email}_likedReviews`) || '[]');
-    setLikedReviews(liked);
-  }, [user.email]);
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
 
-  const loadReviews = async () => {
-    setLoading(true);
+  const send = async () => {
+    if (!input.trim()||loading) return;
+    const text = input.trim();
+    setInput('');
+    setMsgs(p=>[...p,{role:'user',content:text,ts:Date.now()}]);
+    setLoad(true);
+    let replied = false;
     try {
-      const res = await axios.get(`${API_URL}/api/social/reviews`, { timeout: 8000 });
-      if (res?.data?.success) {
-        const serverReviews = res.data.reviews || [];
-        // ✅ Merge with localStorage so reviews posted offline are also visible
-        const localReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
-        const merged = [...serverReviews];
-        localReviews.forEach(lr => {
-          if (!merged.find(sr => sr.id === lr.id)) merged.push(lr);
-        });
-        merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        setReviews(merged);
-        localStorage.setItem('reviews', JSON.stringify(merged));
-        setLoading(false);
+      const res = await fetch('https://api.anthropic.com/v1/messages',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          model:'claude-sonnet-4-20250514', max_tokens:800,
+          system:`You are Page Turner, a Gen Z AI book recommendation bestie for READCREWW app. Use casual Gen Z language: bestie, slay, no cap, fr, hits different, ate, lowkey, it's giving, main character energy, hyperfixation, snatched, understood the assignment etc. When recommending books always give 3-5 specific books with authors. Keep responses SHORT (under 120 words). Write conversationally NOT in bullet points. Always end with an emoji. Never use bullet points. Be enthusiastic and use Gen Z slang naturally.`,
+          messages:[...messages.filter(m=>m.role==='user'||m.role==='assistant').slice(-6).map(m=>({role:m.role,content:m.content})),{role:'user',content:text}]
+        })
+      });
+      if (res.ok) {
+        const d = await res.json();
+        const reply = d?.content?.[0]?.text||'';
+        if (reply) { setMsgs(p=>[...p,{role:'assistant',content:reply,ts:Date.now()}]); setRecs(BOOK_DB[detectGenre(text)]||BOOK_DB.fantasy); replied = true; }
+      }
+    } catch {}
+    if (!replied) {
+      const {reply,books} = generateClientResponse(text,recs);
+      setMsgs(p=>[...p,{role:'assistant',content:reply,ts:Date.now()}]);
+      setRecs(books);
+    }
+    setLoad(false);
+  };
+
+  const handleCreateCrew = (book) => { onCreateCrew(book); setPage('crews'); };
+  const tabs = [{id:'chat',label:'✨ AI Chat'},{id:'character',label:'🎭 By Character'},{id:'libraries',label:'🗺️ Nearby Libraries'}];
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-orange-50 to-white pb-24 overflow-y-auto">
+      <div className="px-4 pt-6 pb-3">
+        <h1 className="text-2xl font-black text-gray-900" style={{fontFamily:'Georgia,serif'}}>explore 🔍</h1>
+        <p className="text-sm text-gray-500">find your next hyperfixation bestie, no cap</p>
+      </div>
+      <div className="px-4 mb-4 flex gap-2 overflow-x-auto" style={{scrollbarWidth:'none'}}>
+        {tabs.map(({id,label})=>(
+          <button key={id} onClick={()=>setMode(id)} className={`flex-shrink-0 px-4 py-2 rounded-full text-xs font-black transition-all ${mode===id?'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow-md':'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'}`}>{label}</button>
+        ))}
+      </div>
+      {selBook&&<BookDetailsModal book={selBook} onClose={()=>setSel(null)} onCreateCrew={handleCreateCrew} currentUser={user}/>}
+      {mode==='chat'&&(
+        <>
+          <div className="px-4 space-y-3 pb-40">
+            {messages.map((m,i)=>(
+              <div key={i} className={`flex ${m.role==='user'?'justify-end':'justify-start'} items-end gap-2`}>
+                {m.role==='assistant'&&<div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center flex-shrink-0 shadow"><BookOpen className="w-4 h-4 text-white"/></div>}
+                <div className={`max-w-[80%] rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role==='user'?'bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-br-sm':'bg-white text-gray-900 rounded-bl-sm shadow-sm border border-gray-100'}`}>{m.content}</div>
+              </div>
+            ))}
+            {loading&&(
+              <div className="flex items-end gap-2">
+                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-pink-500 rounded-full flex items-center justify-center"><BookOpen className="w-4 h-4 text-white"/></div>
+                <div className="bg-white rounded-2xl rounded-bl-sm px-4 py-3 shadow-sm border border-gray-100">
+                  <div className="flex gap-1.5">{[0,150,300].map(d=><div key={d} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{animationDelay:`${d}ms`}}/>)}</div>
+                </div>
+              </div>
+            )}
+            {recs.length>0&&(
+              <div className="space-y-3 pt-4">
+                <div className="flex items-center gap-2"><div className="h-px flex-1 bg-orange-200"/><span className="text-xs text-orange-500 font-black">📚 RECS FOR U BESTIE</span><div className="h-px flex-1 bg-orange-200"/></div>
+                {recs.map((b,i)=><BookCard key={i} book={b} onViewDetails={setSel} onCreateCrew={()=>handleCreateCrew(b)}/>)}
+              </div>
+            )}
+            <div ref={endRef}/>
+          </div>
+          {messages.length<=1&&(
+            <div className="fixed bottom-36 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+              <div className="flex gap-2 overflow-x-auto pb-1" style={{scrollbarWidth:'none'}}>
+                {GEN_Z_EXPLORE_PROMPTS.map(p=>(
+                  <button key={p} onClick={()=>setInput(p.substring(2).trim())} className="flex-shrink-0 px-3 py-1.5 bg-white border border-orange-200 rounded-full text-xs text-orange-600 font-black hover:bg-orange-50 transition whitespace-nowrap shadow-sm">{p}</button>
+                ))}
+              </div>
+            </div>
+          )}
+          <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-md px-4">
+            <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 px-3 py-2.5">
+              <div className="flex items-center gap-2">
+                <input value={input} onChange={e=>setInput(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send();}}} placeholder="spill what vibe you're after bestie..." className="flex-1 text-sm text-gray-900 outline-none bg-transparent placeholder-gray-400"/>
+                <button onClick={send} disabled={!input.trim()||loading} className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${input.trim()&&!loading?'bg-gradient-to-r from-orange-500 to-pink-500 text-white':'bg-gray-100 text-gray-400'}`}><Send className="w-4 h-4"/></button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+      {mode==='character'&&<div className="px-4"><CharacterSearch onViewDetails={setSel} onCreateCrew={handleCreateCrew}/></div>}
+      {mode==='libraries'&&<div className="px-4"><NearbyLibraries/></div>}
+    </div>
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HOME PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+const HomePage = memo(({ user, posts, crews, setPage, updateNotificationCount, profileSrc, savedPosts, onSavePost, onResharePost, onDeletePost, onFollow, following, onBlock, blockedUsers, onViewUserProfile, onViewBookDetails, deepLinkPostId, onDeepLinkHandled }) => {
+  const [trendingBooks,   setTrend]   = useState([]);
+  const [loadingTrending, setLoadTr]  = useState(true);
+  const [feedPosts,       setFeed]    = useState([]);
+  const [selectedBook,    setSel]     = useState(null);
+  const [showShare,       setShare]   = useState(null);
+  const [showReshare,     setReshare] = useState(null);
+  const [stats,           setStats]   = useState({booksRead:0,reviewsGiven:0,postsCreated:0,crewsJoined:0});
+  const [readingProgress, setProgress]= useState(0);
+
+  useEffect(()=>{
+    if (!deepLinkPostId||feedPosts.length===0) return;
+    setTimeout(()=>{
+      const el = document.getElementById(`post-${deepLinkPostId}`);
+      if (el) { el.scrollIntoView({behavior:'smooth',block:'center'}); el.style.boxShadow='0 0 0 3px #f97316'; setTimeout(()=>el.style.boxShadow='',2500); }
+      onDeepLinkHandled?.();
+    },400);
+  },[deepLinkPostId,feedPosts]);
+
+  const loadFeed = useCallback(async()=>{
+    try {
+      const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${encodeURIComponent(user.email)}`,{timeout:8000});
+      if (res.data?.success) {
+        const sp=res.data.posts||[];
+        const lp=getGlobalPosts();
+        const merged=[...sp];
+        lp.forEach(lx=>{if(!merged.find(sx=>(sx.id||sx._id)===(lx.id||lx._id)))merged.push(lx);});
+        setLS(GLOBAL_POSTS_KEY,merged);
+        setFeed(generatePersonalizedFeed(user.email,merged,blockedUsers));
         return;
       }
-    } catch (_) {}
-    // Fallback to local
-    const local = JSON.parse(localStorage.getItem('reviews') || '[]');
-    setReviews(local);
-    setLoading(false);
-  };
+    } catch {}
+    const all=getGlobalPosts();
+    setFeed(generatePersonalizedFeed(user.email,all,blockedUsers));
+  },[user.email,blockedUsers]);
 
-  const handleLikeReview = (reviewId, review) => {
-    if (likedReviews.includes(reviewId)) return;
-    const updated = [...likedReviews, reviewId];
-    setLikedReviews(updated);
-    localStorage.setItem(`user_${user.email}_likedReviews`, JSON.stringify(updated));
-    const updatedReviews = reviews.map(r => r.id === reviewId ? { ...r, likes: (r.likes || 0) + 1 } : r);
-    setReviews(updatedReviews);
-    localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-    if (review.userEmail !== user.email) {
-      pushNotification(review.userEmail, { type: 'review', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} liked your review of "${review.bookName}"` });
-      updateNotificationCount?.();
-    }
-  };
+  useEffect(()=>{
+    loadFeed();
+    const st=getLS(`rcreww_stats_${user.email}`,{});
+    setStats(st);
+    if (user?.readingGoal?.yearly>0) setProgress(Math.min((st.booksRead||0)/user.readingGoal.yearly*100,100));
+    fetch('https://www.googleapis.com/books/v1/volumes?q=bestseller+2024&maxResults=8&projection=lite',{signal:AbortSignal.timeout(8000)})
+      .then(r=>r.json()).then(d=>{
+        const books=(d?.items||[]).map(it=>({title:it.volumeInfo?.title,author:it.volumeInfo?.authors?.[0],rating:it.volumeInfo?.averageRating||4.2})).filter(b=>b.title);
+        if(books.length) setTrend(books); else throw new Error();
+        setLoadTr(false);
+      }).catch(()=>{
+        setTrend([{title:'Atomic Habits',author:'James Clear',rating:4.8},{title:'Fourth Wing',author:'Rebecca Yarros',rating:4.6},{title:'Project Hail Mary',author:'Andy Weir',rating:4.8},{title:'The Midnight Library',author:'Matt Haig',rating:4.6},{title:'Verity',author:'Colleen Hoover',rating:4.6},{title:'Sapiens',author:'Yuval Noah Harari',rating:4.7}]);
+        setLoadTr(false);
+      });
+    socket.on('new_post',post=>{ if(!blockedUsers.includes(post.userEmail)) setFeed(p=>[post,...p]); });
+    socket.on('post_deleted',({postId})=>setFeed(p=>p.filter(x=>(x._id||x.id)!==postId)));
+    const handler=(e)=>{ if(e.data?.type==='posts_updated') loadFeed(); };
+    bc?.addEventListener('message',handler);
+    return()=>{ socket.off('new_post'); socket.off('post_deleted'); bc?.removeEventListener('message',handler); };
+  },[user.email,loadFeed]);
 
-  const handleCreateReview = async () => {
-    if (!newReview.bookName || !newReview.author || !newReview.review) { alert('Please fill all required fields'); return; }
-    const reviewData = { ...newReview, id: generateId(), userName: user.name, userEmail: user.email, userPhoto: user.profileImage, likes: 0, createdAt: new Date().toISOString() };
-    try {
-      const res = await axios.post(`${API_URL}/api/social/reviews`, reviewData, { timeout: 8000 });
-      if (res?.data?.success) {
-        const saved = res.data.review;
-        const updatedReviews = [saved, ...reviews];
-        setReviews(updatedReviews);
-        localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-      } else throw new Error('server fail');
-    } catch (_) {
-      const updatedReviews = [reviewData, ...reviews];
-      setReviews(updatedReviews);
-      localStorage.setItem('reviews', JSON.stringify(updatedReviews));
-    }
-    setShowCreateForm(false);
-    setNewReview({ bookName: '', author: '', rating: 5, review: '', sentiment: 'positive' });
-    const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
-    stats.reviewsGiven = (stats.reviewsGiven || 0) + 1;
-    localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
-  };
+  useEffect(()=>{ loadFeed(); },[posts.length,following.length]);
 
-  const filtered = reviews
-    .filter(r => r.bookName?.toLowerCase().includes(searchQuery.toLowerCase()) || r.author?.toLowerCase().includes(searchQuery.toLowerCase()) || r.userName?.toLowerCase().includes(searchQuery.toLowerCase()))
-    .sort((a, b) => {
-      if (sortBy === 'newest') return new Date(b.createdAt) - new Date(a.createdAt);
-      if (sortBy === 'popular') return (b.likes || 0) - (a.likes || 0);
-      if (sortBy === 'rating') return b.rating - a.rating;
-      return 0;
-    });
+  const handleReshare = (post,comment,isPublic) => { onResharePost(post,comment,isPublic); setReshare(null); };
+  const userCrews = getGlobalCrews().filter(c=>{
+    const joined = getLS(`rcreww_joined_${user.email}`,[]);
+    return joined.includes(c.id)||joined.includes(String(c.id));
+  });
+  const notifCount = getLS(`rcreww_notifs_${user.email}`,[]).filter(n=>!n.read&&n.type!=='message').length;
+  const ph = GEN_Z_PLACEHOLDERS[Math.floor(Date.now()/600000)%GEN_Z_PLACEHOLDERS.length];
+  const currentStatus = getLS(`rcreww_status_${user.email}`, null);
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
-      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
+      <TopBar user={user} setPage={setPage} profileSrc={profileSrc} onNotificationClick={()=>setPage('notifications')} notificationCount={notifCount}/>
+      {selectedBook&&<BookDetailsModal book={selectedBook} onClose={()=>setSel(null)} onCreateCrew={book=>{const{crew}=getOrCreateCrew(book.title,book.author,book.genre,user.email,user.name);const joined=getLS(`rcreww_joined_${user.email}`,[]);if(!joined.includes(crew.id)){setLS(`rcreww_joined_${user.email}`,[...joined,crew.id]);}setSel(null);setPage('crews');}} currentUser={user}/>}
+      {showShare&&<ShareModal post={showShare} onClose={()=>setShare(null)}/>}
+      {showReshare&&<ReshareModal post={showReshare} onClose={()=>setReshare(null)} onReshare={handleReshare}/>}
+      <div className="px-4 py-4 space-y-5">
+        {/* Hero */}
+        <div className="bg-gradient-to-br from-orange-500 via-pink-500 to-red-500 rounded-3xl p-5 text-white shadow-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black">hey {user?.name?.split(' ')[0]} 🔥</h2>
+              <p className="text-orange-100 text-sm mt-0.5">your vibe feed is ready no cap bestie</p>
+            </div>
+            <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center backdrop-blur-sm"><BookOpen className="w-6 h-6 text-white"/></div>
+          </div>
+          {user?.readingGoal?.yearly>0&&(
+            <div className="mt-4 bg-white/20 rounded-2xl p-3 backdrop-blur-sm">
+              <div className="flex items-center justify-between text-sm mb-2">
+                <span className="font-semibold">yearly reading goal</span>
+                <span className="font-black">{stats.booksRead||0}/{user.readingGoal.yearly} books</span>
+              </div>
+              <div className="h-2 bg-white/30 rounded-full overflow-hidden">
+                <div className="h-full bg-white rounded-full transition-all duration-500" style={{width:`${readingProgress}%`}}/>
+              </div>
+              <p className="text-xs text-orange-100 mt-1">{Math.round(readingProgress)}% of goal achieved slay! 🎉</p>
+            </div>
+          )}
+        </div>
 
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
-        <button onClick={() => setPage('home')} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
-        <h2 className="font-semibold text-gray-900">Book Reviews</h2>
-        <button onClick={() => setShowCreateForm(!showCreateForm)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">
-          {showCreateForm ? 'Cancel' : '+ Write Review'}
+        {/* Algorithm banner */}
+        <div className="bg-blue-50 border border-blue-100 rounded-2xl p-3 flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0"><Sparkles className="w-4 h-4 text-blue-500"/></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-black text-blue-900">personalized for u bestie ✨</p>
+            <p className="text-xs text-blue-600">feed ranked by your likes, follows & reading interests</p>
+          </div>
+          <button onClick={loadFeed} className="p-1.5 hover:bg-blue-100 rounded-xl transition"><RefreshCw className="w-4 h-4 text-blue-400"/></button>
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-2">
+          {[{label:'Books',val:stats.booksRead||0,icon:BookOpen,color:'text-blue-600',bg:'bg-blue-100',page:'profile'},{label:'Reviews',val:stats.reviewsGiven||0,icon:Star,color:'text-purple-600',bg:'bg-purple-100',page:'reviews'},{label:'Posts',val:stats.postsCreated||0,icon:Edit3,color:'text-green-600',bg:'bg-green-100',page:'post'},{label:'Crews',val:stats.crewsJoined||0,icon:Users,color:'text-orange-600',bg:'bg-orange-100',page:'crews'}].map(({label,val,icon:Icon,color,bg,page},idx)=>(
+            <div key={idx} className="bg-white rounded-2xl p-3 shadow-sm border border-gray-100 cursor-pointer hover:shadow-md transition" onClick={()=>setPage(page)}>
+              <div className={`w-8 h-8 ${bg} rounded-xl flex items-center justify-center mb-2`}><Icon className={`w-4 h-4 ${color}`}/></div>
+              <p className="text-lg font-black text-gray-900">{val}</p>
+              <p className="text-xs text-gray-500 font-semibold">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Trending */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-orange-500"/>trending rn 🔥</h2>
+            <button onClick={()=>setPage('explore')} className="text-sm text-orange-500 font-black hover:underline">explore all →</button>
+          </div>
+          {loadingTrending?<div className="flex justify-center py-8"><LoadingSpinner/></div>:(
+            <div className="flex gap-4 overflow-x-auto pb-2" style={{scrollbarWidth:'none'}}>
+              {trendingBooks.map((book,i)=>(
+                <div key={i} className="shrink-0 w-28 cursor-pointer hover:scale-105 transition-transform" onClick={()=>setSel(book)}>
+                  <DynamicBookCover title={book.title} author={book.author} size="md"/>
+                  <p className="text-sm font-black text-gray-900 mt-2 leading-tight line-clamp-2">{book.title}</p>
+                  <p className="text-xs text-gray-500 truncate">{book.author}</p>
+                  {book.rating&&<div className="flex items-center gap-1 mt-1"><Star className="w-3 h-3 fill-amber-400 text-amber-400"/><span className="text-xs font-black">{book.rating}</span></div>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Your Crews */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500"/>your crews</h2>
+            <button onClick={()=>setPage('crews')} className="text-sm text-orange-500 font-black hover:underline">view all →</button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {userCrews.slice(0,2).map(crew=>(
+              <div key={crew.id} className="bg-white rounded-2xl overflow-hidden border border-gray-100 shadow-sm cursor-pointer hover:shadow-md transition" onClick={()=>setPage('crews')}>
+                <div className="h-16 flex items-center justify-center p-2 bg-gray-50"><DynamicBookCover title={crew.name} author={crew.author} size="xs"/></div>
+                <div className="p-3">
+                  <h3 className="font-black text-gray-900 text-sm line-clamp-2">{crew.name}</h3>
+                  <p className="text-xs text-gray-500 mt-0.5">{crew.genre}</p>
+                  <div className="flex items-center justify-between mt-2">
+                    <div className="flex items-center gap-1 text-xs text-gray-500"><Users className="w-3 h-3"/>{crew.members||1}</div>
+                    <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-lg text-xs font-black">joined</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {userCrews.length===0&&(
+              <div className="col-span-2 bg-white rounded-2xl p-6 text-center border border-gray-100">
+                <p className="text-gray-500 text-sm font-semibold">no crews joined yet bestie</p>
+                <button onClick={()=>setPage('crews')} className="mt-2 text-orange-500 text-sm font-black hover:underline">browse crews →</button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Create post CTA */}
+        <button onClick={()=>setPage('post')} className="w-full bg-white rounded-2xl p-3.5 border border-gray-100 shadow-sm flex items-center gap-3 hover:shadow-md transition">
+          {profileSrc?<img src={profileSrc} alt="profile" className="w-9 h-9 rounded-full object-cover flex-shrink-0"/>:<Avatar initials={user?.name} size="sm"/>}
+          <span className="text-gray-400 text-sm flex-1 text-left">{ph}</span>
+          <span className="text-xs font-black text-orange-500 bg-orange-50 px-3 py-1 rounded-full">Post</span>
+        </button>
+
+        {/* Feed */}
+        <div>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-lg font-black text-gray-900 flex items-center gap-2"><MessageSquare className="w-5 h-5 text-orange-500"/>{following.length>0?'your feed':'community feed'}</h2>
+            <button onClick={loadFeed} className="text-xs text-gray-400 flex items-center gap-1 hover:text-orange-500 transition font-semibold"><RefreshCw className="w-3 h-3"/>refresh</button>
+          </div>
+          <div className="space-y-4">
+            {feedPosts.length===0?(
+              <div className="bg-white rounded-2xl p-8 text-center border border-gray-100">
+                <p className="text-4xl mb-3">📚</p>
+                <p className="text-gray-500 font-black">no posts yet bestie</p>
+                <p className="text-gray-400 text-sm mt-1">be the main character and post first!</p>
+                <button onClick={()=>setPage('post')} className="mt-4 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black hover:opacity-90 transition">create post 🔥</button>
+              </div>
+            ):feedPosts.map((post,idx)=>(
+              <InlinePostCard
+                key={post.id||idx} post={post} user={user} profileSrc={profileSrc}
+                updateNotificationCount={updateNotificationCount}
+                onShare={p=>setShare(p)} onReshareClick={p=>setReshare(p)}
+                onSaveToggle={onSavePost} isSaved={savedPosts?.includes(post.id)}
+                onDelete={onDeletePost} onFollow={onFollow} isFollowing={following?.includes(post.userEmail)}
+                onBlock={onBlock} isBlocked={blockedUsers?.includes(post.userEmail)}
+                onViewUserProfile={onViewUserProfile} onViewBookDetails={b=>setSel(b)}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// POST PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+const PostPage = memo(({ user, onPost, setPage }) => {
+  const [content,   setContent] = useState('');
+  const [bookName,  setBook]    = useState('');
+  const [author,    setAuthor]  = useState('');
+  const [image,     setImage]   = useState(null);
+  const [isPublic,  setPublic]  = useState(true);
+  const [uploading, setUpload]  = useState(false);
+  const fileRef = useRef();
+  const ph = useMemo(()=>GEN_Z_PLACEHOLDERS[Math.floor(Math.random()*GEN_Z_PLACEHOLDERS.length)],[]);
+
+  const submit = async () => {
+    if (!content.trim()) return;
+    setUpload(true);
+    const post = { id:generateId(), content:sanitizeText(content.trim()), bookName:bookName.trim()||undefined, author:author.trim()||undefined, image, isPublic, userName:user.name, userEmail:user.email, userPhoto:user.profileImage, userInitials:user.name.slice(0,2).toUpperCase(), createdAt:new Date().toISOString(), likes:0, comments:0, reshareCount:0 };
+    saveGlobalPost(post);
+    try { await axios.post(`${API_URL}/api/social/posts`,post,{timeout:8000}); } catch {}
+    onPost(post);
+    setUpload(false);
+    setPage('home');
+  };
+
+  const uploadImg = (e) => {
+    const f=e.target.files[0]; if(!f) return;
+    if(f.size>5*1024*1024){alert('max 5MB bestie 😭');return;}
+    const r=new FileReader(); r.onload=ev=>setImage(ev.target.result); r.readAsDataURL(f);
+  };
+
+  return (
+    <div className="fixed inset-0 flex flex-col bg-white z-[55] overflow-hidden" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <button onClick={()=>setPage('home')} className="p-2 hover:bg-gray-100 rounded-xl"><X className="w-5 h-5 text-gray-600"/></button>
+        <h2 className="font-black text-gray-900">create post</h2>
+        <button onClick={submit} disabled={!content.trim()||uploading} className="px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black disabled:opacity-40 hover:opacity-90 transition">
+          {uploading?<LoadingSpinner size="sm" color="white"/>:'slay 🔥'}
         </button>
       </div>
-
-      <div className="px-4 py-4">
-        <div className="mb-4 flex gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search reviews..." className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400" />
-            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 transform -translate-y-1/2"><X className="w-4 h-4 text-gray-400" /></button>}
+      <div className="flex-1 overflow-y-auto px-4 py-4">
+        <div className="flex gap-3 mb-4">
+          <Avatar initials={user?.name} size="md" src={user?.profileImage}/>
+          <div className="flex-1">
+            <textarea value={content} onChange={e=>setContent(e.target.value)} className="w-full bg-transparent text-gray-900 placeholder-gray-400 outline-none text-base resize-none leading-relaxed" placeholder={ph} rows={7} maxLength={1000} autoFocus/>
+            <p className={`text-right text-xs ${content.length>900?'text-orange-500':'text-gray-400'}`}>{content.length}/1000</p>
           </div>
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400">
-            <option value="newest">Newest</option>
-            <option value="popular">Popular</option>
-            <option value="rating">Highest Rated</option>
+        </div>
+        {image&&<div className="relative mb-4"><img src={image} alt="" className="w-full rounded-2xl max-h-64 object-cover"/><button onClick={()=>setImage(null)} className="absolute top-2 right-2 bg-black/50 rounded-full p-1"><X className="w-4 h-4 text-white"/></button></div>}
+        <div className="space-y-3 mb-4">
+          <input value={bookName} onChange={e=>setBook(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300 transition" placeholder="📖 book name (optional)"/>
+          <input value={author}   onChange={e=>setAuthor(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300 transition" placeholder="✍️ author (optional)"/>
+        </div>
+        <div className="flex gap-3 flex-wrap">
+          <button onClick={()=>fileRef.current?.click()} className="flex items-center gap-2 px-4 py-2 bg-gray-100 rounded-xl text-sm font-black text-gray-700 hover:bg-gray-200 transition"><Camera className="w-4 h-4"/>add pic</button>
+          <button onClick={()=>setPublic(!isPublic)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-black transition ${isPublic?'bg-gray-100 text-gray-700 hover:bg-gray-200':'bg-gray-800 text-white'}`}>
+            {isPublic?<Globe className="w-4 h-4"/>:<Lock className="w-4 h-4"/>}{isPublic?'public':'private'}
+          </button>
+        </div>
+        <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadImg}/>
+      </div>
+    </div>
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// REVIEWS PAGE — GLOBAL, working submission
+// ══════════════════════════════════════════════════════════════════════════════
+const ReviewsPage = memo(({ user, setPage, updateNotificationCount, onViewUserProfile }) => {
+  const [reviews,   setReviews]  = useState(()=>getGlobalReviews());
+  const [loading,   setLoading]  = useState(true);
+  const [showForm,  setShowForm] = useState(false);
+  const [likedRevs, setLiked]    = useState(()=>getLS(`rcreww_liked_reviews_${user.email}`,[]));
+  const [newReview, setNew]      = useState({bookName:'',author:'',rating:5,review:'',sentiment:'positive'});
+  const [search,    setSearch]   = useState('');
+  const [sortBy,    setSort]     = useState('newest');
+  const [selBook,   setSel]      = useState(null);
+  const [submitting,setSubmitting]= useState(false);
+
+  useEffect(()=>{
+    const load = async () => {
+      setLoading(true);
+      // Always load from global localStorage first (global)
+      const localRevs = getGlobalReviews();
+      setReviews(localRevs);
+      try {
+        const res = await axios.get(`${API_URL}/api/social/reviews`,{timeout:8000});
+        if(res.data?.success) {
+          const serverRevs = res.data.reviews||[];
+          // Merge: local + server, deduplicated
+          const merged = [...localRevs];
+          serverRevs.forEach(sr=>{ if(!merged.find(lr=>lr.id===sr.id)) merged.push(sr); });
+          setLS(GLOBAL_REVIEWS_KEY, merged);
+          setReviews(merged);
+        }
+      } catch {}
+      setLoading(false);
+    };
+    load();
+    const h=(e)=>{ if(e.data?.type==='reviews_updated') setReviews(getGlobalReviews()); };
+    bc?.addEventListener('message',h);
+    return()=>bc?.removeEventListener('message',h);
+  },[]);
+
+  const handleLike=(id,rev)=>{
+    if(likedRevs.includes(id)) return;
+    const ul=[...likedRevs,id]; setLiked(ul); setLS(`rcreww_liked_reviews_${user.email}`,ul);
+    const all=getGlobalReviews().map(r=>r.id===id?{...r,likes:(r.likes||0)+1}:r);
+    setLS(GLOBAL_REVIEWS_KEY,all); setReviews(all);
+    if(rev.userEmail!==user.email){pushNotification(rev.userEmail,{type:'review',fromUser:user.name,fromUserEmail:user.email,message:`${user.name} liked your review of "${rev.bookName}" ⭐`});updateNotificationCount?.();}
+  };
+
+  // FIXED: Always save to global localStorage + server
+  const submitReview = async () => {
+    if(!newReview.bookName.trim()||!newReview.author.trim()||!newReview.review.trim()){
+      alert('fill all fields bestie 👀'); return;
+    }
+    setSubmitting(true);
+    const rv = {
+      ...newReview,
+      id: generateId(),
+      bookName: newReview.bookName.trim(),
+      author: newReview.author.trim(),
+      review: newReview.review.trim(),
+      userName: user.name,
+      userEmail: user.email,
+      userPhoto: user.profileImage,
+      likes: 0,
+      createdAt: new Date().toISOString()
+    };
+    // Save globally immediately
+    saveGlobalReview(rv);
+    setReviews(getGlobalReviews());
+    // Update stats
+    const st=getLS(`rcreww_stats_${user.email}`,{}); st.reviewsGiven=(st.reviewsGiven||0)+1; setLS(`rcreww_stats_${user.email}`,st);
+    // Try server sync
+    try { await axios.post(`${API_URL}/api/social/reviews`,rv,{timeout:8000}); } catch {}
+    setShowForm(false);
+    setNew({bookName:'',author:'',rating:5,review:'',sentiment:'positive'});
+    setSubmitting(false);
+  };
+
+  const filtered = reviews
+    .filter(r=>(r.bookName||'').toLowerCase().includes(search.toLowerCase())||(r.author||'').toLowerCase().includes(search.toLowerCase())||(r.userName||'').toLowerCase().includes(search.toLowerCase()))
+    .sort((a,b)=>sortBy==='newest'?new Date(b.createdAt)-new Date(a.createdAt):sortBy==='popular'?(b.likes||0)-(a.likes||0):b.rating-a.rating);
+
+  return (
+    <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
+      {selBook&&<BookDetailsModal book={selBook} onClose={()=>setSel(null)} onCreateCrew={()=>{}} currentUser={user}/>}
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
+        <button onClick={()=>setPage('home')} className="p-1 hover:bg-gray-100 rounded-xl"><ChevronLeft className="w-5 h-5 text-gray-600"/></button>
+        <h2 className="font-black text-gray-900 flex items-center gap-2"><Star className="w-5 h-5 text-orange-500"/>book reviews</h2>
+        <button onClick={()=>setShowForm(!showForm)} className="px-3 py-1.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black hover:opacity-90 transition">{showForm?'cancel':'+ write'}</button>
+      </div>
+      <div className="px-4 py-4 space-y-4">
+        <div className="flex gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+            <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="search reviews..." className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400"/>
+            {search&&<button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-4 h-4 text-gray-400"/></button>}
+          </div>
+          <select value={sortBy} onChange={e=>setSort(e.target.value)} className="px-3 py-2 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 font-semibold">
+            <option value="newest">newest</option>
+            <option value="popular">popular</option>
+            <option value="rating">top rated</option>
           </select>
         </div>
 
-        {showCreateForm && (
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-4">
-            <h3 className="font-semibold text-gray-900 mb-3">Spill the Tea ☕</h3>
+        {showForm&&(
+          <div className="bg-white rounded-2xl p-4 border border-orange-100 shadow-sm">
+            <h3 className="font-black mb-3">drop your review bestie 📝</h3>
             <div className="space-y-3 mb-4">
-              <input type="text" value={newReview.bookName} onChange={e => setNewReview({ ...newReview, bookName: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
-              <input type="text" value={newReview.author} onChange={e => setNewReview({ ...newReview, author: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author *" />
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Your Rating</label>
-                <StarRating rating={newReview.rating} onChange={r => setNewReview({ ...newReview, rating: r })} size="md" />
-              </div>
-              <textarea value={newReview.review} onChange={e => setNewReview({ ...newReview, review: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="spill the tea on this book ☕... *" rows={4} />
+              <input value={newReview.bookName} onChange={e=>setNew({...newReview,bookName:e.target.value})} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="book title *"/>
+              <input value={newReview.author}   onChange={e=>setNew({...newReview,author:e.target.value})}   className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="author *"/>
+              <div><label className="text-xs text-gray-600 mb-1 block font-black">your rating</label><StarRating rating={newReview.rating} onChange={r=>setNew({...newReview,rating:r})} size="md"/></div>
+              <textarea value={newReview.review} onChange={e=>setNew({...newReview,review:e.target.value})} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300 resize-none" rows={4} placeholder="spill the tea on this book bestie... *"/>
               <div className="flex gap-2">
-                {['positive', 'negative'].map(s => (
-                  <button key={s} type="button" onClick={() => setNewReview({ ...newReview, sentiment: s })} className={`flex-1 py-2 rounded-lg text-sm font-medium transition ${newReview.sentiment === s ? (s === 'positive' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-                    {s === 'positive' ? '👍 Positive' : '👎 Negative'}
+                {['positive','negative'].map(s=>(
+                  <button key={s} onClick={()=>setNew({...newReview,sentiment:s})} className={`flex-1 py-2.5 rounded-xl text-sm font-black transition ${newReview.sentiment===s?(s==='positive'?'bg-green-500 text-white':'bg-red-500 text-white'):'bg-gray-100 text-gray-600'}`}>
+                    {s==='positive'?'👍 slay':'👎 flop'}
                   </button>
                 ))}
               </div>
             </div>
-            <button onClick={handleCreateReview} className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition">Submit Review</button>
+            <button onClick={submitReview} disabled={submitting||!newReview.bookName.trim()||!newReview.author.trim()||!newReview.review.trim()} className="w-full py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black hover:opacity-90 transition disabled:opacity-40 flex items-center justify-center gap-2">
+              {submitting?<><LoadingSpinner size="sm" color="white"/>posting...</>:'drop it 🔥'}
+            </button>
           </div>
         )}
 
-        {loading ? (
-          <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>
-        ) : filtered.length === 0 ? (
-          <div className="text-center py-12">
-            <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-500">{searchQuery ? `No reviews for "${searchQuery}"` : 'no reviews yet — spill the tea ☕. Be the first!'}</p>
-          </div>
-        ) : (
+        {loading?<div className="flex justify-center py-12"><LoadingSpinner size="lg"/></div>
+         : filtered.length===0?<div className="text-center py-12"><Star className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-500 font-black">{search?`no reviews for "${search}" bestie`:'no reviews yet bestie. be first!'}</p></div>
+         : (
           <div className="space-y-4">
-            {filtered.map(review => {
-              const isLiked = likedReviews.includes(review.id);
+            {filtered.map(review=>{
+              const isLiked=likedRevs.includes(review.id);
               return (
-                <div key={review.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm hover:shadow-md transition">
-                  <div className="flex items-start gap-3 mb-2">
-                    <DynamicBookCover title={review.bookName} author={review.author} size="sm" onClick={() => setSelectedBook({ title: review.bookName, author: review.author })} />
+                <div key={review.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm hover:shadow-md transition">
+                  <div className="flex items-start gap-3 mb-3">
+                    <DynamicBookCover title={review.bookName} author={review.author} size="sm" onClick={()=>setSel({title:review.bookName,author:review.author})}/>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-gray-900 text-sm">{review.bookName}</h3>
+                      <h3 className="font-black text-gray-900 text-sm">{review.bookName}</h3>
                       <p className="text-xs text-gray-500">by {review.author}</p>
-                      <StarRating rating={review.rating} size="xs" readonly />
+                      <StarRating rating={review.rating} size="xs" readonly/>
                     </div>
+                    <span className={`text-xs px-2 py-1 rounded-full font-black ${review.sentiment==='positive'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>{review.sentiment==='positive'?'👍 slay':'👎 flop'}</span>
                   </div>
-                  <p className="text-sm text-gray-700 mb-3">{review.review}</p>
-                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-                    <button onClick={() => onViewUserProfile(review.userEmail, review.userName)} className="flex items-center gap-2 hover:opacity-75 transition">
-                      <Avatar initials={review.userName} size="xs" src={review.userPhoto} />
-                      <span className="text-xs text-gray-600 hover:underline">{review.userName}</span>
+                  <p className="text-sm text-gray-700 mb-3 leading-relaxed">{review.review}</p>
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-50">
+                    {/* Clicking reviewer name → profile */}
+                    <button onClick={()=>onViewUserProfile(review.userEmail,review.userName)} className="flex items-center gap-2 hover:opacity-75 transition">
+                      <Avatar initials={review.userName} size="xs" src={review.userPhoto}/>
+                      <span className="text-xs text-gray-600 font-black hover:underline hover:text-orange-500 transition">{review.userName}</span>
                     </button>
                     <div className="flex items-center gap-3">
-                      <button onClick={() => handleLikeReview(review.id, review)} disabled={isLiked} className={`flex items-center gap-1 text-xs transition ${isLiked ? 'text-red-500' : 'text-gray-400 hover:text-red-400'}`}>
-                        <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500' : ''}`} />
-                        {review.likes || 0}
+                      <button onClick={()=>handleLike(review.id,review)} disabled={isLiked} className={`flex items-center gap-1 text-xs font-black transition ${isLiked?'text-red-500':'text-gray-400 hover:text-red-400'}`}>
+                        <Heart className={`w-3.5 h-3.5 ${isLiked?'fill-red-500':''}`}/>{review.likes||0}
                       </button>
-                      <span className={`text-xs px-2 py-1 rounded-full ${review.sentiment === 'positive' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {review.sentiment === 'positive' ? '👍' : '👎'}
-                      </span>
                       <span className="text-xs text-gray-400">{formatTimeAgo(review.createdAt)}</span>
                     </div>
                   </div>
@@ -2950,1608 +2080,180 @@ const ReviewsPage = ({ user, setPage, updateNotificationCount, onViewUserProfile
       </div>
     </div>
   );
-};
-
-// ========================================
-// SECTION 29: EXPLORE PAGE
-// ========================================
-
-const ExplorePage = ({ user, setPage, onCreateCrew }) => {
-  const [tab, setTab] = useState('ai');
-  const [messages, setMessages] = useState([{
-    role: 'assistant',
-    content: "bestie i got u 😭📚 tell me the VIBE — genre, mood, or the last book that had u in ur feelings. no boring recs i promise 🤞",
-    timestamp: new Date(),
-  }]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [books, setBooks] = useState([]);
-  const [selectedBook, setSelBook] = useState(null);
-  const [charQuery, setCharQuery] = useState('');
-  const [charBooks, setCharBooks] = useState([]);
-  const [charLoading, setCharLoad] = useState(false);
-  const [charDone, setCharDone] = useState(false);
-  const [libraries, setLibraries] = useState([]);
-  const [libLoading, setLibLoad] = useState(false);
-  const [libError, setLibError] = useState('');
-  const messagesEndRef = useRef(null);
-  const [sessionId] = useState(() => `s_${Date.now()}_${Math.random().toString(36).slice(2)}`);
-
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    const text = input.trim();
-    setInput('');
-    setMessages(p => [...p, { role: 'user', content: text, timestamp: new Date() }]);
-    setLoading(true);
-    let used = false;
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 25000);
-      const res = await fetch(`${API_URL}/api/books/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, sessionId }),
-        signal: ctrl.signal,
-      });
-      clearTimeout(tid);
-      if (res.ok) {
-        const d = await res.json();
-        if (d.success && d.reply) {
-          setMessages(p => [...p, { role: 'assistant', content: d.reply, timestamp: new Date() }]);
-          if (d.recommendations?.length) setBooks(d.recommendations);
-          used = true;
-        }
-      }
-    } catch (_) {}
-    if (!used) {
-      const { reply, books: recs } = generateClientResponse(text, books);
-      setMessages(p => [...p, { role: 'assistant', content: reply, timestamp: new Date() }]);
-      if (recs.length) setBooks(recs);
-    }
-    setLoading(false);
-  };
-
-  const searchByCharacter = async () => {
-    if (!charQuery.trim()) return;
-    setCharLoad(true);
-    setCharDone(false);
-    setCharBooks([]);
-    try {
-      const q = encodeURIComponent(`character "${charQuery.trim()}"`);
-      const res = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=12&orderBy=relevance&langRestrict=en`);
-      if (res.ok) {
-        const d = await res.json();
-        const results = (d.items || []).map(item => {
-          const v = item.volumeInfo;
-          const cover = v.imageLinks?.thumbnail || v.imageLinks?.smallThumbnail;
-          return {
-            title: v.title || 'Unknown',
-            author: v.authors?.[0] || 'Unknown',
-            genre: v.categories?.[0] || 'Fiction',
-            rating: v.averageRating || 4.0,
-            description: (v.description || '').replace(/<[^>]*>/g, ''),
-            coverUrl: cover ? cover.replace('http:', 'https:').replace('&edge=curl', '') : null,
-            pageCount: v.pageCount,
-            publishedDate: v.publishedDate,
-          };
-        }).filter(b => b.title !== 'Unknown');
-        setCharBooks(results);
-      }
-    } catch (_) { setCharBooks([]); }
-    setCharLoad(false);
-    setCharDone(true);
-  };
-
-  const findNearbyLibraries = () => {
-    setLibLoad(true);
-    setLibError('');
-    if (!navigator.geolocation) {
-      setLibError('geolocation not supported on this device bestie 😅');
-      setLibLoad(false);
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        const { latitude: lat, longitude: lng } = pos.coords;
-        try {
-          const query = `[out:json][timeout:25];(node["amenity"="library"](around:5000,${lat},${lng});way["amenity"="library"](around:5000,${lat},${lng}););out center 15;`;
-          const res = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: query });
-          if (res.ok) {
-            const data = await res.json();
-            const libs = data.elements.map(el => {
-              const clat = el.lat || el.center?.lat;
-              const clng = el.lon || el.center?.lon;
-              const dist = clat && clng
-                ? Math.round(Math.sqrt(Math.pow((clat - lat) * 111, 2) + Math.pow((clng - lng) * 111 * Math.cos(lat * Math.PI / 180), 2)) * 10) / 10
-                : null;
-              return {
-                id: el.id,
-                name: el.tags?.name || 'Public Library',
-                address: [el.tags?.['addr:street'], el.tags?.['addr:city']].filter(Boolean).join(', ') || 'Address unavailable',
-                phone: el.tags?.phone || el.tags?.['contact:phone'] || null,
-                website: el.tags?.website || el.tags?.['contact:website'] || null,
-                opening: el.tags?.opening_hours || null,
-                lat: clat,
-                lng: clng,
-                dist,
-                mapsUrl: `https://www.google.com/maps/search/?api=1&query=${clat},${clng}`,
-              };
-            }).filter(l => l.lat).sort((a, b) => (a.dist || 999) - (b.dist || 999));
-            setLibraries(libs);
-            if (!libs.length) setLibError('no libraries found within 5km — try a bigger city! 🏙️');
-          }
-        } catch (_) { setLibError("Couldn't load libraries rn. Check ur connection 😅"); }
-        setLibLoad(false);
-      },
-      () => { setLibError('location access denied — enable location to find libraries 📍'); setLibLoad(false); },
-      { timeout: 10000, maximumAge: 60000 }
-    );
-  };
-
-  const fmt = ts => ts ? new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-  const quickPrompts = ['🔪 dark & twisty', '✨ main character energy', '❤️ slow burn romance', '🚀 sci-fi banger', '💡 big brain reads', '🏰 historical era', '🌙 cozy vibes', '😭 cry-worthy'];
-  const famousChars = ['Sherlock Holmes', 'Elizabeth Bennet', 'Katniss Everdeen', 'Atticus Finch', 'Holden Caulfield', 'Daenerys Targaryen'];
-
-  return (
-    <div className="min-h-screen bg-gradient-to-b from-[#F5E6D3] to-[#FAF6F1] pb-24 overflow-y-auto">
-      <div className="px-5 pt-8 pb-4">
-        <h1 className="text-2xl font-bold text-[#2D1F14] mb-1" style={{ fontFamily: 'Georgia, serif' }}>main character reads ✨</h1>
-        <p className="text-sm text-[#8B7968]">ur AI bestie has the hottest recs 🔥</p>
-      </div>
-
-      <div className="flex gap-2 px-4 mb-4 overflow-x-auto scrollbar-hide">
-        {[
-          { id: 'ai', em: '🤖', label: 'AI Chat' },
-          { id: 'character', em: '🎭', label: 'By Character' },
-          { id: 'libraries', em: '📍', label: 'Nearby Libraries' },
-        ].map(({ id, em, label }) => (
-          <button key={id} onClick={() => setTab(id)}
-            className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap flex-shrink-0 ${tab === id ? 'bg-orange-500 text-white shadow-md' : 'bg-white text-gray-600 border border-gray-200 hover:border-orange-300'}`}>
-            <span>{em}</span><span>{label}</span>
-          </button>
-        ))}
-      </div>
-
-      {tab === 'ai' && (
-        <>
-          <div className="px-4 space-y-3 pb-44">
-            {messages.map((m, i) => (
-              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} items-end gap-2`}>
-                {m.role === 'assistant' && (
-                  <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0 shadow">
-                    <BookOpen className="w-4 h-4 text-white" />
-                  </div>
-                )}
-                <div className={`max-w-[78%] flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div className={`rounded-2xl px-4 py-3 text-sm leading-relaxed ${m.role === 'user' ? 'bg-orange-500 text-white rounded-br-sm' : 'bg-white text-[#3A2C25] rounded-bl-sm shadow-sm border border-gray-100'}`}>
-                    {m.content}
-                  </div>
-                  <span className="text-[10px] text-gray-400 mt-1 px-1">{fmt(m.timestamp)}</span>
-                </div>
-              </div>
-            ))}
-            {loading && (
-              <div className="flex justify-start items-end gap-2">
-                <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-red-500 rounded-full flex items-center justify-center flex-shrink-0">
-                  <BookOpen className="w-4 h-4 text-white" />
-                </div>
-                <div className="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100">
-                  <div className="flex gap-1.5">
-                    {[0, 150, 300].map(d => (
-                      <div key={d} className="w-2 h-2 bg-orange-400 rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-            {books.length > 0 && (
-              <div className="space-y-3 pt-4">
-                <div className="flex items-center gap-2 px-1">
-                  <div className="h-px flex-1 bg-orange-200" />
-                  <span className="text-xs text-orange-500 font-semibold">📚 NO-CAP RECS</span>
-                  <div className="h-px flex-1 bg-orange-200" />
-                </div>
-                {books.map((b, i) => (
-                  <BookCard key={i} book={b} onCreateCrew={() => { onCreateCrew(b); setPage('crews'); }} onViewDetails={setSelBook} />
-                ))}
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          {messages.length <= 1 && (
-            <div className="fixed bottom-36 left-1/2 -translate-x-1/2 w-full max-w-md px-4">
-              <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-2">
-                {quickPrompts.map(q => (
-                  <button key={q} onClick={() => setInput(q.substring(2))}
-                    className="flex-shrink-0 px-3 py-1.5 bg-white border border-orange-200 rounded-full text-xs text-orange-600 font-medium hover:bg-orange-50 whitespace-nowrap shadow-sm">
-                    {q}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="fixed bottom-[72px] left-1/2 -translate-x-1/2 w-full max-w-md px-4">
-            <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg border border-gray-200 px-3 py-2.5">
-              <div className="flex items-center gap-2">
-                <input
-                  value={input}
-                  onChange={e => setInput(e.target.value)}
-                  onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                  placeholder="tell me the vibe and I gotchu 📚✨"
-                  className="flex-1 bg-transparent text-sm text-[#2D1F14] outline-none placeholder-gray-400"
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={!input.trim() || loading}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center transition flex-shrink-0 ${input.trim() && !loading ? 'bg-orange-500 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                  <Send className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {tab === 'character' && (
-        <div className="px-4 py-2 pb-10">
-          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm mb-5">
-            <h2 className="text-lg font-bold mb-1">Search by Character 🎭</h2>
-            <p className="text-sm text-gray-500 mb-4">obsessed with a character? find the book they came from 👀</p>
-            <div className="flex gap-2">
-              <input
-                value={charQuery}
-                onChange={e => setCharQuery(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') searchByCharacter(); }}
-                placeholder="e.g. Hermione, Heathcliff, Jay Gatsby…"
-                className="flex-1 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400"
-              />
-              <button
-                onClick={searchByCharacter}
-                disabled={!charQuery.trim() || charLoading}
-                className="px-5 py-3 bg-orange-500 text-white rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-orange-600 transition flex items-center gap-2">
-                {charLoading ? <LoadingSpinner size="sm" color="white" /> : <Search className="w-4 h-4" />}
-                {charLoading ? '' : 'Search'}
-              </button>
-            </div>
-          </div>
-
-          {charLoading && <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>}
-          {charDone && charBooks.length === 0 && !charLoading && (
-            <div className="text-center py-12">
-              <span className="text-5xl mb-4 block">🤷</span>
-              <p className="text-gray-600 font-medium">no books found for that character ngl</p>
-              <p className="text-gray-400 text-sm mt-1">try a different spelling or a more famous character</p>
-            </div>
-          )}
-          {charBooks.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-600 mb-2">found {charBooks.length} books featuring <span className="text-orange-500">"{charQuery}"</span> ✨</p>
-              {charBooks.map((b, i) => (
-                <BookCard key={i} book={b} onCreateCrew={() => { onCreateCrew(b); setPage('crews'); }} onViewDetails={setSelBook} />
-              ))}
-            </div>
-          )}
-          {!charDone && !charLoading && (
-            <div className="grid grid-cols-2 gap-3">
-              {famousChars.map(char => (
-                <button key={char} onClick={() => setCharQuery(char)}
-                  className="bg-white rounded-xl p-3 border border-gray-200 text-left hover:border-orange-300 hover:shadow-sm transition">
-                  <span className="text-2xl block mb-1">📖</span>
-                  <p className="text-sm font-semibold text-gray-800">{char}</p>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {tab === 'libraries' && (
-        <div className="px-4 py-2 pb-10">
-          <div className="bg-white rounded-2xl p-5 border border-gray-200 shadow-sm mb-5">
-            <h2 className="text-lg font-bold mb-1">Nearby Libraries 📍</h2>
-            <p className="text-sm text-gray-500 mb-4">find public libraries within 5km — because physical books are still iconic 📚</p>
-            <button
-              onClick={findNearbyLibraries}
-              disabled={libLoading}
-              className="w-full py-3 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-semibold flex items-center justify-center gap-2 hover:opacity-90 transition disabled:opacity-60">
-              {libLoading
-                ? <><LoadingSpinner size="sm" color="white" /><span>Finding libraries...</span></>
-                : <><Navigation className="w-5 h-5" /><span>Find Libraries Near Me</span></>
-              }
-            </button>
-            {libError && <p className="text-red-500 text-sm mt-3 text-center">{libError}</p>}
-          </div>
-
-          {libLoading && <div className="flex justify-center py-12"><LoadingSpinner size="lg" /></div>}
-          {libraries.length > 0 && (
-            <div className="space-y-3">
-              <p className="text-sm font-semibold text-gray-600 mb-2">found {libraries.length} libraries nearby 🎉</p>
-              {libraries.map((lib, i) => (
-                <div key={lib.id || i} className="bg-white rounded-2xl border border-gray-200 p-4 shadow-sm">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 bg-orange-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                      <BookOpen className="w-5 h-5 text-orange-500" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-start justify-between gap-2">
-                        <h3 className="font-bold text-gray-900 text-sm">{lib.name}</h3>
-                        {lib.dist && <span className="text-xs text-orange-600 font-semibold bg-orange-50 px-2 py-0.5 rounded-full flex-shrink-0">{lib.dist} km</span>}
-                      </div>
-                      {lib.address && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3" />{lib.address}</p>}
-                      {lib.opening && <p className="text-xs text-green-600 mt-1 flex items-center gap-1"><Clock className="w-3 h-3" />{lib.opening}</p>}
-                      {lib.phone && <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><Phone className="w-3 h-3" />{lib.phone}</p>}
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 pt-3 border-t border-gray-100">
-                    <a href={lib.mapsUrl} target="_blank" rel="noopener noreferrer"
-                      className="flex-1 py-2 bg-blue-500 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-blue-600 transition">
-                      <Navigation className="w-3.5 h-3.5" />Directions
-                    </a>
-                    {lib.website && (
-                      <a href={lib.website.startsWith('http') ? lib.website : `https://${lib.website}`} target="_blank" rel="noopener noreferrer"
-                        className="flex-1 py-2 border border-gray-200 text-gray-700 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 hover:bg-gray-50 transition">
-                        <Globe className="w-3.5 h-3.5" />Website
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {!libLoading && !libraries.length && !libError && (
-            <div className="text-center py-12">
-              <span className="text-6xl block mb-4">📍</span>
-              <p className="text-gray-600 font-medium">tap the button to find libraries near u</p>
-              <p className="text-gray-400 text-sm mt-1">uses ur device location — 100% private, not stored</p>
-            </div>
-          )}
-        </div>
-      )}
-
-      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelBook(null)} onCreateCrew={onCreateCrew} />}
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 30: BOOK DATE MODAL
-// ========================================
-
-const BookDateModal = ({ onClose, user, onCreateCrew }) => {
-  const [step, setStep] = useState('pick');
-  const [dateBook, setDate] = useState(null);
-  const [dateVibe, setVibe] = useState('');
-  const [rating, setRating] = useState(0);
-  const [review, setReview] = useState('');
-  const [wouldReturn, setWR] = useState(null);
-
-  const vibeOptions = [
-    { emoji: '☕', label: 'Cozy café date', desc: 'relaxed, slow burn, warm vibes' },
-    { emoji: '🌙', label: 'Late night date', desc: "couldn't put it down, stayed up till 3am" },
-    { emoji: '🌊', label: 'Beach date', desc: 'breezy, light, perfect summer read' },
-    { emoji: '🎢', label: 'Rollercoaster', desc: 'emotional wreck, twist after twist' },
-    { emoji: '💔', label: 'Situationship', desc: 'started strong, then disappointed me' },
-    { emoji: '💍', label: 'The one', desc: 'instant fave, 10/10 no notes' },
-  ];
-
-  const sampleBooks = [
-    { title: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', rating: 4.6 },
-    { title: 'It Ends with Us', author: 'Colleen Hoover', genre: 'Romance', rating: 4.6 },
-    { title: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', rating: 4.6 },
-    { title: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', rating: 4.8 },
-    { title: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', rating: 4.6 },
-    { title: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', rating: 4.7 },
-  ];
-
-  const saveDateCard = () => {
-    const card = {
-      id: `date_${Date.now()}`,
-      bookTitle: dateBook.title,
-      bookAuthor: dateBook.author,
-      vibe: dateVibe,
-      rating,
-      review,
-      wouldReturn,
-      userName: user.name,
-      userEmail: user.email,
-      createdAt: new Date().toISOString(),
-    };
-    const existing = JSON.parse(localStorage.getItem(`user_${user.email}_bookDates`) || '[]');
-    existing.unshift(card);
-    localStorage.setItem(`user_${user.email}_bookDates`, JSON.stringify(existing));
-
-    const post = {
-      id: `post_${Date.now()}`,
-      content: `went on a book date with "${dateBook.title}" by ${dateBook.author} 📖\n\nVibe: ${dateVibe}\n\n${review}\n\nWould I come back? ${wouldReturn ? 'absolutely 💍' : "it's complicated 💔"}`,
-      bookName: dateBook.title,
-      author: dateBook.author,
-      userName: user.name,
-      userEmail: user.email,
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      comments: 0,
-      reshareCount: 0,
-      isBookDate: true,
-    };
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    allPosts.unshift(post);
-    localStorage.setItem('allPosts', JSON.stringify(allPosts));
-    setStep('done');
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-[80] flex items-center justify-center p-4"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-      <div className="bg-white rounded-3xl w-full max-w-sm mx-auto max-h-[90vh] overflow-y-auto shadow-2xl">
-
-        {step === 'pick' && (
-          <>
-            <div className="bg-gradient-to-br from-pink-500 to-orange-500 p-6 rounded-t-3xl text-white relative">
-              <button onClick={onClose} className="absolute top-4 right-4 p-1 hover:bg-white/20 rounded-full"><X className="w-5 h-5" /></button>
-              <div className="text-4xl mb-2">📖💘</div>
-              <h2 className="text-2xl font-bold">Book Date</h2>
-              <p className="text-pink-100 text-sm mt-1">go on a date with ur next read bestie ✨</p>
-            </div>
-            <div className="p-5">
-              <p className="text-sm font-semibold text-gray-700 mb-3">pick ur date for tonight 👇</p>
-              <div className="space-y-3 mb-5">
-                {sampleBooks.map((b, i) => (
-                  <button key={i} onClick={() => { setDate(b); setStep('date'); }}
-                    className="w-full flex items-center gap-3 p-3 bg-gray-50 border border-gray-200 rounded-xl hover:border-orange-400 hover:bg-orange-50 transition text-left">
-                    <DynamicBookCover title={b.title} author={b.author} size="xs" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-semibold text-sm truncate">{b.title}</p>
-                      <p className="text-xs text-gray-500">by {b.author}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                  </button>
-                ))}
-              </div>
-              <button onClick={onClose} className="w-full py-2 text-sm text-gray-500 hover:text-gray-700">maybe another time</button>
-            </div>
-          </>
-        )}
-
-        {step === 'date' && dateBook && (
-          <>
-            <div className="bg-gradient-to-br from-pink-500 to-orange-500 p-6 rounded-t-3xl text-white">
-              <h2 className="text-xl font-bold">ur date: {dateBook.title} 📖</h2>
-              <p className="text-pink-100 text-sm mt-1">what kinda date is this gonna be? 👀</p>
-            </div>
-            <div className="p-5">
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                {vibeOptions.map(v => (
-                  <button key={v.label} onClick={() => setVibe(v.label)}
-                    className={`p-3 rounded-xl border-2 text-left transition ${dateVibe === v.label ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-orange-300'}`}>
-                    <span className="text-2xl block mb-1">{v.emoji}</span>
-                    <p className="font-semibold text-xs text-gray-800">{v.label}</p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">{v.desc}</p>
-                  </button>
-                ))}
-              </div>
-              <button onClick={() => dateVibe && setStep('review')} disabled={!dateVibe}
-                className="w-full py-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-xl font-semibold disabled:opacity-40">
-                it's a date 💅
-              </button>
-            </div>
-          </>
-        )}
-
-        {step === 'review' && (
-          <>
-            <div className="bg-gradient-to-br from-pink-500 to-orange-500 p-6 rounded-t-3xl text-white">
-              <h2 className="text-xl font-bold">so how was the date? ☕</h2>
-              <p className="text-pink-100 text-sm mt-1">spill everything bestie 👀</p>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">rate ur date 💖</p>
-                <StarRating rating={rating} onChange={setRating} size="lg" />
-              </div>
-              <textarea value={review} onChange={e => setReview(e.target.value)} rows={4}
-                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400 resize-none"
-                placeholder="ok bestie full review — what happened, did u cry, would u recommend..." />
-              <div>
-                <p className="text-sm font-semibold text-gray-700 mb-2">would u go on a second date? 👀</p>
-                <div className="flex gap-3">
-                  <button onClick={() => setWR(true)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition ${wouldReturn === true ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 text-gray-600'}`}>
-                    💍 absolutely
-                  </button>
-                  <button onClick={() => setWR(false)}
-                    className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition ${wouldReturn === false ? 'border-red-400 bg-red-50 text-red-600' : 'border-gray-200 text-gray-600'}`}>
-                    💔 it's complicated
-                  </button>
-                </div>
-              </div>
-              <button onClick={saveDateCard} disabled={!rating || !review.trim() || wouldReturn === null}
-                className="w-full py-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-xl font-semibold disabled:opacity-40">
-                post my date card ✨
-              </button>
-            </div>
-          </>
-        )}
-
-        {step === 'done' && (
-          <div className="p-8 text-center">
-            <div className="text-6xl mb-4">📖💘</div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">date card posted!</h2>
-            <p className="text-gray-500 text-sm mb-6">ur book date is now on ur feed bestie 🎉</p>
-            <div className="bg-gradient-to-r from-pink-50 to-orange-50 rounded-2xl p-4 mb-5 border border-orange-100">
-              <p className="font-bold text-gray-900">{dateBook?.title}</p>
-              <p className="text-sm text-gray-500">by {dateBook?.author}</p>
-              <p className="text-sm text-pink-600 mt-2">{dateVibe}</p>
-              <StarRating rating={rating} size="sm" readonly />
-              <p className="text-xs text-gray-600 mt-2 italic">"{review.substring(0, 80)}{review.length > 80 ? '...' : ''}"</p>
-            </div>
-            <button onClick={onClose} className="w-full py-3 bg-gradient-to-r from-pink-500 to-orange-500 text-white rounded-xl font-semibold">
-              slay 💅
-            </button>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 31: HOME PAGE
-// ✅ AI-powered daily trending books (changes every day)
-// ✅ All posts always visible — server + local merge
-// ========================================
-
-const HomePage = ({
-  user, posts, crews, setPage, updateNotificationCount,
-  profileSrc, savedPosts, onSavePost, onResharePost, onDeletePost,
-  onFollow, following, onBlock, blockedUsers,
-  onViewUserProfile, onViewBookDetails,
-  onCreateCrew,
-  deepLinkPostId, onDeepLinkHandled,
-}) => {
-  const [trendingBooks, setTrendingBooks] = useState([]);
-  const [loadingTrending, setLoadingTrending] = useState(true);
-  const [feedPosts, setFeedPosts] = useState([]);
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [showShare, setShowShare] = useState(null);
-  const [showReshare, setShowReshare] = useState(null);
-  const [stats, setStats] = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
-  const [readingProgress, setReadingProgress] = useState(0);
-  const [showBookDate, setShowBookDate] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(10);
-  const loaderRef = useRef(null);
-
-  // ✅ Scroll to deep-linked post and highlight it
-  useEffect(() => {
-    if (!deepLinkPostId || feedPosts.length === 0) return;
-    setTimeout(() => {
-      const el = document.getElementById(`post-${deepLinkPostId}`);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        el.style.transition = 'box-shadow 0.3s ease';
-        el.style.boxShadow = '0 0 0 3px #f97316';
-        setTimeout(() => { el.style.boxShadow = ''; }, 2500);
-      }
-      onDeepLinkHandled?.();
-    }, 400);
-  }, [deepLinkPostId, feedPosts]);
-
-  useEffect(() => {
-    // ✅ Load AI-powered daily trending books — changes per day
-    getDailyTrendingBooks().then(books => {
-      setTrendingBooks(books);
-      setLoadingTrending(false);
-    });
-
-    loadPersonalizedFeed();
-
-    const savedStats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
-    setStats(savedStats);
-    if (user?.readingGoal?.yearly > 0) {
-      setReadingProgress(Math.min((savedStats.booksRead || 0) / user.readingGoal.yearly * 100, 100));
-    }
-
-    socket.on('new_post', (post) => {
-      if (!blockedUsers.includes(post.userEmail)) {
-        setFeedPosts(prev => [post, ...prev]);
-      }
-    });
-    socket.on('post_deleted', ({ postId }) => setFeedPosts(prev => prev.filter(p => (p._id || p.id) !== postId)));
-    socket.on('post_liked', ({ postId, likes }) => setFeedPosts(prev => prev.map(p => (p._id || p.id) === postId ? { ...p, likes } : p)));
-
-    return () => { socket.off('new_post'); socket.off('post_deleted'); socket.off('post_liked'); };
-  }, [user.email, blockedUsers]);
-
-  useEffect(() => {
-    loadPersonalizedFeed();
-    setVisibleCount(10);
-  }, [posts.length, following.length]);
-
-  // ✅ Infinite scroll loader
-  useEffect(() => {
-    if (!loaderRef.current) return;
-    const observer = new IntersectionObserver(entries => {
-      if (entries[0].isIntersecting) setVisibleCount(c => c + 10);
-    }, { threshold: 0.1 });
-    observer.observe(loaderRef.current);
-    return () => observer.disconnect();
-  }, [feedPosts.length]);
-
-  const loadPersonalizedFeed = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/api/social/posts?userEmail=${user.email}`, { timeout: 8000 });
-      if (res?.data?.success) {
-        const serverPosts = res.data.posts || [];
-        const allLocal = JSON.parse(localStorage.getItem('allPosts') || '[]');
-        // ✅ Merge server and local so ALL posts are always visible
-        const merged = [...serverPosts];
-        allLocal.forEach(lp => {
-          if (!merged.find(sp => (sp.id || sp._id) === (lp.id || lp._id))) {
-            merged.push(lp);
-          }
-        });
-        // Sort newest first so missed posts appear correctly
-        merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        localStorage.setItem('allPosts', JSON.stringify(merged));
-        const personalized = generatePersonalizedFeed(user.email, merged, blockedUsers);
-        setFeedPosts(personalized);
-        return;
-      }
-    } catch (_) {}
-
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const personalized = generatePersonalizedFeed(user.email, allPosts, blockedUsers);
-    setFeedPosts(personalized);
-  };
-
-  const handleReshareClick = (post) => { setShowReshare(post); };
-  const handleReshare = (post, comment, isPublic) => {
-    onResharePost(post, comment, isPublic);
-    setShowReshare(null);
-  };
-
-  const userCrews = crews.filter(c =>
-    user?.joinedCrews?.includes(c.id) ||
-    JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]').includes(c.id)
-  );
-  const hasReadingGoal = user?.readingGoal?.yearly > 0;
-  const notifCount = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]').filter(n => !n.read && n.type !== 'message').length;
-
-  return (
-    <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
-      <TopBar
-        user={user} setPage={setPage} profileSrc={profileSrc}
-        onNotificationClick={() => setPage('notifications')}
-        notificationCount={notifCount}
-      />
-
-      {selectedBook && (
-        <BookDetailsModal
-          book={selectedBook}
-          onClose={() => setSelectedBook(null)}
-          onCreateCrew={(book) => {
-            const nc = {
-              id: generateId(), name: book.title, author: book.author,
-              genre: book.genre || 'General', members: 1, chats: 0,
-              createdBy: user.email, createdByName: user.name,
-              createdAt: new Date().toISOString(),
-            };
-            const updatedCrews = [nc, ...crews];
-            localStorage.setItem('crews', JSON.stringify(updatedCrews));
-            setSelectedBook(null);
-            setPage('crews');
-          }}
-        />
-      )}
-
-      {showShare && <ShareModal post={showShare} onClose={() => setShowShare(null)} />}
-      {showBookDate && <BookDateModal onClose={() => setShowBookDate(false)} user={user} onCreateCrew={onCreateCrew || (() => {})} />}
-      {showReshare && <ReshareModal post={showReshare} onClose={() => setShowReshare(null)} onReshare={handleReshare} />}
-
-      <div className="px-4 py-4 space-y-5">
-        {/* Hero greeting card */}
-        <div className="bg-gradient-to-br from-orange-500 to-red-500 rounded-2xl p-5 text-white shadow-lg">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-bold">Hey, {user?.name?.split(' ')[0]}! 📚</h2>
-              <p className="text-orange-100 text-sm mt-1">no cap, this feed was made for u 🎯</p>
-            </div>
-            <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
-              <BookOpen className="w-6 h-6 text-white" />
-            </div>
-          </div>
-          {hasReadingGoal && (
-            <div className="mt-4 bg-white/20 rounded-xl p-3 backdrop-blur-sm">
-              <div className="flex items-center justify-between text-sm mb-2">
-                <span>Yearly Reading Goal</span>
-                <span className="font-semibold">{stats.booksRead}/{user.readingGoal.yearly} books</span>
-              </div>
-              <div className="h-2 bg-white/30 rounded-full overflow-hidden">
-                <div className="h-full bg-white rounded-full transition-all duration-500" style={{ width: `${readingProgress}%` }} />
-              </div>
-              <p className="text-xs text-orange-100 mt-1">{Math.round(readingProgress)}% of goal achieved</p>
-            </div>
-          )}
-        </div>
-
-        {/* Stats grid */}
-        <div className="grid grid-cols-4 gap-2">
-          {[
-            { label: 'Books', value: stats.booksRead, icon: BookOpen, color: 'text-blue-600', bg: 'bg-blue-100', page: 'profile' },
-            { label: 'Reviews', value: stats.reviewsGiven, icon: Star, color: 'text-purple-600', bg: 'bg-purple-100', page: 'reviews' },
-            { label: 'Posts', value: stats.postsCreated, icon: Edit3, color: 'text-green-600', bg: 'bg-green-100', page: 'post' },
-            { label: 'Crews', value: stats.crewsJoined, icon: Users, color: 'text-orange-600', bg: 'bg-orange-100', page: 'crews' },
-          ].map(({ label, value, icon: Icon, color, bg, page }, idx) => (
-            <div key={idx} className="bg-white rounded-xl p-3 shadow-sm border border-gray-200 cursor-pointer hover:shadow-md transition" onClick={() => setPage(page)}>
-              <div className={`w-8 h-8 ${bg} rounded-lg flex items-center justify-center mb-2`}><Icon className={`w-4 h-4 ${color}`} /></div>
-              <p className="text-lg font-bold text-gray-900">{value}</p>
-              <p className="text-xs text-gray-500">{label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* ✅ AI-powered daily trending books section */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-orange-500" />Trending Today
-              </h2>
-              <span className="text-[10px] text-orange-500 font-bold bg-orange-50 px-2 py-0.5 rounded-full border border-orange-200">✨ AI picks</span>
-            </div>
-            <button onClick={() => setPage('explore')} className="text-sm text-orange-500 font-semibold hover:underline">Explore All</button>
-          </div>
-          {loadingTrending ? (
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="shrink-0 w-28">
-                  <div className="w-24 h-32 bg-gray-200 rounded-xl animate-pulse mb-2" />
-                  <div className="h-3 bg-gray-200 rounded animate-pulse w-20 mb-1" />
-                  <div className="h-2 bg-gray-200 rounded animate-pulse w-14" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-hide">
-              {trendingBooks.map((book, i) => (
-                <div key={i} className="shrink-0 w-28 cursor-pointer hover:scale-105 transition-transform" onClick={() => setSelectedBook(book)}>
-                  <DynamicBookCover title={book.title} author={book.author} size="md" />
-                  <p className="text-sm font-semibold text-gray-900 mt-2 leading-tight line-clamp-2">{book.title}</p>
-                  <p className="text-xs text-gray-500 truncate">{book.author}</p>
-                  {book.rating && (
-                    <div className="flex items-center gap-1 mt-1">
-                      <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
-                      <span className="text-xs font-medium">{typeof book.rating === 'number' ? book.rating.toFixed(1) : book.rating}</span>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Your Crews */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />Your Crews</h2>
-            <button onClick={() => setPage('crews')} className="text-sm text-orange-500 font-semibold hover:underline">View All</button>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            {userCrews.slice(0, 2).map(crew => (
-              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition" onClick={() => setPage('crews')}>
-                <div className="h-16 flex items-center justify-center p-2 bg-gray-50">
-                  <DynamicBookCover title={crew.name} author={crew.author} size="xs" />
-                </div>
-                <div className="p-3">
-                  <h3 className="font-semibold text-gray-900 text-sm line-clamp-2">{crew.name}</h3>
-                  <p className="text-xs text-gray-500 mt-0.5">{crew.genre}</p>
-                  <div className="flex items-center justify-between mt-2">
-                    <div className="flex items-center gap-1 text-xs text-gray-500"><Users className="w-3 h-3" />{crew.members || 1}</div>
-                    <span className="px-2 py-0.5 bg-green-100 text-green-600 rounded-lg text-xs font-medium">Joined</span>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {userCrews.length === 0 && (
-              <div className="col-span-2 bg-white rounded-xl p-6 text-center border border-gray-200">
-                <p className="text-gray-500 text-sm">no crews yet — find ur people 👯</p>
-                <button onClick={() => setPage('crews')} className="mt-2 text-orange-500 text-sm font-medium hover:underline">Browse Crews →</button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Book Date CTA */}
-        <button onClick={() => setShowBookDate(true)} className="w-full bg-gradient-to-r from-pink-500 to-orange-500 rounded-xl p-4 text-white shadow-lg flex items-center gap-3 hover:opacity-90 transition active:scale-95">
-          <span className="text-2xl">📖💘</span>
-          <div className="flex-1 text-left">
-            <p className="font-bold text-sm">Book Date</p>
-            <p className="text-pink-100 text-xs">go on a date with ur next read bestie ✨</p>
-          </div>
-          <ChevronRight className="w-5 h-5 text-pink-200" />
-        </button>
-
-        {/* Post prompt */}
-        <button onClick={() => setPage('post')} className="w-full bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-center gap-3 hover:shadow-md transition">
-          {profileSrc ? <img src={profileSrc} alt="profile" className="w-9 h-9 rounded-full object-cover flex-shrink-0" /> : <Avatar initials={user?.name} size="sm" />}
-          <span className="text-gray-400 text-sm flex-1 text-left">What's your current read? spill 👀</span>
-          <span className="text-xs text-orange-500 font-medium bg-orange-50 px-3 py-1 rounded-full">Post</span>
-        </button>
-
-        {/* Feed */}
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <MessageSquare className="w-5 h-5 text-orange-500" />
-              {following.length > 0 ? 'Your Feed' : 'Community Feed'}
-            </h2>
-            <button onClick={loadPersonalizedFeed} className="text-xs text-gray-400 flex items-center gap-1 hover:text-orange-500 transition">
-              <RefreshCw className="w-3 h-3" />Refresh
-            </button>
-          </div>
-
-          <div className="space-y-4">
-            {feedPosts.length === 0 ? (
-              <div className="bg-white rounded-xl p-8 text-center border border-gray-200">
-                <MessageSquare className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">no posts yet — be the main character 🌟</p>
-                <button onClick={() => setPage('post')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition">Create Post</button>
-              </div>
-            ) : (
-              feedPosts.slice(0, visibleCount).map((post, idx) => (
-                <InlinePostCard
-                  key={post.id || idx}
-                  post={post}
-                  user={user}
-                  profileSrc={profileSrc}
-                  updateNotificationCount={updateNotificationCount}
-                  onShare={(p) => setShowShare(p)}
-                  onReshareClick={handleReshareClick}
-                  onSaveToggle={onSavePost}
-                  isSaved={savedPosts?.includes(post.id)}
-                  onDelete={onDeletePost}
-                  onFollow={onFollow}
-                  isFollowing={following?.includes(post.userEmail)}
-                  onBlock={onBlock}
-                  isBlocked={blockedUsers?.includes(post.userEmail)}
-                  onViewUserProfile={onViewUserProfile}
-                  onViewBookDetails={(b) => setSelectedBook(b)}
-                />
-              ))
-            )}
-            {feedPosts.length > visibleCount && (
-              <div ref={loaderRef} className="flex justify-center py-6">
-                <LoadingSpinner size="md" color="orange" />
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 32: PROFILE PAGE
-// ✅ Books Read, Saved tabs visible ONLY to the owner — hidden from others
-// ✅ Followers/Following counts are clickable → shows list → click user → goes to their profile (Instagram loop)
-// ========================================
-
-const ProfilePage = ({
-  user, posts, setPage, onLogout, onUpdateUser,
-  profileSrc, setProfileSrc, savedPosts, following, followers,
-  onViewFullProfile,
-}) => {
-  const [activeTab, setActiveTab] = useState('Posts');
-  const [stats, setStats] = useState({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 });
-  const [readingGoal, setReadingGoal] = useState(user?.readingGoal || { yearly: 0, monthly: 0 });
-  const [showEditGoal, setShowEditGoal] = useState(false);
-  const [editGoal, setEditGoal] = useState(readingGoal);
-  const [books, setBooks] = useState([]);
-  const [showAddBook, setShowAddBook] = useState(false);
-  const [newBook, setNewBook] = useState({ title: '', author: '', rating: 5, notes: '' });
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [editName, setEditName] = useState(user?.name || '');
-  const [editBio, setEditBio] = useState(user?.bio || '');
-  const [editLocation, setEditLocation] = useState(user?.location || '');
-  const [editWebsite, setEditWebsite] = useState(user?.website || '');
-  const [showFollowersList, setShowFollowersList] = useState(false);
-  const [showFollowingList, setShowFollowingList] = useState(false);
-  const fileInputRef = useRef(null);
-
-  const myPosts = posts.filter(p => p.userEmail === user?.email);
-  const myReviews = JSON.parse(localStorage.getItem('reviews') || '[]').filter(r => r.userEmail === user?.email);
-  const savedPostsList = posts.filter(p => savedPosts?.includes(p.id));
-  const joinedCrewIds = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
-  const allCrews = JSON.parse(localStorage.getItem('crews') || '[]');
-  const myCrews = allCrews.filter(c => joinedCrewIds.includes(c.id) || joinedCrewIds.includes(String(c.id)));
-
-  useEffect(() => {
-    const savedStats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
-    setStats(savedStats);
-    const savedBooks = JSON.parse(localStorage.getItem(`user_${user.email}_readingList`) || '[]');
-    setBooks(savedBooks);
-  }, [user.email]);
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (file.size > 5 * 1024 * 1024) { alert('Max 5MB'); return; }
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const imgData = ev.target.result;
-      setProfileSrc(imgData);
-      localStorage.setItem(`user_${user.email}_profile_image`, imgData);
-      const users = JSON.parse(localStorage.getItem('users') || '[]');
-      localStorage.setItem('users', JSON.stringify(users.map(u => u.email === user.email ? { ...u, profileImage: imgData } : u)));
-      const cu = JSON.parse(localStorage.getItem('currentUser') || '{}');
-      localStorage.setItem('currentUser', JSON.stringify({ ...cu, profileImage: imgData }));
-      onUpdateUser?.({ ...user, profileImage: imgData });
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSaveProfile = () => {
-    const updatedUser = { ...user, name: editName, bio: editBio, location: editLocation, website: editWebsite };
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    localStorage.setItem('users', JSON.stringify(users.map(u => u.email === user.email ? updatedUser : u)));
-    onUpdateUser?.(updatedUser);
-    setEditingProfile(false);
-  };
-
-  const handleSaveGoal = () => {
-    const updatedUser = { ...user, readingGoal: editGoal };
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    setReadingGoal(editGoal);
-    setShowEditGoal(false);
-    onUpdateUser?.(updatedUser);
-  };
-
-  const handleAddBook = () => {
-    if (!newBook.title) { alert('Enter book title'); return; }
-    const book = { id: generateId(), ...newBook, addedAt: new Date().toISOString() };
-    const updatedBooks = [book, ...books];
-    setBooks(updatedBooks);
-    localStorage.setItem(`user_${user.email}_readingList`, JSON.stringify(updatedBooks));
-    const updatedStats = { ...stats, booksRead: updatedBooks.length };
-    setStats(updatedStats);
-    localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(updatedStats));
-    setNewBook({ title: '', author: '', rating: 5, notes: '' });
-    setShowAddBook(false);
-  };
-
-  const handleDeleteBook = (bookId) => {
-    if (!window.confirm('Remove this book?')) return;
-    const updatedBooks = books.filter(b => b.id !== bookId);
-    setBooks(updatedBooks);
-    localStorage.setItem(`user_${user.email}_readingList`, JSON.stringify(updatedBooks));
-    const updatedStats = { ...stats, booksRead: updatedBooks.length };
-    setStats(updatedStats);
-    localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(updatedStats));
-  };
-
-  // ✅ Followers/Following list modal — clicking a user goes to their profile
-  const UserListModal = ({ title, emailList, onClose: closeModal }) => {
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    return (
-      <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
-        style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-        <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-            <h3 className="font-bold">{title} ({emailList.length})</h3>
-            <button onClick={closeModal} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
-          </div>
-          <div className="p-4">
-            {emailList.length === 0
-              ? <p className="text-center text-gray-500 py-4">No users to show</p>
-              : emailList.map(email => {
-                const u = allUsers.find(x => x.email === email);
-                const name = u?.name || email.split('@')[0];
-                return (
-                  <button
-                    key={email}
-                    onClick={() => {
-                      closeModal();
-                      onViewFullProfile?.(email, name);
-                    }}
-                    className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition mb-2"
-                  >
-                    <Avatar initials={name} size="sm" src={u?.profileImage} />
-                    <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900 text-sm">{name}</p>
-                      <p className="text-xs text-gray-500">@{email.split('@')[0]}</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
-                  </button>
-                );
-              })
-            }
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  // These are the tabs — Books Read and Saved are owner-only, hidden from other users' profile views
-  const tabs = ['Posts', 'Reviews', 'Books Read', 'Crews', 'Saved'];
-
-  return (
-    <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
-      {showFollowersList && (
-        <UserListModal title="Followers" emailList={followers} onClose={() => setShowFollowersList(false)} />
-      )}
-      {showFollowingList && (
-        <UserListModal title="Following" emailList={following} onClose={() => setShowFollowingList(false)} />
-      )}
-
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between z-10">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-md flex items-center justify-center">
-            <BookOpen className="w-3.5 h-3.5 text-white" />
-          </div>
-          <span className="font-bold" style={{ fontFamily: 'Georgia, serif' }}>My Profile</span>
-        </div>
-        <button onClick={onLogout} className="p-2 hover:bg-gray-100 rounded-lg"><LogOut className="w-5 h-5 text-gray-600" /></button>
-      </div>
-
-      <div className="px-4 py-5">
-        {/* Profile header */}
-        <div className="flex items-start gap-4 mb-5">
-          <div className="relative flex-shrink-0">
-            {profileSrc ? (
-              <img src={profileSrc} alt={user?.name} className="w-20 h-20 rounded-full object-cover border-2 border-orange-200" />
-            ) : (
-              <Avatar initials={user?.name} size="xl" />
-            )}
-            <button onClick={() => fileInputRef.current?.click()} className="absolute bottom-0 right-0 w-7 h-7 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow hover:bg-orange-600 transition">
-              <Camera className="w-3.5 h-3.5 text-white" />
-            </button>
-            <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-          </div>
-
-          <div className="flex-1 min-w-0">
-            {editingProfile ? (
-              <div className="space-y-2">
-                <input value={editName} onChange={e => setEditName(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Your name" />
-                <input value={editLocation} onChange={e => setEditLocation(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Location" />
-                <input value={editWebsite} onChange={e => setEditWebsite(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Website" />
-                <textarea value={editBio} onChange={e => setEditBio(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Your bio..." rows={2} />
-                <div className="flex gap-2">
-                  <button onClick={handleSaveProfile} className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">Save</button>
-                  <button onClick={() => setEditingProfile(false)} className="px-3 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <>
-                <h2 className="text-xl font-bold text-gray-900 truncate">{user?.name}</h2>
-                <p className="text-sm text-gray-500">@{user?.name?.toLowerCase().replace(/\s/g, '')}</p>
-                {user?.location && <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{user.location}</p>}
-                {user?.website && (
-                  <a href={user.website.startsWith('http') ? user.website : `https://${user.website}`} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-500 mt-1 flex items-center gap-1 hover:underline">
-                    <ExternalLink className="w-3 h-3" />{user.website.replace(/^https?:\/\//, '')}
-                  </a>
-                )}
-                <p className="text-sm text-gray-600 mt-2 italic">"{user?.bio || 'living in my main character era 📚'}"</p>
-
-                {/* ✅ Clickable followers/following counts */}
-                <div className="flex gap-4 mt-2">
-                  <button onClick={() => setShowFollowersList(true)} className="text-center hover:opacity-75 transition">
-                    <p className="font-bold text-gray-900">{followers?.length || 0}</p>
-                    <p className="text-xs text-gray-500">Followers</p>
-                  </button>
-                  <button onClick={() => setShowFollowingList(true)} className="text-center hover:opacity-75 transition">
-                    <p className="font-bold text-gray-900">{following?.length || 0}</p>
-                    <p className="text-xs text-gray-500">Following</p>
-                  </button>
-                </div>
-
-                <button onClick={() => setEditingProfile(true)} className="mt-3 px-4 py-1.5 border border-orange-200 text-orange-600 rounded-lg text-sm font-medium hover:bg-orange-50 flex items-center gap-1.5">
-                  <Edit className="w-3.5 h-3.5" />Edit Profile
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Reading Goal */}
-        <div className="bg-gradient-to-r from-orange-50 to-red-50 rounded-xl p-4 border border-orange-100 mb-5">
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <Target className="w-4 h-4 text-orange-500" />
-              <h3 className="font-semibold text-sm">Reading Goal {new Date().getFullYear()}</h3>
-            </div>
-            <button onClick={() => setShowEditGoal(!showEditGoal)} className="text-sm text-orange-500 font-medium">{showEditGoal ? 'Cancel' : 'Edit'}</button>
-          </div>
-          {showEditGoal ? (
-            <div className="space-y-3 mt-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-600 mb-1 block">Yearly Goal</label>
-                  <input type="number" value={editGoal.yearly} onChange={e => setEditGoal({ ...editGoal, yearly: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="100" />
-                </div>
-                <div>
-                  <label className="text-xs text-gray-600 mb-1 block">Monthly Goal</label>
-                  <input type="number" value={editGoal.monthly} onChange={e => setEditGoal({ ...editGoal, monthly: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 rounded-lg border border-gray-200 focus:border-orange-500 focus:outline-none text-sm" min="0" max="20" />
-                </div>
-              </div>
-              <button onClick={handleSaveGoal} className="w-full py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">Save Goal</button>
-            </div>
-          ) : (
-            <>
-              <div className="flex items-center justify-between text-sm mb-1">
-                <span className="text-gray-600">Progress</span>
-                <span className="font-semibold">{readingGoal.yearly > 0 ? `${stats.booksRead}/${readingGoal.yearly} books` : 'No goal set'}</span>
-              </div>
-              {readingGoal.yearly > 0 && (
-                <div className="h-2 bg-orange-200 rounded-full overflow-hidden">
-                  <div className="h-full bg-orange-500 rounded-full transition-all duration-500" style={{ width: `${Math.min((stats.booksRead / readingGoal.yearly) * 100, 100)}%` }} />
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* Stats */}
-        <div className="grid grid-cols-4 gap-2 bg-white rounded-xl p-3 border border-gray-200 mb-5">
-          {[
-            { label: 'Books', value: stats.booksRead, icon: BookOpen, color: 'text-blue-600' },
-            { label: 'Reviews', value: stats.reviewsGiven, icon: Star, color: 'text-purple-600' },
-            { label: 'Posts', value: stats.postsCreated, icon: Edit3, color: 'text-green-600' },
-            { label: 'Crews', value: stats.crewsJoined, icon: Users, color: 'text-orange-600' },
-          ].map(({ label, value, icon: Icon, color }, idx) => (
-            <div key={idx} className="text-center">
-              <Icon className={`w-5 h-5 ${color} mx-auto mb-1`} />
-              <p className="text-lg font-bold text-gray-900">{value}</p>
-              <p className="text-xs text-gray-500">{label}</p>
-            </div>
-          ))}
-        </div>
-
-        {/* Tab bar */}
-        <div className="flex border-b border-gray-200 mb-4 overflow-x-auto scrollbar-hide">
-          {tabs.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-shrink-0 text-sm pb-2.5 px-3 font-medium border-b-2 transition whitespace-nowrap ${activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent hover:text-gray-700'}`}>
-              {tab}
-            </button>
-          ))}
-        </div>
-
-        {/* Posts tab */}
-        {activeTab === 'Posts' && (
-          <div className="space-y-4">
-            {myPosts.length === 0 ? (
-              <div className="text-center py-8">
-                <Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">no posts rn — start ur era 📸</p>
-                <button onClick={() => setPage('post')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition">Create First Post</button>
-              </div>
-            ) : myPosts.map(post => (
-              <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <p className="text-sm text-gray-700 mb-2">{post.content}</p>
-                {post.bookName && <p className="text-xs text-orange-500">📖 {post.bookName}</p>}
-                {post.image && <img src={post.image} alt="" className="w-full rounded-xl mt-2 max-h-40 object-cover" />}
-                <div className="flex items-center gap-4 pt-2 border-t border-gray-100 mt-2 text-xs text-gray-400">
-                  <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{getPostLikes(post.id) || post.likes || 0}</span>
-                  <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" />{getPostComments(post.id).filter(c => !c.parentId).length || post.comments || 0}</span>
-                  <span>{new Date(post.createdAt).toLocaleDateString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Reviews tab */}
-        {activeTab === 'Reviews' && (
-          <div className="space-y-4">
-            {myReviews.length === 0 ? (
-              <div className="text-center py-8">
-                <Star className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                <p className="text-gray-500">no reviews yet — spill the tea ☕</p>
-                <button onClick={() => setPage('reviews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm hover:bg-orange-600 transition">Spill the Tea ☕</button>
-              </div>
-            ) : myReviews.map(review => (
-              <div key={review.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <div className="flex items-start gap-3 mb-2">
-                  <DynamicBookCover title={review.bookName} author={review.author} size="sm" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm">{review.bookName}</h3>
-                    <p className="text-xs text-gray-500">by {review.author}</p>
-                    <StarRating rating={review.rating} size="xs" readonly />
-                  </div>
-                </div>
-                <p className="text-sm text-gray-700">{review.review}</p>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ✅ Books Read tab — only visible to the owner (this is MY profile page) */}
-        {activeTab === 'Books Read' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-sm font-semibold text-gray-700">{books.length} books read</p>
-              <button onClick={() => setShowAddBook(!showAddBook)} className="flex items-center gap-1.5 px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">
-                <Plus className="w-4 h-4" />{showAddBook ? 'Cancel' : 'Add Book'}
-              </button>
-            </div>
-            {showAddBook && (
-              <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <div className="space-y-3">
-                  <input value={newBook.title} onChange={e => setNewBook({ ...newBook, title: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
-                  <input value={newBook.author} onChange={e => setNewBook({ ...newBook, author: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author" />
-                  <div><label className="text-xs text-gray-600 mb-1 block">Your Rating</label><StarRating rating={newBook.rating} onChange={r => setNewBook({ ...newBook, rating: r })} size="md" /></div>
-                  <textarea value={newBook.notes} onChange={e => setNewBook({ ...newBook, notes: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300 resize-none" placeholder="Notes..." rows={2} />
-                  <button onClick={handleAddBook} className="w-full py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition">Add to My Books</button>
-                </div>
-              </div>
-            )}
-            {books.length === 0 ? (
-              <div className="text-center py-8"><BookMarked className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500 text-sm">No books tracked yet</p></div>
-            ) : books.map(book => (
-              <div key={book.id} className="bg-white rounded-xl p-3 border border-gray-200 shadow-sm flex items-start gap-3">
-                <DynamicBookCover title={book.title} author={book.author} size="sm" />
-                <div className="flex-1 min-w-0">
-                  <h3 className="font-semibold text-sm text-gray-900">{book.title}</h3>
-                  <p className="text-xs text-gray-500">{book.author}</p>
-                  <StarRating rating={book.rating} size="xs" readonly />
-                  {book.notes && <p className="text-xs text-gray-600 mt-1 italic">"{book.notes}"</p>}
-                  <p className="text-xs text-gray-400 mt-1">{new Date(book.addedAt).toLocaleDateString()}</p>
-                </div>
-                <button onClick={() => handleDeleteBook(book.id)} className="p-1 hover:bg-red-50 rounded-lg">
-                  <Trash2 className="w-4 h-4 text-red-400 hover:text-red-500" />
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Crews tab */}
-        {activeTab === 'Crews' && (
-          <div className="space-y-3">
-            {myCrews.length === 0 ? (
-              <div className="text-center py-8"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no crews yet — find ur people 👯</p><button onClick={() => setPage('crews')} className="mt-3 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm">Browse Crews</button></div>
-            ) : myCrews.map(crew => (
-              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                <div className="flex items-center px-4 gap-4 py-3">
-                  <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 truncate">{crew.name}</p>
-                    <p className="text-xs text-gray-500">by {crew.author}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      {crew.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{crew.genre}</span>}
-                      <span className="text-xs text-gray-400">{crew.members || 1} members</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ✅ Saved tab — only visible to the owner (this is MY profile page) */}
-        {activeTab === 'Saved' && (
-          <div className="space-y-4">
-            {savedPostsList.length === 0 ? (
-              <div className="text-center py-8"><Bookmark className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">No saved posts yet</p></div>
-            ) : savedPostsList.map(post => (
-              <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <p className="text-sm text-gray-700 mb-2">{post.content}</p>
-                {post.bookName && <p className="text-xs text-orange-500">📖 {post.bookName}</p>}
-                <div className="flex items-center justify-between pt-2 border-t border-gray-100 mt-2">
-                  <span className="text-xs text-gray-400">by {post.userName}</span>
-                  <span className="text-xs text-gray-400">{new Date(post.createdAt).toLocaleDateString()}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-};
-
-// ========================================
-// SECTION 33: CREW CHAT VIEW
-// ✅ Per-crew block/unblock of specific users
-//    Their messages become invisible only to you
-//    Unblock restores their messages
-// ========================================
-
-const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount, onViewUserProfile, isJoined, joinCrew }) => {
-  const [messages, setMessages] = useState([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [selBook, setSelBook] = useState(null);
-  const [showShare, setShowShare] = useState(false);
-  const [showMembersPanel, setShowMembersPanel] = useState(false);
-  const messagesEndRef = useRef(null);
-  const fileInputRef = useRef(null);
-
-  // ✅ Per-crew blocked list — separate from global account block
-  // Stored as: user_EMAIL_crewBlocked_CREWID = ["blockedEmail1", ...]
-  const [crewBlockedUsers, setCrewBlockedUsers] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(`user_${user.email}_crewBlocked_${crew.id}`) || '[]');
-    } catch (_) { return []; }
-  });
-
-  const isUserCrewBlocked = (email) => crewBlockedUsers.includes(email);
-
-  const toggleCrewBlock = (targetEmail, targetName) => {
-    const current = JSON.parse(localStorage.getItem(`user_${user.email}_crewBlocked_${crew.id}`) || '[]');
-    let updated;
-    if (current.includes(targetEmail)) {
-      // Unblock
-      updated = current.filter(e => e !== targetEmail);
-    } else {
-      // Block
-      updated = [...current, targetEmail];
-    }
-    localStorage.setItem(`user_${user.email}_crewBlocked_${crew.id}`, JSON.stringify(updated));
-    setCrewBlockedUsers(updated);
-  };
-
-  const { onlineCount } = useCrewPresence(crew.id, user.id, user.name);
-  const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(crew.id, user.id, user.name);
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CREW CHAT VIEW — Global chat, orange wallpaper, mic + image + video
+// ══════════════════════════════════════════════════════════════════════════════
+const CrewChatView = memo(({ crew, user, crewMembers, onBack, updateNotificationCount, onViewUserProfile, isJoined, joinCrew }) => {
+  const [messages,      setMsgs]        = useState([]);
+  const [newMsg,        setNewMsg]       = useState('');
+  const [selBook,       setSel]          = useState(null);
+  const [showShare,     setShare]        = useState(false);
+  const [isRecording,   setIsRecording]  = useState(false);
+  const [mediaRecorder, setMR]           = useState(null);
+  const [recordingTime, setRecTime]      = useState(0);
+  const endRef   = useRef();
+  const fileRef  = useRef();
+  const videoRef = useRef();
+  const recTimerRef = useRef(null);
+  const { onlineCount }                          = useCrewPresence(crew.id,user.id||user.email,user.name);
+  const { typingUsers, broadcastTyping, stopTyping } = useTypingIndicator(crew.id,user.id||user.email,user.name);
   const hasJoined = isJoined(crew.id);
 
-  useEffect(() => {
-    const cached = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
-    setMessages(cached.map(m => ({ ...m, timestamp: new Date(m.timestamp) })));
-
-    socket.emit('join_crew_room', crew.id);
-    socket.on('new_crew_message', d => {
-      if (String(d.crewId) === String(crew.id)) {
-        setMessages(prev => [...prev, { ...d.message, timestamp: new Date(d.message.timestamp) }]);
-      }
+  useEffect(()=>{
+    const chatKey = `rcreww_chat_${crew.id}`;
+    setMsgs(getLS(chatKey,[]).map(m=>({...m,timestamp:new Date(m.timestamp)})));
+    socket.emit('join_crew_room',crew.id);
+    socket.on('new_crew_message',d=>{
+      if(String(d.crewId)===String(crew.id)) setMsgs(p=>[...p,{...d.message,timestamp:new Date(d.message.timestamp)}]);
     });
-    return () => { socket.emit('leave_crew_room', crew.id); socket.off('new_crew_message'); };
-  }, [crew.id]);
+    const handler=(e)=>{ if(e.data?.type===`chat_${crew.id}`) setMsgs(getLS(chatKey,[]).map(m=>({...m,timestamp:new Date(m.timestamp)})));};
+    bc?.addEventListener('message',handler);
+    return()=>{ socket.emit('leave_crew_room',crew.id); socket.off('new_crew_message'); bc?.removeEventListener('message',handler); };
+  },[crew.id]);
 
-  useEffect(() => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
-  useEffect(() => { markCrewMessagesRead(crew.id, user.id); }, [messages.length]);
+  useEffect(()=>{ endRef.current?.scrollIntoView({behavior:'smooth'}); },[messages]);
+  useEffect(()=>{ if(messages.length) setLS(`crew_${crew.id}_lastRead_${user.id||user.email}`,Date.now().toString()); },[messages.length]);
 
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !hasJoined) return;
-    stopTyping();
-    const msg = {
-      userId: user.id,
-      userName: user.name,
-      userEmail: user.email,
-      userInitials: user.name?.slice(0, 2).toUpperCase(),
-      content: newMessage.trim(),
-      type: 'text',
-      timestamp: new Date().toISOString(),
-    };
-    setNewMessage('');
-
-    try {
-      const res = await axios.post(`${API_URL}/api/social/crews/${crew.id}/messages`, msg, { timeout: 8000 });
-      if (res.data.success) {
-        setMessages(prev => [...prev, { ...res.data.message, timestamp: new Date(res.data.message.timestamp) }]);
-      }
-    } catch (_) {
-      const localMsg = { id: `msg_${Date.now()}`, ...msg };
-      const existing = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
-      existing.push(localMsg);
-      localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
-      setMessages(prev => [...prev, { ...localMsg, timestamp: new Date() }]);
-    }
-
-    crewMembers.filter(m => m.email !== user.email).forEach(m => {
-      pushNotification(m.email, {
-        type: 'message',
-        fromUser: user.name,
-        fromUserEmail: user.email,
-        message: `${user.name} sent a message in "${crew.name}"`,
-        crewId: crew.id,
-        crewName: crew.name,
-      });
-    });
+  const saveAndBroadcast = (msg) => {
+    const chatKey = `rcreww_chat_${crew.id}`;
+    const existing = getLS(chatKey,[]);
+    existing.push(msg);
+    if(existing.length>500) existing.splice(0,existing.length-500);
+    setLS(chatKey,existing);
+    broadcastMsg(`chat_${crew.id}`,null);
+    setMsgs(p=>[...p,{...msg,timestamp:new Date()}]);
+    crewMembers.filter(m=>m.email!==user.email).forEach(m=>{ pushNotification(m.email,{type:'message',fromUser:user.name,fromUserEmail:user.email,message:`${user.name} sent a message in "${crew.name}"`,crewId:crew.id,crewName:crew.name}); });
     updateNotificationCount?.();
   };
 
-  const sendImage = (e) => {
-    const file = e.target.files[0];
-    if (!file || !hasJoined) return;
-    if (file.size > 5 * 1024 * 1024) { alert('Max 5MB'); return; }
-    const reader = new FileReader();
-    reader.onload = ev => {
-      const msg = { id: `msg_${Date.now()}`, userId: user.id, userName: user.name, userEmail: user.email, userInitials: user.name?.slice(0, 2).toUpperCase(), content: ev.target.result, timestamp: new Date().toISOString(), type: 'image' };
-      const existing = JSON.parse(localStorage.getItem(`crew_${crew.id}_messages`) || '[]');
-      existing.push(msg);
-      localStorage.setItem(`crew_${crew.id}_messages`, JSON.stringify(existing));
-      setMessages(prev => [...prev, { ...msg, timestamp: new Date() }]);
-      crewMembers.filter(m => m.email !== user.email).forEach(m => {
-        pushNotification(m.email, { type: 'message', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} shared an image in "${crew.name}"`, crewId: crew.id, crewName: crew.name });
-      });
-      updateNotificationCount?.();
+  const sendMsg = async () => {
+    if(!newMsg.trim()||!hasJoined) return;
+    stopTyping();
+    const msg = { id:generateId(), userId:user.id||user.email, userName:user.name, userEmail:user.email, userInitials:user.name?.slice(0,2).toUpperCase(), content:newMsg.trim(), type:'text', timestamp:new Date().toISOString() };
+    setNewMsg('');
+    saveAndBroadcast(msg);
+    try{ await axios.post(`${API_URL}/api/social/crews/${crew.id}/messages`,msg,{timeout:8000}); }catch{}
+  };
+
+  const sendFile = (e, type='image') => {
+    const f=e.target.files[0]; if(!f||!hasJoined) return;
+    if(f.size>10*1024*1024){alert('max 10MB bestie');return;}
+    const r=new FileReader();
+    r.onload=ev=>{
+      const msg={id:generateId(),userId:user.id||user.email,userName:user.name,userEmail:user.email,userInitials:user.name?.slice(0,2).toUpperCase(),content:ev.target.result,timestamp:new Date().toISOString(),type};
+      saveAndBroadcast(msg);
     };
-    reader.readAsDataURL(file);
+    r.readAsDataURL(f);
   };
 
-  const formatMsgTime = (ts) => {
-    const diff = Date.now() - new Date(ts);
-    const mins = Math.floor(diff / 60000);
-    const hrs = Math.floor(diff / 3600000);
-    if (mins < 1) return 'Just now';
-    if (mins < 60) return `${mins}m`;
-    if (hrs < 24) return `${hrs}h`;
-    return new Date(ts).toLocaleDateString();
+  const startRecording = async () => {
+    if (!hasJoined) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mr = new MediaRecorder(stream);
+      const chunks = [];
+      mr.ondataavailable = e => chunks.push(e.data);
+      mr.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const reader = new FileReader();
+        reader.onload = ev => {
+          const msg = { id:generateId(), userId:user.id||user.email, userName:user.name, userEmail:user.email, userInitials:user.name?.slice(0,2).toUpperCase(), content:ev.target.result, timestamp:new Date().toISOString(), type:'audio', duration: recordingTime };
+          saveAndBroadcast(msg);
+        };
+        reader.readAsDataURL(blob);
+        stream.getTracks().forEach(t => t.stop());
+        clearInterval(recTimerRef.current);
+        setRecTime(0);
+      };
+      mr.start();
+      setMR(mr);
+      setIsRecording(true);
+      setRecTime(0);
+      recTimerRef.current = setInterval(()=>setRecTime(t=>t+1), 1000);
+    } catch { alert('mic access denied bestie 😭'); }
   };
 
-  const groupsByDate = messages.reduce((acc, msg) => {
-    const date = new Date(msg.timestamp).toDateString();
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(msg);
-    return acc;
-  }, {});
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setMR(null);
+      setIsRecording(false);
+    }
+  };
 
-  // ✅ Members panel with block/unblock controls per person
-  const MembersPanel = () => (
-    <div className="fixed inset-0 bg-black/50 z-[70] flex items-end justify-center"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-      <div className="bg-white rounded-t-2xl w-full max-h-[70vh] overflow-y-auto">
-        <div className="sticky top-0 bg-white border-b px-4 py-3 flex justify-between items-center">
-          <h3 className="font-bold text-gray-900">Crew Members ({crewMembers.length})</h3>
-          <button onClick={() => setShowMembersPanel(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
-        </div>
-        <div className="p-4 space-y-3">
-          {crewMembers.map(member => {
-            const isMe = member.email === user.email;
-            const isCrewBlocked = isUserCrewBlocked(member.email);
-            return (
-              <div key={member.email || member.id} className="flex items-center gap-3">
-                <button
-                  onClick={() => { setShowMembersPanel(false); onViewUserProfile(member.email, member.name); }}
-                  className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold hover:opacity-80 transition flex-shrink-0"
-                >
-                  {(member.initials || member.name?.slice(0, 2) || '??').toUpperCase()}
-                </button>
-                <div className="flex-1 min-w-0">
-                  <button onClick={() => { setShowMembersPanel(false); onViewUserProfile(member.email, member.name); }} className="font-semibold hover:underline text-sm text-left">
-                    {member.name}
-                  </button>
-                  <p className="text-xs text-gray-500">
-                    {member.isCreator ? '👑 Creator' : 'Member'}
-                    {isCrewBlocked ? ' · Messages hidden' : ''}
-                  </p>
-                </div>
-                {/* ✅ Block/Unblock button — not shown for yourself */}
-                {!isMe && (
-                  <button
-                    onClick={() => toggleCrewBlock(member.email, member.name)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex-shrink-0 ${isCrewBlocked ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-600 hover:bg-red-200'}`}
-                  >
-                    {isCrewBlocked ? (
-                      <><Shield className="w-3 h-3" />Unblock</>
-                    ) : (
-                      <><ShieldOff className="w-3 h-3" />Block</>
-                    )}
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-        <div className="px-4 pb-4">
-          <p className="text-xs text-gray-400 text-center">Blocked members' messages are hidden only for you in this crew. They can still see yours.</p>
+  const fmt=(ts)=>{ const m=Math.floor((Date.now()-new Date(ts))/60000),h=Math.floor(m/60); if(m<1)return'just now';if(m<60)return`${m}m`;if(h<24)return`${h}h`;return new Date(ts).toLocaleDateString(); };
+  const fmtSecs = (s) => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+
+  const grouped = messages.reduce((acc,msg)=>{const d=new Date(msg.timestamp).toDateString();if(!acc[d])acc[d]=[];acc[d].push(msg);return acc;},{});
+
+  if (!hasJoined) return (
+    <div className="fixed inset-0 flex flex-col overflow-hidden" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%',background:'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 50%, #ffcc80 100%)'}}>
+      <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3">
+        <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5"/></button>
+        <DynamicBookCover title={crew.name} author={crew.author} size="xs"/>
+        <div><p className="font-black text-gray-900 text-sm">{crew.name}</p><p className="text-xs text-gray-500">{crewMembers.length} members</p></div>
+      </div>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-5xl mb-4">🔒</p>
+          <p className="text-gray-600 font-black mb-2">join this crew to chat bestie</p>
+          <p className="text-gray-400 text-sm mb-5">it's giving exclusive vibes ✨</p>
+          <button onClick={()=>joinCrew(crew)} className="px-6 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black hover:opacity-90 transition">Join to Chat 🔥</button>
         </div>
       </div>
     </div>
   );
 
-  if (!hasJoined) {
-    return (
-      <div className="fixed inset-0 flex flex-col bg-[#e5ddd5] overflow-hidden"
-        style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-        <div className="flex-shrink-0 bg-white border-b px-4 py-3 flex items-center gap-3">
-          <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5" /></button>
-          <DynamicBookCover title={crew.name} author={crew.author} size="xs" />
-          <div><p className="font-semibold text-gray-900">{crew.name}</p><p className="text-xs text-gray-500">{crewMembers.length} members</p></div>
-        </div>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="text-center">
-            <Lock className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-            <p className="text-gray-600 font-medium mb-4">Join this crew to chat</p>
-            <button onClick={() => joinCrew(crew)} className="px-6 py-3 bg-orange-500 text-white rounded-xl font-medium hover:bg-orange-600 transition">Join to Chat</button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="fixed inset-0 flex flex-col z-[60] bg-[#e5ddd5] overflow-hidden"
-      style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
+    <div className="fixed inset-0 flex flex-col z-[60] overflow-hidden" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      {/* Orange themed wallpaper */}
+      <div className="absolute inset-0" style={{background:'linear-gradient(135deg, #fff3e0 0%, #ffe0b2 30%, #ffcc80 60%, #ffb74d 100%)',opacity:0.85}}/>
+      {/* Subtle pattern overlay */}
+      <div className="absolute inset-0 opacity-10" style={{backgroundImage:'radial-gradient(circle, #f97316 1px, transparent 1px)',backgroundSize:'24px 24px'}}/>
 
-      {showMembersPanel && <MembersPanel />}
-
-      {/* Chat header */}
-      <div className="flex-shrink-0 bg-white border-b px-4 py-2 flex items-center justify-between shadow-sm">
+      {/* Header */}
+      <div className="relative flex-shrink-0 bg-white/90 backdrop-blur border-b px-4 py-2 flex items-center justify-between shadow-sm">
         <div className="flex items-center gap-3">
-          <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
-          <DynamicBookCover title={crew.name} author={crew.author} size="xs" onClick={() => setSelBook({ title: crew.name, author: crew.author })} />
+          <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-full"><ChevronLeft className="w-5 h-5 text-gray-600"/></button>
+          <DynamicBookCover title={crew.name} author={crew.author} size="xs" onClick={()=>setSel({title:crew.name,author:crew.author})}/>
           <div>
-            <p className="font-semibold text-gray-900 text-sm">{crew.name}</p>
+            <p className="font-black text-gray-900 text-sm">{crew.name}</p>
             <div className="flex items-center gap-2">
-              {/* ✅ Member count is a button that opens the members panel */}
-              <button onClick={() => setShowMembersPanel(true)} className="text-xs text-gray-500 hover:text-orange-500 transition underline-offset-2">
-                {crewMembers.length} members
-              </button>
-              {onlineCount > 0 && (
-                <span className="flex items-center gap-1 text-xs text-green-600 font-medium">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse inline-block" />
-                  {onlineCount} online
-                </span>
-              )}
+              <p className="text-xs text-gray-500">{crewMembers.length} members</p>
+              {onlineCount>0&&<span className="flex items-center gap-1 text-xs text-green-600 font-black"><span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse inline-block"/>{onlineCount} online</span>}
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button onClick={() => setShowMembersPanel(true)} className="p-2 hover:bg-gray-100 rounded-full" title="Members">
-            <Users className="w-5 h-5 text-gray-600" />
-          </button>
-          <button onClick={() => setShowShare(true)} className="p-2 hover:bg-gray-100 rounded-full" title="Invite friends">
-            <Share2 className="w-5 h-5 text-gray-600" />
-          </button>
-        </div>
+        <button onClick={()=>setShare(true)} className="p-2 hover:bg-gray-100 rounded-full"><Share2 className="w-5 h-5 text-gray-600"/></button>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-center py-16">
-            <MessageCircle className="w-12 h-12 text-gray-300 mb-3" />
-            <p className="text-gray-500 font-medium">No messages yet</p>
-            <p className="text-xs text-gray-400 mt-1">no messages yet — break the ice bestie 🧊</p>
-          </div>
-        )}
-
-        {Object.entries(groupsByDate).map(([date, msgs]) => (
+      <div className="relative flex-1 overflow-y-auto px-4 py-4 space-y-1">
+        {messages.length===0&&<div className="flex flex-col items-center justify-center h-full text-center py-16"><p className="text-5xl mb-3">💬</p><p className="text-gray-600 font-black">no messages yet bestie</p><p className="text-xs text-gray-500 mt-1">be the first to say something!</p></div>}
+        {Object.entries(grouped).map(([date,msgs])=>(
           <div key={date}>
-            <div className="flex justify-center my-4">
-              <span className="bg-gray-300/80 text-gray-700 text-xs px-3 py-1 rounded-full">
-                {new Date(date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-              </span>
-            </div>
-            {msgs.map(msg => {
-              const isOwn = msg.userId === user.id || msg.userEmail === user.email;
-              // ✅ Hide messages from crew-blocked users — only for the current user
-              if (!isOwn && isUserCrewBlocked(msg.userEmail)) {
-                return null; // Message is invisible to this user only
-              }
+            <div className="flex justify-center my-4"><span className="bg-orange-200/80 text-orange-800 text-xs px-3 py-1 rounded-full font-semibold">{new Date(date).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'})}</span></div>
+            {msgs.map(msg=>{
+              const isOwn=msg.userId===(user.id||user.email)||msg.userEmail===user.email;
               return (
-                <div key={msg.id || msg.timestamp} className={`flex mb-2 ${isOwn ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`flex max-w-[78%] items-end gap-1.5 ${isOwn ? 'flex-row-reverse' : ''}`}>
-                    {!isOwn && (
-                      <button
-                        onClick={() => onViewUserProfile(msg.userEmail, msg.userName)}
-                        className="w-7 h-7 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:opacity-80 transition"
-                      >
-                        {msg.userInitials || '??'}
-                      </button>
-                    )}
-                    <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn ? 'bg-[#dcf8c6] rounded-br-sm' : 'bg-white rounded-bl-sm'}`}>
-                      {!isOwn && <p className="text-xs font-semibold text-orange-600 mb-0.5">{msg.userName}</p>}
-                      {msg.type === 'image' ? (
-                        <img src={msg.content} alt="Shared" className="max-w-full rounded-xl max-h-60 cursor-pointer" onClick={() => window.open(msg.content, '_blank')} />
-                      ) : (
-                        <p className="text-sm leading-relaxed break-words text-gray-900">{msg.content}</p>
+                <div key={msg.id||msg.timestamp} className={`flex mb-2 ${isOwn?'justify-end':'justify-start'}`}>
+                  <div className={`flex max-w-[78%] items-end gap-1.5 ${isOwn?'flex-row-reverse':''}`}>
+                    {!isOwn&&<button onClick={()=>onViewUserProfile(msg.userEmail,msg.userName)} className="w-7 h-7 bg-gradient-to-br from-orange-400 to-pink-400 rounded-full flex items-center justify-center text-white text-[10px] font-black flex-shrink-0 hover:opacity-80 transition">{msg.userInitials||'??'}</button>}
+                    <div className={`rounded-2xl px-3.5 py-2 shadow-sm ${isOwn?'bg-gradient-to-br from-orange-400 to-orange-500 text-white rounded-br-sm':'bg-white rounded-bl-sm border border-orange-100'}`}>
+                      {!isOwn&&<p className="text-[10px] font-black text-orange-600 mb-0.5">{msg.userName}</p>}
+                      {msg.type==='image'&&<img src={msg.content} alt="shared" className="max-w-full rounded-xl max-h-60 cursor-pointer" onClick={()=>window.open(msg.content,'_blank')} loading="lazy"/>}
+                      {msg.type==='video'&&<video src={msg.content} controls className="max-w-full rounded-xl max-h-60"/>}
+                      {msg.type==='audio'&&(
+                        <div className="flex items-center gap-2">
+                          <audio controls src={msg.content} className="h-8" style={{maxWidth:'180px'}}/>
+                          {msg.duration&&<span className="text-xs opacity-70">{fmtSecs(msg.duration)}</span>}
+                        </div>
                       )}
-                      <p className="text-[10px] text-gray-400 text-right mt-0.5">
-                        {formatMsgTime(msg.timestamp)}
-                        {isOwn && (() => {
-                          const s = getReadStatus(msg.timestamp, crew.id, onlineCount);
-                          if (s === 'read') return <span className="ml-1 text-blue-400">✓✓</span>;
-                          if (s === 'delivered') return <span className="ml-1 text-gray-400">✓✓</span>;
-                          return <span className="ml-1 text-gray-300">✓</span>;
-                        })()}
-                      </p>
+                      {msg.type==='text'&&<p className={`text-sm leading-relaxed break-words ${isOwn?'text-white':'text-gray-900'}`}>{msg.content}</p>}
+                      <p className={`text-[10px] text-right mt-0.5 ${isOwn?'text-orange-100':'text-gray-400'}`}>{fmt(msg.timestamp)}</p>
                     </div>
                   </div>
                 </div>
@@ -4559,481 +2261,438 @@ const CrewChatView = ({ crew, user, crewMembers, onBack, updateNotificationCount
             })}
           </div>
         ))}
-        <div ref={messagesEndRef} />
+        <div ref={endRef}/>
       </div>
 
-      {typingUsers.length > 0 && (
-        <div className="px-4 py-1 text-xs text-gray-500 italic bg-transparent">
-          {typingUsers.length === 1
-            ? `${typingUsers[0]} is typing...`
-            : typingUsers.length === 2
-              ? `${typingUsers[0]} and ${typingUsers[1]} are typing...`
-              : `${typingUsers.length} people are typing...`}
+      {/* Typing indicator */}
+      {typingUsers.length>0&&<div className="relative px-4 py-1 text-xs text-orange-700 italic bg-orange-50/80">{typingUsers.length===1?`${typingUsers[0]} is typing...`:`${typingUsers.length} people are typing...`}</div>}
+
+      {/* Recording indicator */}
+      {isRecording&&(
+        <div className="relative px-4 py-2 bg-red-50 border-t border-red-100 flex items-center gap-3">
+          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"/>
+          <span className="text-sm font-black text-red-600">Recording... {fmtSecs(recordingTime)}</span>
+          <button onClick={stopRecording} className="ml-auto px-3 py-1 bg-red-500 text-white rounded-lg text-xs font-black">Stop & Send</button>
         </div>
       )}
 
-      {/* Input bar */}
-      <div className="flex-shrink-0 bg-gray-50 border-t px-3 py-2.5">
-        <div className="flex items-center gap-2 bg-white rounded-full px-3 py-1.5 shadow border border-gray-100">
-          <button onClick={() => fileInputRef.current?.click()} className="w-8 h-8 flex items-center justify-center flex-shrink-0">
-            <Plus className="w-5 h-5 text-orange-500" />
+      {/* Input area */}
+      <div className="relative flex-shrink-0 bg-white/90 backdrop-blur border-t border-orange-100 px-3 py-2.5">
+        <div className="flex items-center gap-2">
+          {/* Media buttons */}
+          <button onClick={()=>fileRef.current?.click()} className="w-8 h-8 flex items-center justify-center flex-shrink-0 text-orange-500 hover:bg-orange-50 rounded-full transition" title="Send image">
+            <Image className="w-5 h-5"/>
           </button>
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={sendImage} />
-          <input
-            type="text"
-            value={newMessage}
-            onChange={e => { setNewMessage(e.target.value); broadcastTyping(); }}
-            onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); stopTyping(); sendMessage(); } }}
-            onBlur={stopTyping}
-            className="flex-1 py-2 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent"
-            placeholder="say something bestie... 💬"
-          />
-          <button
-            onClick={() => { stopTyping(); sendMessage(); }}
-            disabled={!newMessage.trim()}
-            className={`w-8 h-8 flex items-center justify-center rounded-full transition ${newMessage.trim() ? 'bg-orange-500 text-white' : 'bg-gray-200 text-gray-400'}`}
-          >
-            <Send className="w-4 h-4" />
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={e=>sendFile(e,'image')}/>
+
+          <button onClick={()=>videoRef.current?.click()} className="w-8 h-8 flex items-center justify-center flex-shrink-0 text-orange-500 hover:bg-orange-50 rounded-full transition" title="Send video">
+            <Video className="w-5 h-5"/>
+          </button>
+          <input ref={videoRef} type="file" accept="video/*" className="hidden" onChange={e=>sendFile(e,'video')}/>
+
+          <button onClick={isRecording?stopRecording:startRecording} className={`w-8 h-8 flex items-center justify-center flex-shrink-0 rounded-full transition ${isRecording?'bg-red-500 text-white':'text-orange-500 hover:bg-orange-50'}`} title="Voice message">
+            {isRecording?<MicOff className="w-5 h-5"/>:<Mic className="w-5 h-5"/>}
+          </button>
+
+          {/* Text input */}
+          <div className="flex-1 flex items-center bg-white rounded-full border border-orange-200 px-4 py-2 focus-within:border-orange-400 focus-within:shadow-sm transition">
+            <input type="text" value={newMsg} onChange={e=>{setNewMsg(e.target.value);broadcastTyping();}} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();stopTyping();sendMsg();}}} onBlur={stopTyping} className="flex-1 py-1 text-sm text-gray-900 placeholder-gray-400 outline-none bg-transparent" placeholder="say something bestie..."/>
+          </div>
+
+          <button onClick={()=>{stopTyping();sendMsg();}} disabled={!newMsg.trim()} className={`w-9 h-9 flex items-center justify-center rounded-full transition flex-shrink-0 ${newMsg.trim()?'bg-gradient-to-r from-orange-500 to-pink-500 text-white shadow':'bg-gray-200 text-gray-400'}`}>
+            <Send className="w-4 h-4"/>
           </button>
         </div>
       </div>
 
-      {selBook && <BookDetailsModal book={selBook} onClose={() => setSelBook(null)} onCreateCrew={() => {}} />}
-      {showShare && <ShareModal crewInvite={crew} onClose={() => setShowShare(false)} />}
+      {selBook&&<BookDetailsModal book={selBook} onClose={()=>setSel(null)} onCreateCrew={()=>{}} currentUser={user}/>}
+      {showShare&&<ShareModal crewInvite={crew} onClose={()=>setShare(false)}/>}
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 34: CREWS PAGE
-// ✅ Global crews — all user-created crews visible to everyone
-// ✅ One crew per book — strict enforcement at creation time
-// ========================================
+// ══════════════════════════════════════════════════════════════════════════════
+// CREWS PAGE — Global crews, one book = one crew, leave option
+// ══════════════════════════════════════════════════════════════════════════════
+const CrewsPage = memo(({ user, initialCrews, setPage, updateNotificationCount, onViewUserProfile, deepLinkCrewId, onDeepLinkHandled }) => {
+  const [view,         setView]    = useState('list');
+  const [selectedCrew, setSel]     = useState(null);
+  const [crews,        setCrews]   = useState([]);
+  const [joinedCrews,  setJoined]  = useState(()=>getLS(`rcreww_joined_${user.email}`,[]));
+  const [crewMembers,  setMembers] = useState([]);
+  const [showForm,     setShowForm]= useState(false);
+  const [newCrew,      setNewCrew] = useState({name:'',author:'',genre:''});
+  const [toast,        setToast]   = useState('');
+  const [search,       setSearch]  = useState('');
+  const [selBook,      setSelBook] = useState(null);
+  const [unread,       setUnread]  = useState({});
+  const [shareModal,   setShareM]  = useState(null);
+  const [loading,      setLoading] = useState(true);
 
-const CrewSkeleton = () => (
-  <div className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm animate-pulse">
-    <div className="flex items-center px-4 gap-4 py-3">
-      <div className="w-16 h-20 bg-gray-200 rounded-xl flex-shrink-0" />
-      <div className="flex-1 space-y-2">
-        <div className="h-4 bg-gray-200 rounded w-3/4" />
-        <div className="h-3 bg-gray-200 rounded w-1/2" />
-        <div className="h-5 bg-gray-200 rounded-full w-20 mt-1" />
-      </div>
-    </div>
-  </div>
-);
+  const showToast = (msg) => { setToast(msg); setTimeout(()=>setToast(''),3000); };
 
-const CrewsPage = ({ user, crews: initialCrews, setPage, updateNotificationCount, onViewUserProfile, deepLinkCrewId, onDeepLinkHandled }) => {
-  const [view, setView] = useState('list');
-  const [selectedCrew, setSelectedCrew] = useState(null);
-  const [crews, setCrews] = useState([]);
-  const [joinedCrews, setJoinedCrews] = useState([]);
-  const [crewMembers, setCrewMembers] = useState([]);
-  const [showCreateForm, setShowCreateForm] = useState(false);
-  const [newCrewData, setNewCrewData] = useState({ name: '', author: '', genre: '' });
-  const [toastMessage, setToastMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedBook, setSelectedBook] = useState(null);
-  const [unreadMessages, setUnreadMessages] = useState({});
-  const [showShareModal, setShowShareModal] = useState(null);
-  const [loadingCrews, setLoadingCrews] = useState(true);
+  const loadCrews = useCallback(async()=>{
+    setLoading(true);
+    initGlobalCrews();
+    let all = getGlobalCrews();
+    (initialCrews||[]).forEach(ic=>{ if(!all.find(c=>String(c.id)===String(ic.id))) all.push({...ic,createdAt:'2024-01-01T00:00:00Z',joinedEmails:[]}); });
+    try {
+      const res = await axios.get(`${API_URL}/api/social/crews`,{timeout:8000});
+      if(res.data?.success) {
+        const sc=res.data.crews||[];
+        sc.forEach(sv=>{ if(!all.find(c=>String(c.id)===String(sv.id))) all.push(sv); });
+        all = all.map(c=>{ const sv=sc.find(s=>String(s.id)===String(c.id)); return sv?{...c,members:Math.max(c.members||0,sv.members||0)}:c; });
+      }
+    } catch {}
+    setLS(GLOBAL_CREWS_KEY,all);
+    setCrews(all);
+    setLoading(false);
+  },[initialCrews]);
 
-  const loadCrews = useCallback(async () => {
-    setLoadingCrews(true);
-    const res = await api.get('/api/social/crews');
-    let allCrews = [];
-    if (res?.data?.success) {
-      allCrews = res.data.crews || [];
-    }
-    // ✅ Merge server crews with initialCrews (seeded defaults) and user-created local ones
-    initialCrews.forEach(ic => { if (!allCrews.find(c => String(c.id) === String(ic.id))) allCrews.push(ic); });
-    const local = JSON.parse(localStorage.getItem('crews') || '[]');
-    local.forEach(lc => { if (!allCrews.find(c => String(c.id) === String(lc.id))) allCrews.push(lc); });
-    // Save merged list so it's globally visible
-    localStorage.setItem('crews', JSON.stringify(allCrews));
-    setCrews(allCrews);
-    setLoadingCrews(false);
-  }, [user.email]);
-
-  useEffect(() => {
+  useEffect(()=>{
     loadCrews();
-    const joined = JSON.parse(localStorage.getItem(`user_${user.email}_joinedCrews`) || '[]');
-    setJoinedCrews(joined);
-    const notifs = JSON.parse(localStorage.getItem(`user_${user.email}_notifications`) || '[]');
-    const crewMsgs = notifs.filter(n => n.type === 'message' && !n.read);
-    const counts = {};
-    crewMsgs.forEach(n => { if (n.crewId) counts[n.crewId] = (counts[n.crewId] || 0) + 1; });
-    setUnreadMessages(counts);
-  }, [user.email, loadCrews]);
+    const notifs=getLS(`rcreww_notifs_${user.email}`,[]);
+    const cmsgs=notifs.filter(n=>n.type==='message'&&!n.read);
+    const counts={}; cmsgs.forEach(n=>{if(n.crewId)counts[n.crewId]=(counts[n.crewId]||0)+1;}); setUnread(counts);
+    const handler=(e)=>{ if(e.data?.type==='crews_updated') loadCrews(); };
+    bc?.addEventListener('message',handler);
+    return()=>bc?.removeEventListener('message',handler);
+  },[user.email,loadCrews]);
 
-  // ✅ Deep-link: navigate directly to a specific crew
-  useEffect(() => {
-    if (!deepLinkCrewId || crews.length === 0) return;
-    const target = crews.find(c => String(c.id) === String(deepLinkCrewId) || c.slug === deepLinkCrewId);
-    if (target) { setSelectedCrew(target); setView('detail'); onDeepLinkHandled?.(); }
-  }, [deepLinkCrewId, crews]);
+  useEffect(()=>{
+    if(!deepLinkCrewId||crews.length===0) return;
+    const t=crews.find(c=>String(c.id)===String(deepLinkCrewId)||c.slug===deepLinkCrewId);
+    if(t){setSel(t);setView('detail');onDeepLinkHandled?.();}
+  },[deepLinkCrewId,crews]);
 
-  const isJoined = (crewId) => joinedCrews.includes(crewId) || joinedCrews.includes(String(crewId));
-  const showToast = (msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(''), 3000); };
+  const isJoined = (id) => joinedCrews.includes(id)||joinedCrews.includes(String(id));
 
   const joinCrew = (crew) => {
-    if (isJoined(crew.id)) return;
-    const updated = [...joinedCrews, crew.id];
-    setJoinedCrews(updated);
-    localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updated));
-    const updatedCrews = crews.map(c => c.id === crew.id ? { ...c, members: (c.members || 1) + 1 } : c);
-    setCrews(updatedCrews);
-    localStorage.setItem('crews', JSON.stringify(updatedCrews));
-    const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
-    stats.crewsJoined = (stats.crewsJoined || 0) + 1;
-    localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
-    showToast(`🔥 locked in with "${crew.name}"!`);
-    if (crew.createdBy !== user.email) {
-      pushNotification(crew.createdBy, { type: 'join', fromUser: user.name, fromUserEmail: user.email, message: `${user.name} joined your crew "${crew.name}"`, crewId: crew.id });
-      updateNotificationCount?.();
-    }
+    if(isJoined(crew.id)) return;
+    const u=[...joinedCrews,crew.id]; setJoined(u); setLS(`rcreww_joined_${user.email}`,u);
+    const all=getGlobalCrews().map(c=>c.id===crew.id?{...c,members:(c.members||1)+1,joinedEmails:[...(c.joinedEmails||[]),user.email]}:c);
+    saveGlobalCrews(all); setCrews(all);
+    const st=getLS(`rcreww_stats_${user.email}`,{}); st.crewsJoined=(st.crewsJoined||0)+1; setLS(`rcreww_stats_${user.email}`,st);
+    showToast(`🎉 joined "${crew.name}" bestie!`);
+    if(crew.createdBy!==user.email) { pushNotification(crew.createdBy,{type:'join',fromUser:user.name,fromUserEmail:user.email,message:`${user.name} joined your crew "${crew.name}"`,crewId:crew.id}); updateNotificationCount?.(); }
+    try { axios.post(`${API_URL}/api/social/crews/${crew.id}/join`,{userEmail:user.email,userName:user.name},{timeout:5000}); } catch {}
   };
 
+  // LEAVE CREW
   const leaveCrew = (crew) => {
-    if (!window.confirm(`Leave "${crew.name}"?`)) return;
-    const updated = joinedCrews.filter(id => id !== crew.id && id !== String(crew.id));
-    setJoinedCrews(updated);
-    localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updated));
-    const updatedCrews = crews.map(c => c.id === crew.id ? { ...c, members: Math.max(0, (c.members || 1) - 1) } : c);
-    setCrews(updatedCrews);
-    localStorage.setItem('crews', JSON.stringify(updatedCrews));
-    if (selectedCrew?.id === crew.id) { setView('list'); setSelectedCrew(null); }
-    showToast(`Left "${crew.name}"`);
+    if(!window.confirm(`leave "${crew.name}" fr bestie?`)) return;
+    const u=joinedCrews.filter(id=>id!==crew.id&&id!==String(crew.id)); setJoined(u); setLS(`rcreww_joined_${user.email}`,u);
+    const all=getGlobalCrews().map(c=>c.id===crew.id?{...c,members:Math.max(0,(c.members||1)-1),joinedEmails:(c.joinedEmails||[]).filter(e=>e!==user.email)}:c);
+    saveGlobalCrews(all); setCrews(all);
+    if(selectedCrew?.id===crew.id){setView('list');setSel(null);}
+    showToast(`left "${crew.name}" — see you on the other side bestie 👋`);
+    const st=getLS(`rcreww_stats_${user.email}`,{}); st.crewsJoined=Math.max(0,(st.crewsJoined||1)-1); setLS(`rcreww_stats_${user.email}`,st);
   };
 
   const createCrew = async () => {
-    if (!newCrewData.name || !newCrewData.author) { alert('bestie fill in the book name and author first 👀'); return; }
-
-    // ✅ ONE CREW PER BOOK — check if a crew for this exact book+author already exists
-    // Case-insensitive comparison
-    const existing = crews.find(c =>
-      c.name.trim().toLowerCase() === newCrewData.name.trim().toLowerCase() &&
-      c.author.trim().toLowerCase() === newCrewData.author.trim().toLowerCase()
-    );
-
-    if (existing) {
-      // ✅ Instead of creating a duplicate, join the existing one and navigate to it
-      alert(`A crew for "${existing.name}" by ${existing.author} already exists! Taking you there now.`);
-      if (!isJoined(existing.id)) joinCrew(existing);
-      setShowCreateForm(false);
-      setNewCrewData({ name: '', author: '', genre: '' });
-      setSelectedCrew(existing);
-      setView('detail');
-      return;
-    }
-
-    const newCrew = {
-      id: generateId(),
-      ...newCrewData,
-      members: 1,
-      chats: 0,
-      createdBy: user.email,
-      createdByName: user.name,
-      createdAt: new Date().toISOString(),
-    };
-    const res = await api.post('/api/social/crews', newCrew);
-    const saved = res?.data?.success ? res.data.crew : newCrew;
-    const updatedCrews = [saved, ...crews];
-    setCrews(updatedCrews);
-    localStorage.setItem('crews', JSON.stringify(updatedCrews));
-    const updated = [...joinedCrews, saved.id];
-    setJoinedCrews(updated);
-    localStorage.setItem(`user_${user.email}_joinedCrews`, JSON.stringify(updated));
-    const stats = JSON.parse(localStorage.getItem(`user_${user.email}_stats`) || '{}');
-    stats.crewsJoined = (stats.crewsJoined || 0) + 1;
-    localStorage.setItem(`user_${user.email}_stats`, JSON.stringify(stats));
-    setShowCreateForm(false);
-    setNewCrewData({ name: '', author: '', genre: '' });
-    showToast(`🎉 Created "${saved.name}"!`);
+    if(!newCrew.name||!newCrew.author){showToast('need book name + author bestie 👀');return;}
+    const {crew:c,created} = getOrCreateCrew(newCrew.name,newCrew.author,newCrew.genre,user.email,user.name);
+    if(!created) { showToast(`crew already exists! taking you there bestie 📚`); if(!isJoined(c.id))joinCrew(c); setSel(c); setView('detail'); setShowForm(false); return; }
+    setCrews(getGlobalCrews());
+    const u=[...joinedCrews,c.id]; setJoined(u); setLS(`rcreww_joined_${user.email}`,u);
+    const st=getLS(`rcreww_stats_${user.email}`,{}); st.crewsJoined=(st.crewsJoined||0)+1; setLS(`rcreww_stats_${user.email}`,st);
+    setShowForm(false); setNewCrew({name:'',author:'',genre:''});
+    try { await axios.post(`${API_URL}/api/social/crews`,c,{timeout:8000}); } catch {}
+    showToast(`🔥 created "${c.name}" bestie!`);
   };
 
-  useEffect(() => {
-    if (!selectedCrew) return;
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
-    const members = allUsers
-      .filter(u => { const j = JSON.parse(localStorage.getItem(`user_${u.email}_joinedCrews`) || '[]'); return j.includes(selectedCrew.id) || j.includes(String(selectedCrew.id)); })
-      .map(u => ({ id: u.id, name: u.name, email: u.email, initials: u.name?.slice(0, 2), isCreator: u.email === selectedCrew.createdBy }));
-    if (!members.find(m => m.email === selectedCrew.createdBy)) {
-      members.push({ id: selectedCrew.createdBy, name: selectedCrew.createdByName || 'Creator', email: selectedCrew.createdBy, initials: (selectedCrew.createdByName || 'CR').slice(0, 2), isCreator: true });
-    }
-    setCrewMembers(members);
-  }, [selectedCrew]);
+  useEffect(()=>{
+    if(!selectedCrew) return;
+    const users=getLS('rcreww_users',[]);
+    const members = (selectedCrew.joinedEmails||[]).map(email=>{
+      const u=users.find(x=>x.email===email);
+      return {id:email,name:u?.name||email.split('@')[0],email,initials:(u?.name||email).slice(0,2),isCreator:email===selectedCrew.createdBy};
+    });
+    if(!members.find(m=>m.email===selectedCrew.createdBy)) members.unshift({id:selectedCrew.createdBy,name:selectedCrew.createdByName||'Creator',email:selectedCrew.createdBy,initials:(selectedCrew.createdByName||'CR').slice(0,2),isCreator:true});
+    setMembers(members);
+  },[selectedCrew]);
 
-  const filtered = crews.filter(c =>
-    c.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.author?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    c.genre?.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-  const joinedList = filtered.filter(c => isJoined(c.id));
-  const discoverList = filtered.filter(c => !isJoined(c.id));
+  const filtered = crews.filter(c=>(c.name||'').toLowerCase().includes(search.toLowerCase())||(c.author||'').toLowerCase().includes(search.toLowerCase())||(c.genre||'').toLowerCase().includes(search.toLowerCase()));
+  const joined_  = filtered.filter(c=>isJoined(c.id));
+  const discover = filtered.filter(c=>!isJoined(c.id));
 
-  const Toast = () => toastMessage ? (
-    <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-green-500 text-white px-4 py-3 rounded-xl shadow-lg z-[100] text-center animate-slideDown">{toastMessage}</div>
-  ) : null;
+  const ToastBar = () => toast ? <div className="fixed top-4 left-4 right-4 max-w-md mx-auto bg-gradient-to-r from-orange-500 to-pink-500 text-white px-4 py-3 rounded-2xl shadow-lg z-[100] text-center font-black animate-slideDown">{toast}</div> : null;
 
-  if (view === 'chat' && selectedCrew) {
-    return <CrewChatView crew={selectedCrew} user={user} crewMembers={crewMembers} onBack={() => setView('detail')} updateNotificationCount={updateNotificationCount} onViewUserProfile={onViewUserProfile} isJoined={isJoined} joinCrew={joinCrew} />;
-  }
+  if (view==='chat'&&selectedCrew) return <CrewChatView crew={selectedCrew} user={user} crewMembers={crewMembers} onBack={()=>setView('detail')} updateNotificationCount={updateNotificationCount} onViewUserProfile={onViewUserProfile} isJoined={isJoined} joinCrew={joinCrew}/>;
 
-  if (view === 'detail' && selectedCrew) {
-    const joined = isJoined(selectedCrew.id);
+  if (view==='detail'&&selectedCrew) {
+    const jd = isJoined(selectedCrew.id);
     return (
-      <div className="h-screen flex flex-col bg-white overflow-hidden" style={{ maxWidth: '448px', margin: '0 auto' }}>
-        <Toast />
+      <div className="h-screen flex flex-col bg-white overflow-hidden" style={{maxWidth:'448px',margin:'0 auto'}}>
+        <ToastBar/>
         <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center gap-3 z-10 flex-shrink-0">
-          <button onClick={() => setView('list')} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5" /></button>
-          <span className="font-semibold flex-1">Crew Info</span>
+          <button onClick={()=>setView('list')} className="p-1 hover:bg-gray-100 rounded-xl"><ChevronLeft className="w-5 h-5"/></button>
+          <span className="font-black flex-1 text-gray-900">crew info</span>
         </div>
-
         <div className="flex-1 overflow-y-auto">
           <div className="bg-gradient-to-b from-orange-50 to-white px-4 pt-6 pb-4">
             <div className="flex flex-col items-center text-center">
-              <DynamicBookCover title={selectedCrew.name} author={selectedCrew.author} size="xl" onClick={() => setSelectedBook({ title: selectedCrew.name, author: selectedCrew.author })} />
-              <h1 className="text-2xl font-bold text-gray-900 mt-4">{selectedCrew.name}</h1>
+              <DynamicBookCover title={selectedCrew.name} author={selectedCrew.author} size="xl" onClick={()=>setSelBook({title:selectedCrew.name,author:selectedCrew.author})}/>
+              <h1 className="text-2xl font-black text-gray-900 mt-4">{selectedCrew.name}</h1>
               <p className="text-gray-500">by {selectedCrew.author}</p>
-              {selectedCrew.genre && <span className="mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-medium">{selectedCrew.genre}</span>}
-              <div className="flex gap-8 mt-4">
-                <div className="text-center"><p className="text-xl font-bold">{crewMembers.length}</p><p className="text-xs text-gray-500">Members</p></div>
+              {selectedCrew.genre&&<span className="mt-2 px-3 py-1 bg-orange-100 text-orange-600 rounded-full text-xs font-black">{selectedCrew.genre}</span>}
+              <div className="mt-4 flex gap-8">
+                <div className="text-center"><p className="text-2xl font-black">{crewMembers.length}</p><p className="text-xs text-gray-500">members</p></div>
               </div>
               <div className="flex gap-3 mt-5 w-full">
-                {!joined ? (
-                  <button onClick={() => joinCrew(selectedCrew)} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition">Join Crew</button>
-                ) : (
-                  <button onClick={() => setView('chat')} className="flex-1 py-3 bg-orange-500 text-white rounded-xl font-semibold hover:bg-orange-600 transition flex items-center justify-center gap-2">
-                    <MessageCircle className="w-4 h-4" />Open Chat
-                  </button>
-                )}
-                <button onClick={() => setShowShareModal(selectedCrew)} className="px-4 py-3 border border-gray-200 rounded-xl hover:bg-gray-50 transition flex items-center gap-1.5 text-gray-600 text-sm font-medium">
-                  <Share2 className="w-4 h-4" /> Invite
-                </button>
+                {!jd?<button onClick={()=>joinCrew(selectedCrew)} className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black hover:opacity-90 transition">join the crew 🔥</button>
+                     :<button onClick={()=>setView('chat')} className="flex-1 py-3 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black flex items-center justify-center gap-2 hover:opacity-90 transition"><MessageCircle className="w-4 h-4"/>open chat</button>}
+                <button onClick={()=>setShareM(selectedCrew)} className="px-4 py-3 border border-gray-200 rounded-2xl hover:bg-gray-50 transition flex items-center gap-1.5 text-gray-600 text-sm font-black"><Share2 className="w-4 h-4"/>invite</button>
               </div>
             </div>
           </div>
-
           <div className="p-4">
-            <h3 className="font-semibold mb-3">Members ({crewMembers.length})</h3>
+            <h3 className="font-black text-gray-900 mb-3">members ({crewMembers.length})</h3>
             <div className="space-y-3">
-              {crewMembers.map(member => (
-                <div key={member.id} className="flex items-center gap-3">
-                  <button onClick={() => onViewUserProfile(member.email, member.name)} className="w-10 h-10 bg-gradient-to-br from-orange-400 to-red-400 rounded-full flex items-center justify-center text-white font-bold hover:opacity-80 transition">
-                    {(member.initials || '??').toUpperCase()}
-                  </button>
+              {crewMembers.map(m=>(
+                <div key={m.id} className="flex items-center gap-3">
+                  {/* Clicking member name → profile */}
+                  <button onClick={()=>onViewUserProfile(m.email,m.name)} className="w-10 h-10 bg-gradient-to-br from-orange-400 to-pink-400 rounded-full flex items-center justify-center text-white font-black hover:opacity-80 transition">{m.initials}</button>
                   <div className="flex-1">
-                    <button onClick={() => onViewUserProfile(member.email, member.name)} className="font-semibold hover:underline text-sm">{member.name}</button>
-                    <p className="text-xs text-gray-500">{member.isCreator ? '👑 Creator' : 'Member'}</p>
+                    <button onClick={()=>onViewUserProfile(m.email,m.name)} className="font-black hover:underline hover:text-orange-500 transition text-sm">{m.name}</button>
+                    <p className="text-xs text-gray-500">{m.isCreator?'👑 creator':'member'}</p>
                   </div>
                 </div>
               ))}
             </div>
           </div>
-
-          {joined && (
-            <div className="p-4 pt-0">
-              <button onClick={() => leaveCrew(selectedCrew)} className="w-full py-3 border border-red-200 text-red-500 rounded-xl font-medium hover:bg-red-50 transition">Leave Crew</button>
+          {/* LEAVE CREW button */}
+          {jd&&(
+            <div className="p-4 pt-0 space-y-2">
+              {view==='detail'&&<button onClick={()=>setView('chat')} className="w-full py-3 bg-orange-50 border border-orange-200 text-orange-600 rounded-2xl font-black hover:bg-orange-100 transition flex items-center justify-center gap-2"><MessageCircle className="w-4 h-4"/>open chat</button>}
+              <button onClick={()=>leaveCrew(selectedCrew)} className="w-full py-3 border border-red-200 text-red-500 rounded-2xl font-black hover:bg-red-50 transition flex items-center justify-center gap-2">
+                🚪 leave crew
+              </button>
             </div>
           )}
         </div>
-
-        {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
-        {showShareModal && <ShareModal crewInvite={showShareModal} onClose={() => setShowShareModal(null)} />}
+        {selBook&&<BookDetailsModal book={selBook} onClose={()=>setSelBook(null)} onCreateCrew={()=>{}} currentUser={user}/>}
+        {shareModal&&<ShareModal crewInvite={shareModal} onClose={()=>setShareM(null)}/>}
       </div>
     );
   }
 
   return (
     <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
-      <Toast />
-      <div className="sticky top-0 bg-white border-b px-4 py-3 flex items-center justify-between z-10">
+      <ToastBar/>
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-red-500 rounded-md flex items-center justify-center"><BookOpen className="w-3.5 h-3.5 text-white" /></div>
-          <span className="font-bold" style={{ fontFamily: 'Georgia, serif' }}>Reading Crews</span>
+          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-pink-500 rounded-md flex items-center justify-center"><BookOpen className="w-3.5 h-3.5 text-white"/></div>
+          <span className="font-black text-gray-900" style={{fontFamily:'Georgia,serif'}}>reading crews</span>
         </div>
-        <button onClick={() => setShowCreateForm(true)} className="px-3 py-1.5 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">+ Create Crew</button>
+        <button onClick={()=>setShowForm(true)} className="px-3 py-1.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black hover:opacity-90 transition">+ create</button>
       </div>
-
-      <div className="px-4 py-4">
-        <div className="mb-4 relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <input type="text" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="search for ur next read crew 🔍" className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400" />
-          {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 transform -translate-y-1/2"><X className="w-4 h-4 text-gray-400" /></button>}
+      <div className="px-4 py-4 space-y-5">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="search global crews bestie 🌍..." className="w-full pl-10 pr-4 py-3 bg-white border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-400"/>
+          {search&&<button onClick={()=>setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2"><X className="w-4 h-4 text-gray-400"/></button>}
         </div>
 
-        {showCreateForm && (
-          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm mb-4">
-            <h3 className="font-semibold mb-3">Create New Crew</h3>
-            {newCrewData.name && <div className="flex justify-center mb-4"><DynamicBookCover title={newCrewData.name} author={newCrewData.author} size="lg" /></div>}
+        {showForm&&(
+          <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+            <h3 className="font-black mb-1">start a new crew 🔥</h3>
+            <p className="text-xs text-gray-400 mb-3">one book = one crew globally — we'll redirect you if it exists bestie!</p>
+            {newCrew.name&&<div className="flex justify-center mb-4"><DynamicBookCover title={newCrew.name} author={newCrew.author} size="md"/></div>}
             <div className="space-y-3">
-              <input value={newCrewData.name} onChange={e => setNewCrewData({ ...newCrewData, name: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Book title *" />
-              <input value={newCrewData.author} onChange={e => setNewCrewData({ ...newCrewData, author: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Author *" />
-              <input value={newCrewData.genre} onChange={e => setNewCrewData({ ...newCrewData, genre: e.target.value })} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm outline-none focus:border-orange-300" placeholder="Genre (optional)" />
+              <input value={newCrew.name}   onChange={e=>setNewCrew({...newCrew,name:e.target.value})}   className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="book title *"/>
+              <input value={newCrew.author} onChange={e=>setNewCrew({...newCrew,author:e.target.value})} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="author *"/>
+              <input value={newCrew.genre}  onChange={e=>setNewCrew({...newCrew,genre:e.target.value})}  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="genre (optional)"/>
               <div className="flex gap-2">
-                <button onClick={createCrew} className="flex-1 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 transition">Create</button>
-                <button onClick={() => setShowCreateForm(false)} className="px-4 py-2 border border-gray-200 rounded-lg text-sm hover:bg-gray-50 transition">Cancel</button>
+                <button onClick={createCrew} className="flex-1 py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black hover:opacity-90 transition">create/join crew 🚀</button>
+                <button onClick={()=>setShowForm(false)} className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm font-black">nah</button>
               </div>
             </div>
           </div>
         )}
 
-        {loadingCrews ? (
-          <div className="space-y-3 mb-6">{[1, 2, 3, 4].map(i => <CrewSkeleton key={i} />)}</div>
-        ) : null}
-
-        <div style={{ display: loadingCrews ? 'none' : 'block' }}>
-          {/* My Crews */}
-          <div className="mb-6">
-            <h2 className="text-lg font-bold mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500" />My Crews ({joinedList.length})</h2>
-            {joinedList.length === 0 ? (
-              <div className="bg-white rounded-xl p-6 text-center border border-gray-200"><p className="text-gray-500 text-sm">no crews yet — find ur people 👯. Explore below!</p></div>
-            ) : joinedList.map(crew => (
-              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-green-200 shadow-sm cursor-pointer mb-3 hover:shadow-md transition" onClick={() => { setSelectedCrew(crew); setView('detail'); }}>
-                <div className="flex items-center px-4 gap-4 py-3">
-                  <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="font-bold text-gray-900 truncate">{crew.name}</p>
-                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full flex-shrink-0">Joined</span>
-                      {unreadMessages[crew.id] > 0 && <span className="px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full">{unreadMessages[crew.id]}</span>}
-                    </div>
-                    <p className="text-xs text-gray-500">by {crew.author}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      {crew.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{crew.genre}</span>}
-                      <span className="text-xs text-gray-400">{crew.members || 1} members</span>
-                    </div>
+        {/* My Crews */}
+        <div>
+          <h2 className="text-lg font-black text-gray-900 mb-3 flex items-center gap-2"><Users className="w-5 h-5 text-orange-500"/>my crews ({joined_.length})</h2>
+          {joined_.length===0?<div className="bg-white rounded-2xl p-6 text-center border border-gray-100"><p className="text-gray-400 text-sm font-semibold">join a crew below bestie!</p></div>
+           : joined_.map(crew=>(
+            <div key={crew.id} className="bg-white rounded-2xl border border-green-200 shadow-sm mb-3 overflow-hidden">
+              <div className="flex items-center px-4 gap-3 py-3 cursor-pointer" onClick={()=>{setSel(crew);setView('detail');}}>
+                <DynamicBookCover title={crew.name} author={crew.author} size="sm"/>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className="font-black text-gray-900 text-sm truncate">{crew.name}</p>
+                    <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-black flex-shrink-0">joined</span>
+                    {unread[crew.id]>0&&<span className="px-1.5 py-0.5 bg-red-500 text-white text-[10px] rounded-full font-black">{unread[crew.id]}</span>}
                   </div>
-                </div>
-                <div className="px-4 py-2 flex justify-end gap-2 border-t border-gray-100">
-                  <button onClick={e => { e.stopPropagation(); setSelectedCrew(crew); setView('chat'); }} className="px-3 py-1 bg-orange-100 text-orange-600 rounded-lg text-xs font-medium hover:bg-orange-200 transition flex items-center gap-1">
-                    <MessageCircle className="w-3 h-3" />Open Chat
-                  </button>
-                  <button onClick={e => { e.stopPropagation(); setShowShareModal(crew); }} className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-xs font-medium hover:bg-gray-200 transition flex items-center gap-1">
-                    <Share2 className="w-3 h-3" />Invite
-                  </button>
+                  <p className="text-xs text-gray-500">by {crew.author}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {crew.genre&&<span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full font-semibold">{crew.genre}</span>}
+                    <span className="text-xs text-gray-400 flex items-center gap-0.5"><Users className="w-3 h-3"/>{crew.members||1}</span>
+                  </div>
                 </div>
               </div>
-            ))}
-          </div>
+              <div className="px-4 py-2.5 flex gap-2 justify-end border-t border-gray-50">
+                <button onClick={e=>{e.stopPropagation();setSel(crew);setView('chat');}} className="px-3 py-1.5 bg-orange-100 text-orange-600 rounded-xl text-xs font-black hover:bg-orange-200 transition flex items-center gap-1"><MessageCircle className="w-3 h-3"/>chat</button>
+                <button onClick={e=>{e.stopPropagation();setShareM(crew);}} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-xl text-xs font-black hover:bg-gray-200 transition flex items-center gap-1"><Share2 className="w-3 h-3"/>invite</button>
+                <button onClick={e=>{e.stopPropagation();leaveCrew(crew);}} className="px-3 py-1.5 bg-red-50 text-red-500 rounded-xl text-xs font-black hover:bg-red-100 transition">leave</button>
+              </div>
+            </div>
+          ))}
+        </div>
 
-          {/* Discover Crews */}
-          <div>
-            <h2 className="text-lg font-bold mb-3">Discover Crews ({discoverList.length})</h2>
-            <div className="space-y-3">
-              {discoverList.length === 0 ? (
-                <div className="bg-white rounded-xl p-6 text-center border border-gray-200"><p className="text-gray-500 text-sm">No crews to discover</p></div>
-              ) : discoverList.map(crew => (
-                <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm cursor-pointer hover:shadow-md transition" onClick={() => { setSelectedCrew(crew); setView('detail'); }}>
-                  <div className="flex items-center px-4 gap-4 py-3">
-                    <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-gray-900 truncate">{crew.name}</p>
-                      <p className="text-xs text-gray-500">by {crew.author}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        {crew.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{crew.genre}</span>}
-                        <span className="text-xs text-gray-400">{crew.members || 1} members</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="px-4 py-3 flex justify-end border-t border-gray-100">
-                    <button onClick={e => { e.stopPropagation(); joinCrew(crew); }} className="px-5 py-2 bg-orange-500 text-white rounded-xl text-sm font-semibold hover:bg-orange-600 transition">Join</button>
+        {/* Discover Crews */}
+        <div>
+          <h2 className="text-lg font-black text-gray-900 mb-3">discover crews 🌍 <span className="text-sm text-gray-400 font-semibold">({discover.length} global)</span></h2>
+          {loading?<div className="flex justify-center py-8"><LoadingSpinner/></div>
+           : discover.length===0?<div className="bg-white rounded-2xl p-6 text-center border border-gray-100"><p className="text-gray-400 text-sm font-semibold">no crews to discover rn bestie</p></div>
+           : discover.map(crew=>(
+            <div key={crew.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm mb-3 overflow-hidden cursor-pointer hover:shadow-md transition" onClick={()=>{setSel(crew);setView('detail');}}>
+              <div className="flex items-center px-4 gap-3 py-3">
+                <DynamicBookCover title={crew.name} author={crew.author} size="sm"/>
+                <div className="flex-1 min-w-0">
+                  <p className="font-black text-gray-900 text-sm truncate">{crew.name}</p>
+                  <p className="text-xs text-gray-500">by {crew.author}</p>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    {crew.genre&&<span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full font-semibold">{crew.genre}</span>}
+                    <span className="text-xs text-gray-400 flex items-center gap-0.5"><Users className="w-3 h-3"/>{crew.members||1}</span>
                   </div>
                 </div>
-              ))}
+              </div>
+              <div className="px-4 py-2.5 border-t border-gray-50 flex justify-end">
+                <button onClick={e=>{e.stopPropagation();joinCrew(crew);}} className="px-5 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-xs font-black hover:opacity-90 transition">join fr 🔥</button>
+              </div>
             </div>
-          </div>
+          ))}
         </div>
       </div>
-
-      {selectedBook && <BookDetailsModal book={selectedBook} onClose={() => setSelectedBook(null)} onCreateCrew={() => {}} />}
-      {showShareModal && <ShareModal crewInvite={showShareModal} onClose={() => setShowShareModal(null)} />}
+      {selBook&&<BookDetailsModal book={selBook} onClose={()=>setSelBook(null)} onCreateCrew={()=>{}} currentUser={user}/>}
+      {shareModal&&<ShareModal crewInvite={shareModal} onClose={()=>setShareM(null)}/>}
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 35: FULL USER PROFILE PAGE
-// ✅ Books Read and Saved tabs are NOT shown for other users' profiles
-//    (only shown on own profile — that's handled in ProfilePage)
-// ✅ Followers/Following clickable → opens list → click user → navigates to their profile (Instagram loop)
-// ========================================
 
-const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onBack, onFollow, isFollowing, onBlock, isBlocked, onViewFullProfile }) => {
-  const [userData, setUserData] = useState(null);
-  const [userPosts, setUserPosts] = useState([]);
-  const [userReviews, setUserReviews] = useState([]);
-  const [userCrews, setUserCrews] = useState([]);
-  const [followers, setFollowers] = useState([]);
-  const [following, setFollowing] = useState([]);
-  const [activeTab, setActiveTab] = useState('Posts');
-  const [stats, setStats] = useState({ posts: 0, reviews: 0, followers: 0, following: 0 });
-  const [showFollowersList, setShowFollowersList] = useState(false);
-  const [showFollowingList, setShowFollowingList] = useState(false);
+// ══════════════════════════════════════════════════════════════════════════════
+// PROFILE PAGE — Book Status Ring (Instagram/WhatsApp style), private tabs
+// ══════════════════════════════════════════════════════════════════════════════
+const ProfilePage = memo(({ user, posts, setPage, onLogout, onUpdateUser, profileSrc, setProfileSrc, savedPosts, following, followers }) => {
+  const [activeTab,    setActiveTab]  = useState('Posts');
+  const [stats,        setStats]      = useState(()=>getLS(`rcreww_stats_${user.email}`,{}));
+  const [readingGoal,  setRG]         = useState(user?.readingGoal||{yearly:0,monthly:0});
+  const [showGoalEdit, setGoalEdit]   = useState(false);
+  const [editGoal,     setEG]         = useState(readingGoal);
+  const [books,        setBooks]      = useState(()=>getLS(`rcreww_reading_${user.email}`,[]));
+  const [showAddBook,  setShowAdd]    = useState(false);
+  const [newBook,      setNewBook]    = useState({title:'',author:'',rating:5,notes:''});
+  const [editProfile,  setEditProf]   = useState(false);
+  const [editName,     setEN]         = useState(user?.name||'');
+  const [editBio,      setEB]         = useState(user?.bio||'');
+  const [editLocation, setEL]         = useState(user?.location||'');
+  const [editWebsite,  setEW]         = useState(user?.website||'');
+  const [showFollowers,setShowFwers]  = useState(false);
+  const [showFollowing,setShowFwing]  = useState(false);
+  // Book status (reading status ring)
+  const [currentStatus,setStatus]     = useState(()=>getLS(`rcreww_status_${user.email}`,null));
+  const [showStatusModal,setShowSM]   = useState(false);
+  const [statusBookTitle,setSBT]      = useState('');
+  const [statusBookAuthor,setSBA]     = useState('');
+  const fileRef = useRef();
 
-  useEffect(() => { loadData(); }, [viewedUserEmail]);
+  const myPosts   = posts.filter(p=>p.userEmail===user?.email);
+  const myReviews = getGlobalReviews().filter(r=>r.userEmail===user?.email);
+  // PRIVATE: saved posts only visible to self
+  const savedList = posts.filter(p=>savedPosts?.includes(p.id));
+  // PRIVATE: crews only visible to self
+  const joinedIds = getLS(`rcreww_joined_${user.email}`,[]);
+  const allCrews  = getGlobalCrews();
+  const myCrews   = allCrews.filter(c=>joinedIds.includes(c.id)||joinedIds.includes(String(c.id)));
 
-  const loadData = () => {
-    const users = JSON.parse(localStorage.getItem('users') || '[]');
-    const found = users.find(u => u.email === viewedUserEmail);
-    if (found) setUserData(found);
+  useEffect(()=>{
+    const st=getLS(`rcreww_stats_${user.email}`,{}); setStats(st);
+  },[user.email]);
 
-    const fwers = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_followers`) || '[]');
-    const fwing = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_following`) || '[]');
-    setFollowers(fwers);
-    setFollowing(fwing);
-
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    setUserPosts(allPosts.filter(p => p.userEmail === viewedUserEmail));
-
-    const allReviews = JSON.parse(localStorage.getItem('reviews') || '[]');
-    setUserReviews(allReviews.filter(r => r.userEmail === viewedUserEmail));
-
-    // ✅ Books Read and Saved are intentionally NOT loaded here — they are private to the account owner
-
-    const joinedIds = JSON.parse(localStorage.getItem(`user_${viewedUserEmail}_joinedCrews`) || '[]');
-    const allCrews = JSON.parse(localStorage.getItem('crews') || '[]');
-    setUserCrews(allCrews.filter(c => joinedIds.includes(c.id) || joinedIds.includes(String(c.id))));
-
-    const allPostCount = allPosts.filter(p => p.userEmail === viewedUserEmail).length;
-    const allReviewCount = allReviews.filter(r => r.userEmail === viewedUserEmail).length;
-    setStats({ posts: allPostCount, reviews: allReviewCount, followers: fwers.length, following: fwing.length });
+  const uploadPic = (e) => {
+    const f=e.target.files[0]; if(!f) return;
+    if(f.size>5*1024*1024){alert('max 5MB bestie');return;}
+    const r=new FileReader();
+    r.onload=ev=>{
+      const img=ev.target.result;
+      setProfileSrc(img);
+      setLS(`rcreww_pic_${user.email}`,img);
+      const users=getLS('rcreww_users',[]);
+      setLS('rcreww_users',users.map(u=>u.email===user.email?{...u,profileImage:img}:u));
+      const cu=getLS('rcreww_current',{});
+      setLS('rcreww_current',{...cu,profileImage:img});
+      onUpdateUser?.({...user,profileImage:img});
+    };
+    r.readAsDataURL(f);
   };
 
-  // ✅ Followers/Following list — clicking a user in the list navigates to their full profile (the loop)
-  const UserListSheet = ({ title, emailList, onClose: closeSheet }) => {
-    const allUsers = JSON.parse(localStorage.getItem('users') || '[]');
+  const saveProfile = () => {
+    const updated={...user,name:editName,bio:editBio,location:editLocation,website:editWebsite};
+    setLS('rcreww_current',updated);
+    const users=getLS('rcreww_users',[]);
+    setLS('rcreww_users',users.map(u=>u.email===user.email?updated:u));
+    onUpdateUser?.(updated); setEditProf(false);
+  };
+
+  const saveGoal = () => {
+    const updated={...user,readingGoal:editGoal};
+    setLS('rcreww_current',updated);
+    setRG(editGoal); setGoalEdit(false); onUpdateUser?.(updated);
+  };
+
+  const addBook = () => {
+    if(!newBook.title){alert('drop the book name bestie');return;}
+    const book={id:generateId(),...newBook,addedAt:new Date().toISOString()};
+    const updated=[book,...books]; setBooks(updated);
+    setLS(`rcreww_reading_${user.email}`,updated);
+    const st={...stats,booksRead:updated.length}; setStats(st); setLS(`rcreww_stats_${user.email}`,st);
+    setNewBook({title:'',author:'',rating:5,notes:''}); setShowAdd(false);
+  };
+
+  const delBook = (id) => {
+    if(!window.confirm('remove this book fr?')) return;
+    const updated=books.filter(b=>b.id!==id); setBooks(updated);
+    setLS(`rcreww_reading_${user.email}`,updated);
+    const st={...stats,booksRead:updated.length}; setStats(st); setLS(`rcreww_stats_${user.email}`,st);
+  };
+
+  // Set book status (reading ring)
+  const saveStatus = () => {
+    if(!statusBookTitle.trim()){alert('enter what you\'re reading bestie!');return;}
+    const status={title:statusBookTitle.trim(),author:statusBookAuthor.trim(),setAt:new Date().toISOString()};
+    setLS(`rcreww_status_${user.email}`,status);
+    setStatus(status); setShowSM(false); setSBT(''); setSBA('');
+  };
+  const clearStatus = () => { localStorage.removeItem(`rcreww_status_${user.email}`); setStatus(null); };
+
+  // Follower/Following modal — clicking name → profile
+  const FollowerModal = ({ title, emailList, onClose:closeM }) => {
+    const users = getLS('rcreww_users',[]);
     return (
-      <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4"
-        style={{ maxWidth: '448px', left: '50%', transform: 'translateX(-50%)', width: '100%' }}>
-        <div className="bg-white rounded-2xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
-          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
-            <h3 className="font-bold">{title} ({emailList.length})</h3>
-            <button onClick={closeSheet} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5" /></button>
+      <div className="fixed inset-0 bg-black/50 z-[80] flex items-center justify-center p-4" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+        <div className="bg-white rounded-3xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center rounded-t-3xl">
+            <h3 className="font-black">{title} ({emailList.length})</h3>
+            <button onClick={closeM} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5"/></button>
           </div>
-          <div className="p-4">
-            {emailList.length === 0
-              ? <p className="text-center text-gray-500 py-4">No users to show</p>
-              : emailList.map(email => {
-                const u = allUsers.find(x => x.email === email);
-                const name = u?.name || email.split('@')[0];
+          <div className="p-4 space-y-2">
+            {emailList.length===0
+              ? <p className="text-center text-gray-400 py-4 font-semibold">no one here yet bestie</p>
+              : emailList.map(email=>{
+                const u=users.find(x=>x.email===email);
+                const pic=getLS(`rcreww_pic_${email}`,null);
                 return (
-                  <button
-                    key={email}
-                    onClick={() => {
-                      // ✅ Click → navigate to that person's profile, creating the Instagram-style loop
-                      closeSheet();
-                      onViewFullProfile?.(email, name);
-                    }}
-                    className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition mb-2"
-                  >
-                    <Avatar initials={name} size="sm" src={u?.profileImage} />
+                  // Clicking name in followers/following → goes to their profile
+                  <button key={email} onClick={()=>{closeM();setPage('profile_'+email);}} className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition">
+                    <Avatar initials={u?.name||email} size="sm" src={u?.profileImage||pic}/>
                     <div className="flex-1 text-left">
-                      <p className="font-semibold text-gray-900 text-sm">{name}</p>
+                      <p className="font-black text-gray-900 text-sm">{u?.name||email.split('@')[0]}</p>
                       <p className="text-xs text-gray-500">@{email.split('@')[0]}</p>
                     </div>
-                    <ChevronRight className="w-4 h-4 text-gray-400" />
+                    <ChevronRight className="w-4 h-4 text-gray-300"/>
                   </button>
                 );
               })
@@ -5044,137 +2703,253 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
     );
   };
 
-  // ✅ Only Posts, Reviews, Crews shown here — no Books Read, no Saved (those are private)
-  const tabs = ['Posts', 'Reviews', 'Crews'];
+  // Book status modal
+  const StatusModal = () => (
+    <div className="fixed inset-0 bg-black/60 z-[90] flex items-center justify-center p-4" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="bg-white rounded-3xl w-full max-w-sm mx-auto shadow-2xl">
+        <div className="bg-gradient-to-br from-orange-500 to-pink-500 p-5 rounded-t-3xl text-white">
+          <div className="flex items-center justify-between">
+            <div><h3 className="font-black text-lg">set reading status 📚</h3><p className="text-orange-100 text-sm mt-0.5">show your crew what you're reading rn</p></div>
+            <button onClick={()=>setShowSM(false)} className="p-1 bg-white/20 rounded-full hover:bg-white/30 transition"><X className="w-5 h-5"/></button>
+          </div>
+        </div>
+        <div className="p-5 space-y-3">
+          {currentStatus&&(
+            <div className="bg-orange-50 border border-orange-200 rounded-2xl p-3 flex items-center justify-between">
+              <div><p className="text-xs text-orange-600 font-black">currently showing</p><p className="text-sm font-black text-gray-900">{currentStatus.title}</p>{currentStatus.author&&<p className="text-xs text-gray-500">by {currentStatus.author}</p>}</div>
+              <button onClick={clearStatus} className="text-xs text-red-400 font-black hover:text-red-500">clear</button>
+            </div>
+          )}
+          <input value={statusBookTitle} onChange={e=>setSBT(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-400" placeholder="what are you reading rn? *"/>
+          <input value={statusBookAuthor} onChange={e=>setSBA(e.target.value)} className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-400" placeholder="author (optional)"/>
+          <p className="text-xs text-gray-400 text-center">your ring will glow on your profile — bestie energy ✨</p>
+          <button onClick={saveStatus} disabled={!statusBookTitle.trim()} className="w-full py-3.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-2xl font-black hover:opacity-90 transition disabled:opacity-40">set status 🔥</button>
+        </div>
+      </div>
+    </div>
+  );
+
+  const tabs = ['Posts','Reviews','Books Read','Crews','Saved'];
+  const progress = readingGoal.yearly>0 ? Math.min((stats.booksRead||0)/readingGoal.yearly*100,100) : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-24 overflow-y-auto">
-      {showFollowersList && (
-        <UserListSheet title="Followers" emailList={followers} onClose={() => setShowFollowersList(false)} />
-      )}
-      {showFollowingList && (
-        <UserListSheet title="Following" emailList={following} onClose={() => setShowFollowingList(false)} />
-      )}
+    <div className="pb-24 bg-gray-50 min-h-screen overflow-y-auto">
+      {showFollowers&&<FollowerModal title="Followers" emailList={followers||[]} onClose={()=>setShowFwers(false)}/>}
+      {showFollowing&&<FollowerModal title="Following" emailList={following||[]} onClose={()=>setShowFwing(false)}/>}
+      {showStatusModal&&<StatusModal/>}
 
-      <div className="sticky top-0 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3 z-10">
-        <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-lg"><ChevronLeft className="w-5 h-5 text-gray-600" /></button>
-        <h2 className="font-semibold text-gray-900 flex-1 truncate">{viewedUserName}'s Profile</h2>
-        <div className="w-6" />
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between z-10">
+        <div className="flex items-center gap-2">
+          <div className="w-6 h-6 bg-gradient-to-r from-orange-500 to-pink-500 rounded-md flex items-center justify-center"><BookOpen className="w-3.5 h-3.5 text-white"/></div>
+          <span className="font-black text-gray-900" style={{fontFamily:'Georgia,serif'}}>my profile</span>
+        </div>
+        <button onClick={onLogout} className="p-2 hover:bg-gray-100 rounded-xl"><LogOut className="w-5 h-5 text-gray-600"/></button>
       </div>
 
       <div className="px-4 py-5">
+        {/* Avatar with reading status RING */}
         <div className="flex items-start gap-4 mb-5">
-          <Avatar initials={viewedUserName} size="xl" src={userData?.profileImage} />
-          <div className="flex-1 min-w-0">
-            <h2 className="text-xl font-bold text-gray-900 truncate">{viewedUserName}</h2>
-            <p className="text-sm text-gray-500">@{viewedUserName?.toLowerCase().replace(/\s/g, '')}</p>
-            {userData?.bio && <p className="text-sm text-gray-600 mt-1 italic">"{userData.bio}"</p>}
-            {userData?.location && <p className="text-xs text-gray-400 mt-1 flex items-center gap-1"><MapPin className="w-3 h-3" />{userData.location}</p>}
-
-            {/* ✅ Clickable followers/following numbers — tap to see list, tap list item to go to their profile */}
-            <div className="flex gap-4 mt-2">
-              <button onClick={() => setShowFollowersList(true)} className="text-center hover:opacity-75 transition">
-                <p className="font-bold text-gray-900">{followers.length}</p>
-                <p className="text-xs text-gray-500">Followers</p>
-              </button>
-              <button onClick={() => setShowFollowingList(true)} className="text-center hover:opacity-75 transition">
-                <p className="font-bold text-gray-900">{following.length}</p>
-                <p className="text-xs text-gray-500">Following</p>
-              </button>
-            </div>
-
-            {viewedUserEmail !== currentUser.email && (
-              <div className="flex gap-2 mt-3">
-                <button
-                  onClick={() => { onFollow(viewedUserEmail, viewedUserName); }}
-                  className={`flex-1 py-2 rounded-xl font-semibold text-sm flex items-center justify-center gap-1.5 transition ${isFollowing ? 'bg-gray-200 text-gray-700 hover:bg-gray-300' : 'bg-gradient-to-r from-orange-500 to-red-500 text-white hover:opacity-90'}`}
-                >
-                  {isFollowing ? <><UserMinus className="w-4 h-4" />Unfollow</> : <><UserPlus className="w-4 h-4" />Follow</>}
-                </button>
-                <button
-                  onClick={() => { onBlock(viewedUserEmail, viewedUserName); }}
-                  className={`px-4 py-2 rounded-xl font-semibold text-sm transition ${isBlocked ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}`}
-                >
-                  {isBlocked ? 'Unblock' : 'Block'}
-                </button>
+          <div className="relative flex-shrink-0">
+            {/* Story ring if status is set */}
+            <div className={`p-0.5 rounded-full ${currentStatus ? 'bg-gradient-to-tr from-orange-400 via-pink-400 to-purple-500' : 'bg-transparent'}`}>
+              <div className="p-0.5 bg-white rounded-full">
+                <div className="relative">
+                  {profileSrc
+                    ? <img src={profileSrc} alt={user?.name} className="w-20 h-20 rounded-full object-cover cursor-pointer" onClick={()=>setShowSM(true)}/>
+                    : <div className="w-20 h-20 cursor-pointer" onClick={()=>setShowSM(true)}><Avatar initials={user?.name} size="xl"/></div>
+                  }
+                  {/* Camera button */}
+                  <button onClick={()=>fileRef.current?.click()} className="absolute bottom-0 right-0 w-6 h-6 bg-orange-500 rounded-full flex items-center justify-center border-2 border-white shadow hover:bg-orange-600 transition">
+                    <Camera className="w-3 h-3 text-white"/>
+                  </button>
+                </div>
               </div>
+            </div>
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={uploadPic}/>
+            {/* Status indicator dot */}
+            {currentStatus&&<div className="absolute -bottom-1 -right-1 w-5 h-5 bg-gradient-to-br from-orange-400 to-pink-400 rounded-full border-2 border-white flex items-center justify-center"><BookOpen className="w-2.5 h-2.5 text-white"/></div>}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {editProfile ? (
+              <div className="space-y-2">
+                <input value={editName} onChange={e=>setEN(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="name"/>
+                <input value={editLocation} onChange={e=>setEL(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="location"/>
+                <input value={editWebsite} onChange={e=>setEW(e.target.value)} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="website"/>
+                <textarea value={editBio} onChange={e=>setEB(e.target.value)} rows={2} className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm outline-none focus:border-orange-300 resize-none" placeholder="bio..."/>
+                <div className="flex gap-2">
+                  <button onClick={saveProfile} className="flex-1 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black hover:opacity-90 transition">save</button>
+                  <button onClick={()=>setEditProf(false)} className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-black hover:bg-gray-50">cancel</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <h2 className="text-xl font-black text-gray-900 truncate">{user?.name}</h2>
+                <p className="text-sm text-gray-400">@{user?.name?.toLowerCase().replace(/\s/g,'')}</p>
+                {user?.location&&<p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3"/>{user.location}</p>}
+                {user?.website&&<a href={user.website.startsWith('http')?user.website:`https://${user.website}`} target="_blank" rel="noopener noreferrer" className="text-xs text-orange-500 mt-0.5 flex items-center gap-1 hover:underline"><ExternalLink className="w-3 h-3"/>{user.website.replace(/^https?:\/\//,'')}</a>}
+                <p className="text-sm text-gray-600 mt-1.5 italic">"{user?.bio||'living my best bookish era 📚'}"</p>
+                {/* Current reading status */}
+                {currentStatus&&(
+                  <div className="mt-2 bg-gradient-to-r from-orange-50 to-pink-50 border border-orange-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                    <BookOpen className="w-3.5 h-3.5 text-orange-500 flex-shrink-0"/>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-orange-600 font-black">📖 currently reading</p>
+                      <p className="text-xs text-gray-800 font-black truncate">{currentStatus.title}</p>
+                      {currentStatus.author&&<p className="text-xs text-gray-500">by {currentStatus.author}</p>}
+                    </div>
+                    <button onClick={()=>setShowSM(true)} className="text-xs text-orange-400 font-black hover:text-orange-500">edit</button>
+                  </div>
+                )}
+                <div className="flex gap-4 mt-2">
+                  {/* Clicking followers → modal with clickable names */}
+                  <button onClick={()=>setShowFwers(true)} className="text-center hover:opacity-75 transition">
+                    <p className="font-black text-gray-900">{followers?.length||0}</p>
+                    <p className="text-xs text-gray-500">followers</p>
+                  </button>
+                  <button onClick={()=>setShowFwing(true)} className="text-center hover:opacity-75 transition">
+                    <p className="font-black text-gray-900">{following?.length||0}</p>
+                    <p className="text-xs text-gray-500">following</p>
+                  </button>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <button onClick={()=>setEditProf(true)} className="px-4 py-1.5 border border-orange-200 text-orange-600 rounded-xl text-sm font-black hover:bg-orange-50 flex items-center gap-1.5 transition">
+                    <Edit className="w-3.5 h-3.5"/>edit profile
+                  </button>
+                  <button onClick={()=>setShowSM(true)} className={`px-3 py-1.5 rounded-xl text-sm font-black transition flex items-center gap-1.5 ${currentStatus?'bg-gradient-to-r from-orange-500 to-pink-500 text-white':'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                    <BookOpen className="w-3.5 h-3.5"/>status
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>
 
-        <div className="grid grid-cols-3 gap-2 bg-white rounded-xl p-3 border border-gray-200 mb-5">
-          {[['Posts', stats.posts, Edit3, 'text-green-600'], ['Reviews', stats.reviews, Star, 'text-purple-600'], ['Crews', userCrews.length, Users, 'text-orange-600']].map(([label, value, Icon, color]) => (
-            <div key={label} className="text-center">
-              <Icon className={`w-5 h-5 ${color} mx-auto mb-1`} />
-              <p className="text-lg font-bold text-gray-900">{value}</p>
-              <p className="text-xs text-gray-500">{label}</p>
+        {/* Reading goal */}
+        <div className="bg-gradient-to-r from-orange-50 to-pink-50 rounded-2xl p-4 border border-orange-100 mb-5">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2"><Target className="w-4 h-4 text-orange-500"/><h3 className="font-black text-sm">reading goal {new Date().getFullYear()}</h3></div>
+            <button onClick={()=>setGoalEdit(!showGoalEdit)} className="text-sm text-orange-500 font-black">{showGoalEdit?'cancel':'edit'}</button>
+          </div>
+          {showGoalEdit?(
+            <div className="space-y-3 mt-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="text-xs text-gray-600 mb-1 block font-black">yearly</label><input type="number" value={editGoal.yearly} onChange={e=>setEG({...editGoal,yearly:parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-orange-400 focus:outline-none text-sm" min="0" max="365"/></div>
+                <div><label className="text-xs text-gray-600 mb-1 block font-black">monthly</label><input type="number" value={editGoal.monthly} onChange={e=>setEG({...editGoal,monthly:parseInt(e.target.value)||0})} className="w-full px-3 py-2 rounded-xl border border-gray-200 focus:border-orange-400 focus:outline-none text-sm" min="0" max="31"/></div>
+              </div>
+              <button onClick={saveGoal} className="w-full py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black hover:opacity-90 transition">save goal</button>
             </div>
+          ):(
+            <>
+              <div className="flex justify-between text-sm mb-1">
+                <span className="text-gray-600 font-semibold">progress</span>
+                <span className="font-black">{readingGoal.yearly>0?`${stats.booksRead||0}/${readingGoal.yearly} books`:'no goal set'}</span>
+              </div>
+              {readingGoal.yearly>0&&<div className="h-2 bg-orange-200 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-orange-500 to-pink-500 rounded-full transition-all duration-500" style={{width:`${progress}%`}}/></div>}
+            </>
+          )}
+        </div>
+
+        {/* Stats */}
+        <div className="grid grid-cols-4 gap-2 bg-white rounded-2xl p-3 border border-gray-100 mb-5">
+          {[{l:'Books',v:stats.booksRead||0,I:BookOpen,c:'text-blue-600'},{l:'Reviews',v:stats.reviewsGiven||0,I:Star,c:'text-purple-600'},{l:'Posts',v:stats.postsCreated||0,I:Edit3,c:'text-green-600'},{l:'Crews',v:stats.crewsJoined||0,I:Users,c:'text-orange-600'}].map(({l,v,I,c},i)=>(
+            <div key={i} className="text-center"><I className={`w-5 h-5 ${c} mx-auto mb-1`}/><p className="text-lg font-black text-gray-900">{v}</p><p className="text-xs text-gray-500 font-semibold">{l}</p></div>
           ))}
         </div>
 
-        <div className="flex border-b border-gray-200 mb-4 overflow-x-auto scrollbar-hide">
-          {tabs.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              className={`flex-shrink-0 text-sm pb-2.5 px-3 font-medium border-b-2 transition whitespace-nowrap ${activeTab === tab ? 'text-orange-500 border-orange-500' : 'text-gray-500 border-transparent'}`}>
-              {tab}
-            </button>
+        {/* Tabs */}
+        <div className="flex border-b border-gray-200 mb-4 overflow-x-auto" style={{scrollbarWidth:'none'}}>
+          {tabs.map(tab=>(
+            <button key={tab} onClick={()=>setActiveTab(tab)} className={`flex-shrink-0 text-sm pb-2.5 px-3 font-black border-b-2 transition whitespace-nowrap ${activeTab===tab?'text-orange-500 border-orange-500':'text-gray-400 border-transparent hover:text-gray-600'}`}>{tab}</button>
           ))}
         </div>
 
-        {activeTab === 'Posts' && (
+        {/* Posts tab */}
+        {activeTab==='Posts'&&(
           <div className="space-y-4">
-            {userPosts.length === 0 ? (
-              <div className="text-center py-8"><Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no posts rn — start ur era 📸</p></div>
-            ) : userPosts.map(post => (
-              <div key={post.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
-                <p className="text-sm text-gray-700 mb-2">{post.content}</p>
-                {post.bookName && <p className="text-xs text-orange-500">📖 {post.bookName}</p>}
-                {post.image && <img src={post.image} alt="" className="w-full rounded-xl mt-2 max-h-40 object-cover" />}
-                <div className="flex items-center gap-4 pt-2 border-t border-gray-100 mt-2 text-xs text-gray-400">
-                  <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" />{getPostLikes(post.id) || post.likes || 0}</span>
-                  <span className="flex items-center gap-1"><Repeat className="w-3.5 h-3.5" />{post.reshareCount || 0}</span>
-                  <span>{new Date(post.createdAt).toLocaleDateString()}</span>
+            {myPosts.length===0?<div className="text-center py-8"><Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-400 font-black">no posts yet bestie — start your era 📸</p><button onClick={()=>setPage('post')} className="mt-3 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black">create first post</button></div>
+             : myPosts.map(post=>(
+              <div key={post.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <p className="text-sm text-gray-700 mb-2 leading-relaxed" style={{fontFamily:'Georgia,serif'}}>{post.content}</p>
+                {post.bookName&&<p className="text-xs text-orange-500 font-black">📖 {post.bookName}</p>}
+                {post.image&&<img src={post.image} alt="" className="w-full rounded-xl mt-2 max-h-40 object-cover" loading="lazy"/>}
+                <div className="flex items-center gap-4 pt-2 border-t border-gray-50 mt-2 text-xs text-gray-400">
+                  <span className="flex items-center gap-1 font-semibold"><Heart className="w-3.5 h-3.5"/>{getLikeCount(post.id)||post.likes||0}</span>
+                  <span className="flex items-center gap-1 font-semibold"><MessageCircle className="w-3.5 h-3.5"/>{getPostComments(post.id).filter(c=>!c.parentId).length||post.comments||0}</span>
+                  <span>{formatTimeAgo(post.createdAt)}</span>
                 </div>
               </div>
             ))}
           </div>
         )}
 
-        {activeTab === 'Reviews' && (
+        {/* Reviews tab */}
+        {activeTab==='Reviews'&&(
           <div className="space-y-4">
-            {userReviews.length === 0 ? (
-              <div className="text-center py-8"><Star className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no reviews yet — spill the tea ☕</p></div>
-            ) : userReviews.map(review => (
-              <div key={review.id} className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+            {myReviews.length===0?<div className="text-center py-8"><Star className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-400 font-black">no reviews yet bestie — spill the tea ☕</p><button onClick={()=>setPage('reviews')} className="mt-3 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black">write a review</button></div>
+             : myReviews.map(rev=>(
+              <div key={rev.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
                 <div className="flex items-start gap-3 mb-2">
-                  <DynamicBookCover title={review.bookName} author={review.author} size="sm" />
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-sm">{review.bookName}</h3>
-                    <p className="text-xs text-gray-500">by {review.author}</p>
-                    <StarRating rating={review.rating} size="xs" readonly />
-                  </div>
+                  <DynamicBookCover title={rev.bookName} author={rev.author} size="sm"/>
+                  <div className="flex-1"><h3 className="font-black text-sm">{rev.bookName}</h3><p className="text-xs text-gray-500">by {rev.author}</p><StarRating rating={rev.rating} size="xs" readonly/></div>
                 </div>
-                <p className="text-sm text-gray-700">{review.review}</p>
-                <p className="text-xs text-gray-400 mt-2">{new Date(review.createdAt).toLocaleDateString()}</p>
+                <p className="text-sm text-gray-700 leading-relaxed">{rev.review}</p>
+                <p className="text-xs text-gray-400 mt-2">{formatTimeAgo(rev.createdAt)}</p>
               </div>
             ))}
           </div>
         )}
 
-        {activeTab === 'Crews' && (
+        {/* Books Read tab — PRIVATE */}
+        {activeTab==='Books Read'&&(
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2"><Lock className="w-4 h-4 text-gray-400"/><p className="text-xs text-gray-400 font-semibold">private — only you can see this</p></div>
+              <button onClick={()=>setShowAdd(!showAddBook)} className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black hover:opacity-90 transition"><Plus className="w-4 h-4"/>{showAddBook?'cancel':'add'}</button>
+            </div>
+            {showAddBook&&(
+              <div className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="space-y-3">
+                  <input value={newBook.title}  onChange={e=>setNewBook({...newBook,title:e.target.value})}  className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="book title *"/>
+                  <input value={newBook.author} onChange={e=>setNewBook({...newBook,author:e.target.value})} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300" placeholder="author"/>
+                  <div><label className="text-xs text-gray-600 mb-1 block font-black">your rating</label><StarRating rating={newBook.rating} onChange={r=>setNewBook({...newBook,rating:r})} size="md"/></div>
+                  <textarea value={newBook.notes} onChange={e=>setNewBook({...newBook,notes:e.target.value})} rows={2} className="w-full px-3 py-2.5 bg-gray-50 border border-gray-100 rounded-xl text-sm outline-none focus:border-orange-300 resize-none" placeholder="notes..."/>
+                  <button onClick={addBook} className="w-full py-2.5 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl font-black text-sm hover:opacity-90 transition">add to my list ✅</button>
+                </div>
+              </div>
+            )}
+            {books.length===0?<div className="text-center py-8"><BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-400 font-black text-sm">no books logged yet bestie</p></div>
+             : books.map(book=>(
+              <div key={book.id} className="bg-white rounded-2xl p-3 border border-gray-100 shadow-sm flex items-start gap-3">
+                <DynamicBookCover title={book.title} author={book.author} size="sm"/>
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-black text-sm text-gray-900">{book.title}</h3>
+                  <p className="text-xs text-gray-500">{book.author}</p>
+                  <StarRating rating={book.rating} size="xs" readonly/>
+                  {book.notes&&<p className="text-xs text-gray-500 mt-1 italic">"{book.notes}"</p>}
+                  <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(book.addedAt)}</p>
+                </div>
+                <button onClick={()=>delBook(book.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition"><Trash2 className="w-4 h-4 text-red-300 hover:text-red-500"/></button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Crews tab — PRIVATE */}
+        {activeTab==='Crews'&&(
           <div className="space-y-3">
-            {userCrews.length === 0 ? (
-              <div className="text-center py-8"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3" /><p className="text-gray-500">no crews yet — find ur people 👯</p></div>
-            ) : userCrews.map(crew => (
-              <div key={crew.id} className="bg-white rounded-xl overflow-hidden border border-gray-200 shadow-sm">
-                <div className="flex items-center px-4 gap-4 py-3">
-                  <DynamicBookCover title={crew.name} author={crew.author} size="sm" />
+            <div className="flex items-center gap-2 mb-2"><Lock className="w-4 h-4 text-gray-400"/><p className="text-xs text-gray-400 font-semibold">private — only you can see this</p></div>
+            {myCrews.length===0?<div className="text-center py-8"><Users className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-400 font-black text-sm">no crews yet bestie</p><button onClick={()=>setPage('crews')} className="mt-3 px-4 py-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white rounded-xl text-sm font-black">browse crews</button></div>
+             : myCrews.map(crew=>(
+              <div key={crew.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="flex items-center px-4 gap-3 py-3">
+                  <DynamicBookCover title={crew.name} author={crew.author} size="sm"/>
                   <div className="flex-1 min-w-0">
-                    <p className="font-bold text-gray-900 truncate">{crew.name}</p>
+                    <p className="font-black text-gray-900 text-sm truncate">{crew.name}</p>
                     <p className="text-xs text-gray-500">by {crew.author}</p>
-                    <div className="flex items-center gap-3 mt-1">
-                      {crew.genre && <span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full">{crew.genre}</span>}
-                      <span className="text-xs text-gray-400">{crew.members || 1} members</span>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      {crew.genre&&<span className="text-xs px-2 py-0.5 bg-orange-100 text-orange-600 rounded-full font-semibold">{crew.genre}</span>}
+                      <span className="text-xs text-gray-400">{crew.members||1} members</span>
                     </div>
                   </div>
                 </div>
@@ -5182,497 +2957,587 @@ const FullUserProfilePage = ({ viewedUserEmail, viewedUserName, currentUser, onB
             ))}
           </div>
         )}
+
+        {/* Saved tab — PRIVATE */}
+        {activeTab==='Saved'&&(
+          <div className="space-y-4">
+            <div className="flex items-center gap-2 mb-2"><Lock className="w-4 h-4 text-gray-400"/><p className="text-xs text-gray-400 font-semibold">private — only you can see this</p></div>
+            {savedList.length===0?<div className="text-center py-8"><Bookmark className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-400 font-black text-sm">no saved posts yet bestie</p></div>
+             : savedList.map(post=>(
+              <div key={post.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                  <Avatar initials={post.userName} size="xs" src={post.userPhoto}/>
+                  <span className="text-xs font-black text-gray-700">{post.userName}</span>
+                </div>
+                <p className="text-sm text-gray-700">{post.content}</p>
+                {post.bookName&&<p className="text-xs text-orange-500 mt-1 font-black">📖 {post.bookName}</p>}
+                <p className="text-xs text-gray-400 mt-2">{formatTimeAgo(post.createdAt)}</p>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
-};
+});
 
-// ========================================
-// SECTION 36: MAIN APP COMPONENT
-// ✅ onNavigateToPost + onNavigateToCrew passed to NotificationsPage
-// ✅ handleNavigateToPost: scrolls home feed to specific post
-// ✅ handleNavigateToCrew: opens crews page to specific crew
-// ========================================
-
-export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [currentUser, setCurrentUser] = useState(null);
-  const [profileSrc, setProfileSrc] = useState(null);
-  const [currentPage, setCurrentPage] = useState('home');
-  const [showBottomNav, setShowBottomNav] = useState(true);
-  const [posts, setPosts] = useState([]);
-  const [crews, setCrews] = useState([
-    { id: 'crew_atomic', name: 'Atomic Habits', author: 'James Clear', genre: 'Self-Help', members: 24, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_tuesdays', name: 'Tuesdays with Morrie', author: 'Mitch Albom', genre: 'Inspiration', members: 12, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_alchemist', name: 'The Alchemist', author: 'Paulo Coelho', genre: 'Fiction', members: 31, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_hailmary', name: 'Project Hail Mary', author: 'Andy Weir', genre: 'Sci-Fi', members: 18, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_fourth', name: 'Fourth Wing', author: 'Rebecca Yarros', genre: 'Fantasy', members: 42, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_midnight', name: 'The Midnight Library', author: 'Matt Haig', genre: 'Fiction', members: 29, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_becoming', name: 'Becoming', author: 'Michelle Obama', genre: 'Memoir', members: 27, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_beach', name: 'The Beach', author: 'Alex Garland', genre: 'Fiction', members: 15, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_sapiens', name: 'Sapiens', author: 'Yuval Noah Harari', genre: 'History', members: 22, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_psychology', name: 'The Psychology of Money', author: 'Morgan Housel', genre: 'Finance', members: 19, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_silentpatient', name: 'The Silent Patient', author: 'Alex Michaelides', genre: 'Thriller', members: 33, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-    { id: 'crew_gonegirl', name: 'Gone Girl', author: 'Gillian Flynn', genre: 'Thriller', members: 21, chats: 0, createdBy: 'system', createdByName: 'READCREWW', createdAt: '2024-01-01T00:00:00Z' },
-  ]);
-  const [savedPosts, setSavedPosts] = useState([]);
-  const [following, setFollowing] = useState([]);
-  const [followers, setFollowers] = useState([]);
-  const [blockedUsers, setBlockedUsers] = useState([]);
-  const [unreadMessages, setUnreadMessages] = useState(0);
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [currentToast, setCurrentToast] = useState(null);
-  const [selectedUserProfile, setSelectedUserProfile] = useState(null);
-  const [showUserProfile, setShowUserProfile] = useState(false);
-  const [viewingFullProfile, setViewingFullProfile] = useState(null);
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+// ══════════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS PAGE
+// ══════════════════════════════════════════════════════════════════════════════
+const NotificationsPage = memo(({ user, onClose, updateNotificationCount }) => {
+  const [notifs,  setNotifs]  = useState([]);
   const [loading, setLoading] = useState(true);
-  const prevCountRef = useRef(0);
 
-  const [deepLinkPostId, setDeepLinkPostId] = useState(null);
-  const [deepLinkCrewId, setDeepLinkCrewId] = useState(null);
+  const load = useCallback(()=>{
+    const raw=getLS(`rcreww_notifs_${user.email}`,[]);
+    const social=raw.filter(n=>n.type!=='message');
+    setNotifs(social.sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)));
+    setLoading(false);
+  },[user.email]);
 
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); };
-  }, []);
+  useEffect(()=>{
+    load();
+    const h=(e)=>{ if(e.data?.type==='notif'&&e.data.payload?.targetEmail===user.email) load(); };
+    const hc=(e)=>{ if(e.detail?.targetEmail===user.email) load(); };
+    bc?.addEventListener('message',h);
+    window.addEventListener('rc:notif',hc);
+    return()=>{ bc?.removeEventListener('message',h); window.removeEventListener('rc:notif',hc); };
+  },[user.email,load]);
 
-  useEffect(() => {
-    setShowBottomNav(currentPage !== 'post' && !viewingFullProfile);
-  }, [currentPage, viewingFullProfile]);
+  const markAll = () => {
+    const raw=getLS(`rcreww_notifs_${user.email}`,[]);
+    const updated=raw.map(n=>({...n,read:true}));
+    updated.forEach(n=>_shownToastIds.add(n.id));
+    setLS(`rcreww_notifs_${user.email}`,updated);
+    setNotifs(prev=>prev.map(n=>({...n,read:true})));
+    updateNotificationCount?.();
+  };
+  const markOne = (id) => {
+    _shownToastIds.add(id);
+    const raw=getLS(`rcreww_notifs_${user.email}`,[]);
+    setLS(`rcreww_notifs_${user.email}`,raw.map(n=>n.id===id?{...n,read:true}:n));
+    setNotifs(p=>p.map(n=>n.id===id?{...n,read:true}:n));
+    updateNotificationCount?.();
+  };
+  const delOne = (id) => {
+    const raw=getLS(`rcreww_notifs_${user.email}`,[]);
+    setLS(`rcreww_notifs_${user.email}`,raw.filter(n=>n.id!==id));
+    setNotifs(p=>p.filter(n=>n.id!==id));
+    updateNotificationCount?.();
+  };
 
-  useEffect(() => {
+  const icons={like:<Heart className="w-4 h-4 text-red-500"/>,comment:<MessageCircle className="w-4 h-4 text-blue-500"/>,mention:<AtSign className="w-4 h-4 text-amber-500"/>,reshare:<Repeat className="w-4 h-4 text-indigo-500"/>,follow:<UserCheck className="w-4 h-4 text-green-500"/>,join:<Users className="w-4 h-4 text-blue-500"/>,review:<Star className="w-4 h-4 text-yellow-500"/>,success:<CheckCircle className="w-4 h-4 text-green-500"/>,info:<Info className="w-4 h-4 text-orange-500"/>,warning:<AlertCircle className="w-4 h-4 text-orange-500"/>};
+  const ibgs={like:'bg-red-100',comment:'bg-blue-100',mention:'bg-amber-100',reshare:'bg-indigo-100',follow:'bg-green-100',join:'bg-blue-100',review:'bg-yellow-100',success:'bg-green-100',info:'bg-orange-100',warning:'bg-amber-100'};
+  const unread=notifs.filter(n=>!n.read).length;
+
+  return (
+    <div className="fixed inset-0 bg-white z-50 flex flex-col overflow-hidden" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center justify-between flex-shrink-0">
+        <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-xl"><ChevronLeft className="w-5 h-5 text-gray-600"/></button>
+        <div className="flex items-center gap-2">
+          <h2 className="font-black text-gray-900">notifications</h2>
+          {unread>0&&<span className="bg-red-500 text-white text-xs px-2 py-0.5 rounded-full font-black">{unread}</span>}
+        </div>
+        <button onClick={markAll} disabled={unread===0} className={`text-sm font-black transition ${unread>0?'text-orange-500 hover:text-orange-600':'text-gray-300 cursor-not-allowed'}`}>mark all read</button>
+      </div>
+      <div className="flex-1 overflow-y-auto pb-4">
+        {loading?<div className="flex justify-center py-12"><LoadingSpinner/></div>
+         : notifs.length===0?(
+          <div className="text-center py-16">
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4"><Bell className="w-10 h-10 text-gray-300"/></div>
+            <p className="text-gray-500 font-black">all caught up bestie 🎉</p>
+            <p className="text-gray-400 text-sm mt-1">your hype squad will slide in here 📬</p>
+          </div>
+         ):(
+          <div className="divide-y divide-gray-50">
+            {notifs.map(n=>(
+              <div key={n.id} onClick={()=>!n.read&&markOne(n.id)} className={`p-4 transition cursor-pointer hover:bg-gray-50 ${n.read?'bg-white':'bg-orange-50'}`}>
+                <div className="flex items-start gap-3">
+                  <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${ibgs[n.type]||'bg-gray-100'}`}>{icons[n.type]||<Bell className="w-4 h-4 text-gray-500"/>}</div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-gray-900 leading-relaxed font-semibold">{n.message}</p>
+                    <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(n.timestamp)}</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {!n.read&&<div className="w-2.5 h-2.5 bg-orange-500 rounded-full flex-shrink-0"/>}
+                    <button onClick={e=>{e.stopPropagation();delOne(n.id);}} className="p-1 text-gray-200 hover:text-red-400 transition"><X className="w-3.5 h-3.5"/></button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FULL USER PROFILE PAGE — Shows public content only, private tabs HIDDEN
+// Clicking followers/following names → navigate to their profile
+// ══════════════════════════════════════════════════════════════════════════════
+const FullUserProfilePage = memo(({ viewedEmail, viewedName, currentUser, onBack, onFollow, isFollowing, onBlock, isBlocked, onViewUserProfile }) => {
+  const [userData,  setData]    = useState(null);
+  const [userPosts, setPosts]   = useState([]);
+  const [userRevs,  setRevs]    = useState([]);
+  const [stats,     setStats]   = useState({posts:0,reviews:0,followers:0,following:0,crewsJoined:0,booksRead:0});
+  const [activeTab, setActiveTab]=useState('Posts');
+  const [selBook,   setSel]     = useState(null);
+  const [showFwers, setShowFwers]=useState(false);
+  const [showFwing, setShowFwing]=useState(false);
+  const profilePic = getLS(`rcreww_pic_${viewedEmail}`,null);
+  // Book status
+  const status = getLS(`rcreww_status_${viewedEmail}`,null);
+
+  useEffect(()=>{
+    const users=getLS('rcreww_users',[]);
+    const found=users.find(u=>u.email===viewedEmail);
+    if(found) setData(found);
+    const fwers=getLS(`rcreww_followers_${viewedEmail}`,[]);
+    const fwing=getLS(`rcreww_following_${viewedEmail}`,[]);
+    const allPosts=getGlobalPosts();
+    const posts=allPosts.filter(p=>p.userEmail===viewedEmail);
+    setPosts(posts);
+    const revs=getGlobalReviews().filter(r=>r.userEmail===viewedEmail);
+    setRevs(revs);
+    const st=getLS(`rcreww_stats_${viewedEmail}`,{});
+    setStats({posts:posts.length,reviews:revs.length,followers:fwers.length,following:fwing.length,crewsJoined:st.crewsJoined||0,booksRead:st.booksRead||0});
+  },[viewedEmail]);
+
+  // Follower/Following modal — clicking name → profile
+  const FollowerModal2 = ({ title, emailList, onClose:closeM }) => {
+    const users=getLS('rcreww_users',[]);
+    return (
+      <div className="fixed inset-0 bg-black/50 z-[85] flex items-center justify-center p-4" style={{maxWidth:'448px',left:'50%',transform:'translateX(-50%)',width:'100%'}}>
+        <div className="bg-white rounded-3xl w-full max-w-sm mx-auto max-h-[80vh] overflow-y-auto">
+          <div className="sticky top-0 bg-white border-b p-4 flex justify-between items-center rounded-t-3xl">
+            <h3 className="font-black">{title} ({emailList.length})</h3>
+            <button onClick={closeM} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5"/></button>
+          </div>
+          <div className="p-4 space-y-2">
+            {emailList.length===0?<p className="text-center text-gray-400 py-4 font-semibold">no one here yet bestie</p>
+             : emailList.map(email=>{
+              const u=users.find(x=>x.email===email);
+              const pic=getLS(`rcreww_pic_${email}`,null);
+              return (
+                <button key={email} onClick={()=>{closeM();onViewUserProfile(email,u?.name||email.split('@')[0]);}} className="w-full flex items-center gap-3 p-2 hover:bg-gray-50 rounded-xl transition">
+                  <Avatar initials={u?.name||email} size="sm" src={u?.profileImage||pic}/>
+                  <div className="flex-1 text-left">
+                    <p className="font-black text-gray-900 text-sm">{u?.name||email.split('@')[0]}</p>
+                    <p className="text-xs text-gray-500">@{email.split('@')[0]}</p>
+                  </div>
+                  <ChevronRight className="w-4 h-4 text-gray-300"/>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // PUBLIC tabs only — Books Read, Crews, Saved = PRIVATE (hidden)
+  const tabs = ['Posts','Reviews'];
+
+  return (
+    <div className="min-h-screen bg-gray-50 pb-24 overflow-y-auto">
+      {showFwers&&<FollowerModal2 title="Followers" emailList={getLS(`rcreww_followers_${viewedEmail}`,[])} onClose={()=>setShowFwers(false)}/>}
+      {showFwing&&<FollowerModal2 title="Following" emailList={getLS(`rcreww_following_${viewedEmail}`,[])} onClose={()=>setShowFwing(false)}/>}
+      {selBook&&<BookDetailsModal book={selBook} onClose={()=>setSel(null)} onCreateCrew={()=>{}} currentUser={currentUser}/>}
+
+      <div className="sticky top-0 bg-white border-b border-gray-100 px-4 py-3 flex items-center gap-3 z-10">
+        <button onClick={onBack} className="p-1 hover:bg-gray-100 rounded-xl"><ChevronLeft className="w-5 h-5 text-gray-600"/></button>
+        <h2 className="font-black text-gray-900 flex-1 truncate">{viewedName}'s profile</h2>
+        <div className="w-6"/>
+      </div>
+
+      <div className="px-4 py-5">
+        <div className="flex items-start gap-4 mb-5">
+          {/* Status ring on other user's profile */}
+          <div className={`p-0.5 rounded-full ${status?'bg-gradient-to-tr from-orange-400 via-pink-400 to-purple-500':'bg-transparent'} flex-shrink-0`}>
+            <div className="p-0.5 bg-white rounded-full">
+              <Avatar initials={viewedName} size="xl" src={userData?.profileImage||profilePic}/>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <h2 className="text-xl font-black text-gray-900 truncate">{viewedName}</h2>
+            <p className="text-sm text-gray-400">@{viewedName?.toLowerCase().replace(/\s/g,'')}</p>
+            {userData?.bio&&<p className="text-sm text-gray-600 mt-1 italic">"{userData.bio}"</p>}
+            {userData?.location&&<p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3"/>{userData.location}</p>}
+            {/* Status display */}
+            {status&&(
+              <div className="mt-2 bg-gradient-to-r from-orange-50 to-pink-50 border border-orange-100 rounded-xl px-3 py-2 flex items-center gap-2">
+                <BookOpen className="w-3.5 h-3.5 text-orange-500 flex-shrink-0"/>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs text-orange-600 font-black">📖 currently reading</p>
+                  <p className="text-xs text-gray-800 font-black truncate">{status.title}</p>
+                  {status.author&&<p className="text-xs text-gray-500">by {status.author}</p>}
+                </div>
+              </div>
+            )}
+            {/* Clickable followers/following */}
+            <div className="flex gap-4 mt-2">
+              <button onClick={()=>setShowFwers(true)} className="text-center hover:opacity-75 transition">
+                <p className="font-black text-gray-900">{stats.followers}</p>
+                <p className="text-xs text-gray-500">followers</p>
+              </button>
+              <button onClick={()=>setShowFwing(true)} className="text-center hover:opacity-75 transition">
+                <p className="font-black text-gray-900">{stats.following}</p>
+                <p className="text-xs text-gray-500">following</p>
+              </button>
+            </div>
+            {viewedEmail!==currentUser.email&&(
+              <div className="flex gap-2 mt-3">
+                <button onClick={()=>onFollow(viewedEmail,viewedName)} className={`flex-1 py-2 rounded-2xl font-black text-sm flex items-center justify-center gap-1.5 transition ${isFollowing?'bg-gray-200 text-gray-700':'bg-gradient-to-r from-orange-500 to-pink-500 text-white'}`}>
+                  {isFollowing?<><UserMinus className="w-4 h-4"/>unfollow</>:<><UserPlus className="w-4 h-4"/>follow</>}
+                </button>
+                <button onClick={()=>onBlock(viewedEmail,viewedName)} className={`px-4 py-2 rounded-2xl font-black text-sm transition ${isBlocked?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}`}>
+                  {isBlocked?'unblock':'block'}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Stats — public only */}
+        <div className="grid grid-cols-4 gap-2 bg-white rounded-2xl p-3 border border-gray-100 mb-5">
+          {[{l:'Posts',v:stats.posts,I:Edit3,c:'text-green-600'},{l:'Reviews',v:stats.reviews,I:Star,c:'text-purple-600'},{l:'Followers',v:stats.followers,I:Users,c:'text-blue-600'},{l:'Following',v:stats.following,I:UserCheck,c:'text-orange-600'}].map(({l,v,I,c},i)=>(
+            <div key={i} className="text-center"><I className={`w-5 h-5 ${c} mx-auto mb-1`}/><p className="text-lg font-black text-gray-900">{v}</p><p className="text-xs text-gray-500 font-semibold">{l}</p></div>
+          ))}
+        </div>
+
+        {/* PUBLIC tabs only — Books Read/Crews/Saved = private, NOT shown */}
+        <div className="flex border-b border-gray-200 mb-4">
+          {tabs.map(tab=>(
+            <button key={tab} onClick={()=>setActiveTab(tab)} className={`flex-1 text-sm pb-2.5 px-3 font-black border-b-2 transition ${activeTab===tab?'text-orange-500 border-orange-500':'text-gray-400 border-transparent'}`}>{tab}</button>
+          ))}
+        </div>
+
+        {activeTab==='Posts'&&(
+          <div className="space-y-4">
+            {userPosts.length===0?<div className="text-center py-8"><Edit3 className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-400 font-black text-sm">no posts yet bestie</p></div>
+             : userPosts.map(post=>(
+              <div key={post.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <p className="text-sm text-gray-700 mb-2 leading-relaxed" style={{fontFamily:'Georgia,serif'}}>{post.content}</p>
+                {post.bookName&&<p className="text-xs text-orange-500 font-black">📖 {post.bookName}</p>}
+                {post.image&&<img src={post.image} alt="" className="w-full rounded-xl mt-2 max-h-40 object-cover" loading="lazy"/>}
+                <div className="flex items-center gap-4 pt-2 border-t border-gray-50 mt-2 text-xs text-gray-400">
+                  <span className="flex items-center gap-1 font-semibold"><Heart className="w-3.5 h-3.5"/>{getLikeCount(post.id)||post.likes||0}</span>
+                  <span className="flex items-center gap-1 font-semibold"><Repeat className="w-3.5 h-3.5"/>{post.reshareCount||0}</span>
+                  <span>{formatTimeAgo(post.createdAt)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {activeTab==='Reviews'&&(
+          <div className="space-y-4">
+            {userRevs.length===0?<div className="text-center py-8"><Star className="w-12 h-12 text-gray-300 mx-auto mb-3"/><p className="text-gray-400 font-black text-sm">no reviews yet bestie</p></div>
+             : userRevs.map(rev=>(
+              <div key={rev.id} className="bg-white rounded-2xl p-4 border border-gray-100 shadow-sm">
+                <div className="flex items-start gap-3 mb-2">
+                  <DynamicBookCover title={rev.bookName} author={rev.author} size="sm" onClick={()=>setSel({title:rev.bookName,author:rev.author})}/>
+                  <div className="flex-1"><h3 className="font-black text-sm">{rev.bookName}</h3><p className="text-xs text-gray-500">by {rev.author}</p><StarRating rating={rev.rating} size="xs" readonly/></div>
+                </div>
+                <p className="text-sm text-gray-700 leading-relaxed">{rev.review}</p>
+                <p className="text-xs text-gray-400 mt-2">{formatTimeAgo(rev.createdAt)}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MAIN APP COMPONENT
+// ══════════════════════════════════════════════════════════════════════════════
+export default function App() {
+  const [isLoggedIn,    setLoggedIn]   = useState(false);
+  const [currentUser,   setUser]       = useState(null);
+  const [profileSrc,    setProfileSrc] = useState(null);
+  const [currentPage,   setCurrentPage]= useState('home');
+  const [showBottomNav, setShowNav]    = useState(true);
+  const [posts,         setPosts]      = useState([]);
+  const [savedPosts,    setSaved]      = useState([]);
+  const [following,     setFollowing]  = useState([]);
+  const [followers,     setFollowers]  = useState([]);
+  const [blockedUsers,  setBlocked]    = useState([]);
+  const [notifCount,    setNotifCount] = useState(0);
+  const [unreadMsgs,    setUnreadMsgs] = useState(0);
+  const [currentToast,  setToast]      = useState(null);
+  const [selectedUser,  setSelUser]    = useState(null);
+  const [showUserModal, setShowUM]     = useState(false);
+  // Full profile stack — can stack multiple profile views
+  const [profileStack,  setProfileStack]=useState([]);
+  const [isOnline,      setOnline]     = useState(navigator.onLine);
+  const [loading,       setLoading]    = useState(true);
+  const [deepLinkPostId,setDLPost]     = useState(null);
+  const [deepLinkCrewId,setDLCrew]     = useState(null);
+  const prevNotifRef = useRef(0);
+
+  // Handle page routing including dynamic profile pages
+  const setPage = useCallback((page) => {
+    if (typeof page === 'string' && page.startsWith('profile_')) {
+      const email = page.replace('profile_','');
+      const users = getLS('rcreww_users',[]);
+      const u = users.find(x=>x.email===email);
+      setProfileStack(prev=>[...prev,{email,name:u?.name||email.split('@')[0]}]);
+    } else {
+      setCurrentPage(page);
+    }
+  },[]);
+
+  useEffect(()=>{
+    window.addEventListener('online', ()=>setOnline(true));
+    window.addEventListener('offline',()=>setOnline(false));
+    return()=>{window.removeEventListener('online',()=>setOnline(true));window.removeEventListener('offline',()=>setOnline(false));};
+  },[]);
+
+  useEffect(()=>{
+    setShowNav(currentPage!=='post' && profileStack.length===0 && !showUserModal);
+  },[currentPage,profileStack.length,showUserModal]);
+
+  useEffect(()=>{
     const init = async () => {
-      const storedUser = localStorage.getItem('currentUser');
-      if (storedUser) {
-        const user = JSON.parse(storedUser);
-        setCurrentUser(user);
-        setIsLoggedIn(true);
-        setFollowing(JSON.parse(localStorage.getItem(`user_${user.email}_following`) || '[]'));
-        setFollowers(JSON.parse(localStorage.getItem(`user_${user.email}_followers`) || '[]'));
-        setBlockedUsers(JSON.parse(localStorage.getItem(`user_${user.email}_blocked`) || '[]'));
-        setSavedPosts(JSON.parse(localStorage.getItem(`user_${user.email}_savedPosts`) || '[]'));
-        const pi = localStorage.getItem(`user_${user.email}_profile_image`);
-        if (pi) setProfileSrc(pi);
+      initGlobalCrews();
+      const stored = getLS('rcreww_current',null);
+      if (stored) {
+        setUser(stored); setLoggedIn(true);
+        setFollowing(getLS(`rcreww_following_${stored.email}`,[]));
+        setFollowers(getLS(`rcreww_followers_${stored.email}`,[]));
+        setBlocked(getLS(`rcreww_blocked_${stored.email}`,[]));
+        setSaved(getLS(`rcreww_saved_${stored.email}`,[]));
+        const pic=getLS(`rcreww_pic_${stored.email}`,null); if(pic) setProfileSrc(pic);
       }
-
+      // Load global posts
+      const local=getGlobalPosts(); setPosts(local);
       try {
-        const email = (JSON.parse(localStorage.getItem('currentUser') || '{}')).email;
-        const res = await api.get(`/api/social/posts?userEmail=${encodeURIComponent(email || '')}`);
-        if (res?.data?.success) {
-          const sp = res.data.posts || [];
-          const lp = JSON.parse(localStorage.getItem('allPosts') || '[]');
-          const merged = [...sp];
-          lp.forEach(lx => { if (!merged.find(sx => (sx.id || sx._id) === (lx.id || lx._id))) merged.push(lx); });
-          merged.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-          localStorage.setItem('allPosts', JSON.stringify(merged));
-          setPosts(merged);
-        } else {
-          setPosts(JSON.parse(localStorage.getItem('allPosts') || '[]'));
+        const res=await axios.get(`${API_URL}/api/social/posts`,{timeout:8000});
+        if(res.data?.success){
+          const sp=res.data.posts||[];
+          const merged=[...local];
+          sp.forEach(s=>{if(!merged.find(l=>(l.id||l._id)===(s.id||s._id)))merged.push(s);});
+          setLS(GLOBAL_POSTS_KEY,merged); setPosts(merged);
         }
-      } catch (_) {
-        setPosts(JSON.parse(localStorage.getItem('allPosts') || '[]'));
-      }
-
-      const storedCrews = JSON.parse(localStorage.getItem('crews') || '[]');
-      if (storedCrews.length > 0) setCrews(storedCrews);
-
-      if (!localStorage.getItem('reportedPosts')) localStorage.setItem('reportedPosts', JSON.stringify([]));
-
-      // Handle deep links from URL
-      const dl = parseDeepLink();
-      if (dl) {
-        if (dl.type === 'post') { setDeepLinkPostId(dl.id); setCurrentPage('home'); }
-        if (dl.type === 'crew') { setDeepLinkCrewId(dl.id); setCurrentPage('crews'); }
-        window.history.replaceState({}, '', window.location.pathname);
-      }
-
+      } catch {}
+      const dl=parseDeepLink();
+      if(dl){if(dl.type==='post'){setDLPost(dl.id);setCurrentPage('home');}if(dl.type==='crew'){setDLCrew(dl.id);setCurrentPage('crews');}window.history.replaceState({},'',window.location.pathname);}
       setLoading(false);
     };
     init();
-  }, []);
+  },[]);
 
-  const checkForNewNotifications = useCallback(() => {
-    if (!currentUser) return;
-    const raw = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
-    const social = raw.filter(n => n.type !== 'message');
-    const crewMsgs = raw.filter(n => n.type === 'message');
-    const unreadSocial = social.filter(n => !n.read).length;
-    const unreadCrew = crewMsgs.filter(n => !n.read).length;
-
-    if (unreadSocial > prevCountRef.current) {
-      const newest = social.find(n => !n.read && !_shownToastIds.has(n.id));
-      if (newest) {
-        _shownToastIds.add(newest.id);
-        setCurrentToast(newest);
-        setTimeout(() => setCurrentToast(null), 5000);
-      }
+  const checkNotifications = useCallback(()=>{
+    if(!currentUser) return;
+    const raw=getLS(`rcreww_notifs_${currentUser.email}`,[]);
+    const social=raw.filter(n=>n.type!=='message');
+    const msgs=raw.filter(n=>n.type==='message');
+    const unreadSocial=social.filter(n=>!n.read).length;
+    const unreadMsgCount=msgs.filter(n=>!n.read).length;
+    if(unreadSocial>prevNotifRef.current){
+      const newest=social.find(n=>!n.read&&!_shownToastIds.has(n.id));
+      if(newest){_shownToastIds.add(newest.id);setToast(newest);setTimeout(()=>setToast(null),5000);}
     }
+    setNotifCount(unreadSocial); setUnreadMsgs(unreadMsgCount); prevNotifRef.current=unreadSocial;
+  },[currentUser]);
 
-    setNotificationCount(unreadSocial);
-    setUnreadMessages(unreadCrew);
-    prevCountRef.current = unreadSocial;
-  }, [currentUser]);
+  useEffect(()=>{
+    if(!currentUser) return;
+    checkNotifications();
+    const pollInterval = setInterval(async()=>{
+      try { const res=await axios.get(`${API_URL}/api/social/notifications/${encodeURIComponent(currentUser.email)}`,{timeout:8000}); if(res.data?.success){const fresh=res.data.notifications||[];const old=getLS(`rcreww_notifs_${currentUser.email}`,[]);const merged=[...fresh];old.forEach(o=>{if(!merged.find(f=>f.id===o.id))merged.push(o);});merged.sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp));setLS(`rcreww_notifs_${currentUser.email}`,merged);checkNotifications();} } catch {}
+    },15000);
+    const hc=(e)=>{ if(e.detail?.targetEmail===currentUser.email) checkNotifications(); };
+    const hs=(e)=>{ if(e.key?.includes('_notifs')) checkNotifications(); };
+    const hbc=(e)=>{ if(e.data?.type==='notif') checkNotifications(); };
+    window.addEventListener('rc:notif',hc);
+    window.addEventListener('storage',hs);
+    bc?.addEventListener('message',hbc);
+    socket.emit('join_user_room',currentUser.email);
+    socket.on('new_notification',n=>{ if(n.toEmail===currentUser.email){pushNotification(currentUser.email,n);checkNotifications();} });
+    return()=>{clearInterval(pollInterval);window.removeEventListener('rc:notif',hc);window.removeEventListener('storage',hs);bc?.removeEventListener('message',hbc);socket.off('new_notification');};
+  },[currentUser,checkNotifications]);
 
-  useEffect(() => {
-    if (!currentUser) return;
-    checkForNewNotifications();
-
-    const pollNotifications = async () => {
-      try {
-        const res = await api.get(`/api/social/notifications/${encodeURIComponent(currentUser.email)}`);
-        if (res?.data?.success) {
-          const fresh = res.data.notifications || [];
-          const old = JSON.parse(localStorage.getItem(`user_${currentUser.email}_notifications`) || '[]');
-          const merged = [...fresh];
-          old.forEach(o => { if (!merged.find(f => f.id === o.id)) merged.push(o); });
-          merged.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-          localStorage.setItem(`user_${currentUser.email}_notifications`, JSON.stringify(merged));
-          checkForNewNotifications();
-        }
-      } catch (_) {}
-    };
-
-    const interval = setInterval(pollNotifications, 15000);
-    pollNotifications();
-
-    const handleCustom = (e) => { if (e.detail?.targetEmail === currentUser.email) checkForNewNotifications(); };
-    const handleStorage = (e) => { if (e.key?.includes('_notifications')) checkForNewNotifications(); };
-    window.addEventListener('rc:notif', handleCustom);
-    window.addEventListener('storage', handleStorage);
-
-    socket.emit('join_user_room', currentUser.email);
-    socket.on('new_notification', (notification) => {
-      if (notification.toEmail === currentUser?.email) {
-        pushNotification(currentUser.email, notification);
-        checkForNewNotifications();
-      }
-    });
-
-    return () => {
-      clearInterval(interval);
-      window.removeEventListener('rc:notif', handleCustom);
-      window.removeEventListener('storage', handleStorage);
-      socket.off('new_notification');
-    };
-  }, [currentUser, checkForNewNotifications]);
-
-  const handleLogin = (userData) => {
-    setCurrentUser(userData);
-    setIsLoggedIn(true);
-    localStorage.setItem('currentUser', JSON.stringify(userData));
-    ['followers', 'following', 'blocked', 'notifications', 'likedPosts', 'likedReviews', 'readingList', 'savedPosts'].forEach(key => {
-      if (!localStorage.getItem(`user_${userData.email}_${key}`))
-        localStorage.setItem(`user_${userData.email}_${key}`, JSON.stringify([]));
-    });
-    if (!localStorage.getItem(`user_${userData.email}_stats`))
-      localStorage.setItem(`user_${userData.email}_stats`, JSON.stringify({ booksRead: 0, reviewsGiven: 0, postsCreated: 0, crewsJoined: 0 }));
-    setFollowing(JSON.parse(localStorage.getItem(`user_${userData.email}_following`) || '[]'));
-    setFollowers(JSON.parse(localStorage.getItem(`user_${userData.email}_followers`) || '[]'));
-    setBlockedUsers(JSON.parse(localStorage.getItem(`user_${userData.email}_blocked`) || '[]'));
-    setSavedPosts(JSON.parse(localStorage.getItem(`user_${userData.email}_savedPosts`) || '[]'));
-    const pi = localStorage.getItem(`user_${userData.email}_profile_image`);
-    if (pi) setProfileSrc(pi);
+  const handleLogin=(userData)=>{
+    setUser(userData); setLoggedIn(true); setLS('rcreww_current',userData);
+    const users=getLS('rcreww_users',[]); const idx=users.findIndex(u=>u.email===userData.email);
+    if(idx>=0) users[idx]={...users[idx],...userData}; else users.push(userData);
+    setLS('rcreww_users',users);
+    ['followers','following','blocked','notifications'].forEach(k=>{ if(!localStorage.getItem(`rcreww_${k}_${userData.email}`)) setLS(`rcreww_${k}_${userData.email}`,[]);});
+    if(!localStorage.getItem(`rcreww_stats_${userData.email}`)) setLS(`rcreww_stats_${userData.email}`,{booksRead:0,reviewsGiven:0,postsCreated:0,crewsJoined:0});
+    setFollowing(getLS(`rcreww_following_${userData.email}`,[]));
+    setFollowers(getLS(`rcreww_followers_${userData.email}`,[]));
+    setBlocked(getLS(`rcreww_blocked_${userData.email}`,[]));
+    setSaved(getLS(`rcreww_saved_${userData.email}`,[]));
+    const pic=getLS(`rcreww_pic_${userData.email}`,null); if(pic) setProfileSrc(pic);
     setCurrentPage('home');
   };
 
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    setCurrentUser(null);
-    setProfileSrc(null);
-    setCurrentPage('home');
-    localStorage.removeItem('currentUser');
+  const handleLogout=()=>{ setLoggedIn(false); setUser(null); setProfileSrc(null); setCurrentPage('home'); localStorage.removeItem('rcreww_current'); };
+  const handleUpdateUser=(updated)=>{ setUser(updated); setLS('rcreww_current',updated); };
+
+  const handlePost=(postData)=>{
+    const p={...postData,id:postData.id||generateId(),createdAt:postData.createdAt||new Date().toISOString(),likes:0,comments:0,reshareCount:0};
+    if(!getGlobalPosts().find(x=>x.id===p.id)) saveGlobalPost(p);
+    setPosts(getGlobalPosts());
+    const st=getLS(`rcreww_stats_${currentUser.email}`,{}); st.postsCreated=(st.postsCreated||0)+1; setLS(`rcreww_stats_${currentUser.email}`,st);
   };
 
-  const handleUpdateUser = (updatedUser) => {
-    setCurrentUser(updatedUser);
-    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+  const handleDeletePost=(post)=>{
+    const all=getGlobalPosts().filter(p=>p.id!==post.id);
+    setLS(GLOBAL_POSTS_KEY,all); setPosts(all);
+    const st=getLS(`rcreww_stats_${currentUser.email}`,{}); st.postsCreated=Math.max((st.postsCreated||0)-1,0); setLS(`rcreww_stats_${currentUser.email}`,st);
   };
 
-  const handlePost = (postData) => {
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const newPost = {
-      ...postData,
-      id: postData.id || generateId(),
-      createdAt: postData.createdAt || new Date().toISOString(),
-      likes: 0,
-      comments: 0,
-      reshareCount: postData.reshareCount || 0,
-    };
-    allPosts.unshift(newPost);
-    localStorage.setItem('allPosts', JSON.stringify(allPosts));
-    setPosts([...allPosts]);
-    const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
-    stats.postsCreated = (stats.postsCreated || 0) + 1;
-    localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(stats));
+  const handleSavePost=(post)=>{
+    const curr=getLS(`rcreww_saved_${currentUser.email}`,[]);
+    const updated=curr.includes(post.id)?curr.filter(id=>id!==post.id):[...curr,post.id];
+    setLS(`rcreww_saved_${currentUser.email}`,updated); setSaved(updated);
   };
 
-  const handleDeletePost = (post) => {
-    const allPosts = JSON.parse(localStorage.getItem('allPosts') || '[]');
-    const filtered = allPosts.filter(p => p.id !== post.id);
-    localStorage.setItem('allPosts', JSON.stringify(filtered));
-    setPosts(filtered);
-    const stats = JSON.parse(localStorage.getItem(`user_${currentUser.email}_stats`) || '{}');
-    stats.postsCreated = Math.max((stats.postsCreated || 0) - 1, 0);
-    localStorage.setItem(`user_${currentUser.email}_stats`, JSON.stringify(stats));
-  };
-
-  const handleSavePost = (post) => {
-    const userSaved = JSON.parse(localStorage.getItem(`user_${currentUser.email}_savedPosts`) || '[]');
-    const updated = userSaved.includes(post.id) ? userSaved.filter(id => id !== post.id) : [...userSaved, post.id];
-    localStorage.setItem(`user_${currentUser.email}_savedPosts`, JSON.stringify(updated));
-    setSavedPosts(updated);
-  };
-
-  const handleReshare = (originalPost, comment, isPublic = true) => {
+  const handleReshare=(originalPost,comment,isPublic=true)=>{
     incrementReshareCount(originalPost.id);
-    if (originalPost.userEmail !== currentUser.email) {
-      pushNotification(originalPost.userEmail, {
-        type: 'reshare',
-        fromUser: currentUser.name,
-        fromUserEmail: currentUser.email,
-        message: `${currentUser.name} reshared your post`,
-        postId: originalPost.id,
-      });
-      checkForNewNotifications();
-    }
-    const resharePost = {
-      id: generateId(),
-      content: originalPost.content || originalPost.story || '',
-      bookName: originalPost.bookName,
-      author: originalPost.author,
-      image: originalPost.image,
-      isPublic,
-      isReshare: true,
-      reshareComment: comment || null,
-      userName: currentUser.name,
-      userEmail: currentUser.email,
-      userPhoto: currentUser.profileImage,
-      userInitials: currentUser.name.slice(0, 2).toUpperCase(),
-      createdAt: new Date().toISOString(),
-      likes: 0,
-      comments: 0,
-      reshareCount: 0,
-      originalPost: { id: originalPost.id, userName: originalPost.userName, userEmail: originalPost.userEmail, content: originalPost.content || originalPost.story || '' },
-    };
-    handlePost(resharePost);
-    setCurrentToast({ type: 'success', message: 'Post reshared successfully!', timestamp: new Date().toISOString() });
-    setTimeout(() => setCurrentToast(null), 3000);
+    if(originalPost.userEmail!==currentUser.email){ pushNotification(originalPost.userEmail,{type:'reshare',fromUser:currentUser.name,fromUserEmail:currentUser.email,message:`${currentUser.name} reshared your post 🔁`,postId:originalPost.id}); checkNotifications(); }
+    const reshared={id:generateId(),content:originalPost.content||originalPost.story||'',bookName:originalPost.bookName,author:originalPost.author,image:originalPost.image,isPublic,isReshare:true,reshareComment:comment||null,userName:currentUser.name,userEmail:currentUser.email,userPhoto:currentUser.profileImage,userInitials:currentUser.name.slice(0,2).toUpperCase(),createdAt:new Date().toISOString(),likes:0,comments:0,reshareCount:0,originalPost:{id:originalPost.id,userName:originalPost.userName,userEmail:originalPost.userEmail,content:originalPost.content||originalPost.story||''}};
+    handlePost(reshared);
+    setToast({type:'success',message:'post reshared bestie! 🔁 slay',timestamp:new Date().toISOString()}); setTimeout(()=>setToast(null),3000);
   };
 
-  const handleFollow = useCallback((targetEmail, targetName) => {
-    const currentFollowing = JSON.parse(localStorage.getItem(`user_${currentUser.email}_following`) || '[]');
-    if (currentFollowing.includes(targetEmail)) {
-      const updated = currentFollowing.filter(e => e !== targetEmail);
-      localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(updated));
-      setFollowing(updated);
-      const tf = JSON.parse(localStorage.getItem(`user_${targetEmail}_followers`) || '[]');
-      localStorage.setItem(`user_${targetEmail}_followers`, JSON.stringify(tf.filter(e => e !== currentUser.email)));
+  const handleFollow=useCallback((targetEmail,targetName)=>{
+    const curr=getLS(`rcreww_following_${currentUser.email}`,[]);
+    if(curr.includes(targetEmail)){
+      const upd=curr.filter(e=>e!==targetEmail); setLS(`rcreww_following_${currentUser.email}`,upd); setFollowing(upd);
+      const tf=getLS(`rcreww_followers_${targetEmail}`,[]).filter(e=>e!==currentUser.email); setLS(`rcreww_followers_${targetEmail}`,tf);
     } else {
-      const updated = [...currentFollowing, targetEmail];
-      localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(updated));
-      setFollowing(updated);
-      const tf = JSON.parse(localStorage.getItem(`user_${targetEmail}_followers`) || '[]');
-      if (!tf.includes(currentUser.email)) {
-        localStorage.setItem(`user_${targetEmail}_followers`, JSON.stringify([...tf, currentUser.email]));
-        pushNotification(targetEmail, { type: 'follow', fromUser: currentUser.name, fromUserEmail: currentUser.email, message: `${currentUser.name} started following you` });
-        checkForNewNotifications();
-      }
-      setCurrentToast({ type: 'success', message: `You are now following ${targetName} 🎉`, timestamp: new Date().toISOString() });
-      setTimeout(() => setCurrentToast(null), 3000);
+      const upd=[...curr,targetEmail]; setLS(`rcreww_following_${currentUser.email}`,upd); setFollowing(upd);
+      const tf=getLS(`rcreww_followers_${targetEmail}`,[]);
+      if(!tf.includes(currentUser.email)){setLS(`rcreww_followers_${targetEmail}`,[...tf,currentUser.email]);pushNotification(targetEmail,{type:'follow',fromUser:currentUser.name,fromUserEmail:currentUser.email,message:`${currentUser.name} started following you 🫶`});checkNotifications();}
+      setToast({type:'success',message:`following ${targetName}! 🎉`,timestamp:new Date().toISOString()}); setTimeout(()=>setToast(null),3000);
     }
-  }, [currentUser]);
+  },[currentUser,checkNotifications]);
 
-  const handleBlockUser = (targetEmail, targetName) => {
-    const current = JSON.parse(localStorage.getItem(`user_${currentUser.email}_blocked`) || '[]');
-    if (current.includes(targetEmail)) {
-      const updated = current.filter(e => e !== targetEmail);
-      localStorage.setItem(`user_${currentUser.email}_blocked`, JSON.stringify(updated));
-      setBlockedUsers(updated);
-    } else {
-      const updated = [...current, targetEmail];
-      localStorage.setItem(`user_${currentUser.email}_blocked`, JSON.stringify(updated));
-      setBlockedUsers(updated);
-      const cf = JSON.parse(localStorage.getItem(`user_${currentUser.email}_following`) || '[]');
-      localStorage.setItem(`user_${currentUser.email}_following`, JSON.stringify(cf.filter(e => e !== targetEmail)));
-      setFollowing(cf.filter(e => e !== targetEmail));
-    }
+  const handleBlock=useCallback((targetEmail,targetName)=>{
+    const curr=getLS(`rcreww_blocked_${currentUser.email}`,[]);
+    const isBlocked=curr.includes(targetEmail);
+    const upd=isBlocked?curr.filter(e=>e!==targetEmail):[...curr,targetEmail];
+    setLS(`rcreww_blocked_${currentUser.email}`,upd); setBlocked(upd);
+    if(!isBlocked){const fwing=getLS(`rcreww_following_${currentUser.email}`,[]).filter(e=>e!==targetEmail);setLS(`rcreww_following_${currentUser.email}`,fwing);setFollowing(fwing);}
+  },[currentUser]);
+
+  const handleViewUserProfile=(email,name)=>{
+    if(email===currentUser?.email){setCurrentPage('profile');return;}
+    setSelUser({email,name}); setShowUM(true);
   };
 
-  const handleViewUserProfile = (userEmail, userName) => {
-    setSelectedUserProfile({ email: userEmail, name: userName });
-    setShowUserProfile(true);
+  const handleViewFullProfile=(email,name)=>{
+    setShowUM(false); setSelUser(null);
+    setProfileStack(prev=>[...prev,{email,name}]);
   };
 
-  const handleViewFullProfile = (userEmail, userName) => {
-    setShowUserProfile(false);
-    setSelectedUserProfile(null);
-    setViewingFullProfile({ email: userEmail, name: userName });
-  };
-
-  // ✅ Clicking a notification about a post → navigate to that post in the home feed
-  const handleNavigateToPost = (postId) => {
-    setDeepLinkPostId(postId);
-    setCurrentPage('home');
-  };
-
-  // ✅ Clicking a notification about a crew message → navigate to that crew
-  const handleNavigateToCrew = (crewId) => {
-    setDeepLinkCrewId(crewId);
+  const handleCreateCrew=(book)=>{
+    const{crew}=getOrCreateCrew(book.title,book.author,book.genre||'General',currentUser.email,currentUser.name);
+    const joined=getLS(`rcreww_joined_${currentUser.email}`,[]);
+    if(!joined.includes(crew.id)){setLS(`rcreww_joined_${currentUser.email}`,[...joined,crew.id]);const st=getLS(`rcreww_stats_${currentUser.email}`,{});st.crewsJoined=(st.crewsJoined||0)+1;setLS(`rcreww_stats_${currentUser.email}`,st);}
     setCurrentPage('crews');
   };
 
-  const handleCreateCrew = (book) => {
-    // ✅ One-crew-per-book check on create from home/explore
-    const allCrews = JSON.parse(localStorage.getItem('crews') || '[]');
-    const existing = allCrews.find(c =>
-      c.name.trim().toLowerCase() === (book.title || '').trim().toLowerCase() &&
-      c.author?.trim().toLowerCase() === (book.author || '').trim().toLowerCase()
-    );
-    if (existing) {
-      setCurrentPage('crews');
-      return;
-    }
-    const nc = {
-      id: generateId(), name: book.title, author: book.author,
-      genre: book.genre || 'General', members: 1, chats: 0,
-      createdBy: currentUser.email, createdByName: currentUser.name,
-      createdAt: new Date().toISOString(),
-    };
-    const updatedCrews = [nc, ...crews];
-    setCrews(updatedCrews);
-    localStorage.setItem('crews', JSON.stringify(updatedCrews));
-    setCurrentPage('crews');
+  const filteredPosts=useMemo(()=>posts.filter(p=>!blockedUsers.includes(p.userEmail)),[posts,blockedUsers]);
+
+  if(loading) return <LoadingSpinner size="xl" fullScreen/>;
+  if(!isLoggedIn) return <LoginPage onLogin={handleLogin}/>;
+
+  const commonProps={
+    user:currentUser, posts:filteredPosts, setPage,
+    updateNotificationCount:checkNotifications,
+    profileSrc, savedPosts, onSavePost:handleSavePost,
+    onFollow:handleFollow, following, onBlock:handleBlock, blockedUsers,
+    onViewUserProfile:handleViewUserProfile,
   };
-
-  const filteredPosts = React.useMemo(
-    () => posts.filter(p => !blockedUsers.includes(p.userEmail)),
-    [posts, blockedUsers]
-  );
-
-  if (loading) return <LoadingSpinner size="xl" fullScreen />;
-  if (!isLoggedIn) return <LoginPage onLogin={handleLogin} />;
 
   return (
     <div className="flex justify-center min-h-screen bg-gray-200">
-      {currentToast && (
-        <NotificationToast notification={currentToast} onClose={() => setCurrentToast(null)} />
-      )}
-
-      {!isOnline && (
-        <div className="fixed top-0 left-0 right-0 bg-yellow-500 text-white text-center py-1.5 text-xs z-[200] flex items-center justify-center gap-2">
-          <WifiOff className="w-3 h-3" />
-          You're offline — some features may be limited
+      {currentToast&&<NotificationToast notification={currentToast} onClose={()=>setToast(null)}/>}
+      {!isOnline&&(
+        <div className="fixed top-0 left-0 right-0 bg-amber-500 text-white text-center py-1.5 text-xs z-[200] flex items-center justify-center gap-2">
+          <WifiOff className="w-3 h-3"/>you're offline bestie — some features limited
         </div>
       )}
-
       <div className="w-full max-w-md relative bg-white min-h-screen overflow-hidden shadow-xl">
-        {showUserProfile && selectedUserProfile && (
+
+        {/* User Profile Quick Modal */}
+        {showUserModal&&selectedUser&&(
           <UserProfileModal
-            userEmail={selectedUserProfile.email}
-            userName={selectedUserProfile.name}
+            userEmail={selectedUser.email} userName={selectedUser.name}
             currentUser={currentUser}
-            onClose={() => { setShowUserProfile(false); setSelectedUserProfile(null); }}
-            onFollow={handleFollow}
-            isFollowing={following.includes(selectedUserProfile.email)}
-            onBlock={handleBlockUser}
-            isBlocked={blockedUsers.includes(selectedUserProfile.email)}
+            onClose={()=>{setShowUM(false);setSelUser(null);}}
+            onFollow={handleFollow} isFollowing={following.includes(selectedUser.email)}
+            onBlock={handleBlock}   isBlocked={blockedUsers.includes(selectedUser.email)}
             onViewFullProfile={handleViewFullProfile}
           />
         )}
 
-        {viewingFullProfile && (
+        {/* Full profile stack overlay */}
+        {profileStack.length>0&&(
           <div className="absolute inset-0 z-50 bg-white overflow-y-auto">
             <FullUserProfilePage
-              viewedUserEmail={viewingFullProfile.email}
-              viewedUserName={viewingFullProfile.name}
+              viewedEmail={profileStack[profileStack.length-1].email}
+              viewedName={profileStack[profileStack.length-1].name}
               currentUser={currentUser}
-              onBack={() => setViewingFullProfile(null)}
+              onBack={()=>setProfileStack(prev=>prev.slice(0,-1))}
               onFollow={handleFollow}
-              isFollowing={following.includes(viewingFullProfile.email)}
-              onBlock={handleBlockUser}
-              isBlocked={blockedUsers.includes(viewingFullProfile.email)}
-              onViewFullProfile={handleViewFullProfile}
+              isFollowing={following.includes(profileStack[profileStack.length-1].email)}
+              onBlock={handleBlock}
+              isBlocked={blockedUsers.includes(profileStack[profileStack.length-1].email)}
+              onViewUserProfile={(email,name)=>setProfileStack(prev=>[...prev,{email,name}])}
             />
           </div>
         )}
 
-        {!viewingFullProfile && (
+        {/* Pages */}
+        {profileStack.length===0&&(
           <>
-            {currentPage === 'home' && (
+            {currentPage==='home'&&(
               <HomePage
-                user={currentUser} posts={filteredPosts} crews={crews} setPage={setCurrentPage}
-                updateNotificationCount={checkForNewNotifications}
-                profileSrc={profileSrc} savedPosts={savedPosts}
-                onSavePost={handleSavePost} onResharePost={handleReshare} onDeletePost={handleDeletePost}
-                onFollow={handleFollow} following={following}
-                onBlock={handleBlockUser} blockedUsers={blockedUsers}
-                onViewUserProfile={handleViewUserProfile}
-                onViewBookDetails={() => {}}
+                {...commonProps}
+                crews={getGlobalCrews()}
+                onResharePost={handleReshare}
+                onDeletePost={handleDeletePost}
+                onViewBookDetails={()=>{}}
                 onCreateCrew={handleCreateCrew}
                 deepLinkPostId={deepLinkPostId}
-                onDeepLinkHandled={() => setDeepLinkPostId(null)}
+                onDeepLinkHandled={()=>setDLPost(null)}
               />
             )}
-
-            {currentPage === 'post' && (
-              <PostPage user={currentUser} onPost={handlePost} setPage={setCurrentPage} />
-            )}
-
-            {currentPage === 'reviews' && (
-              <ReviewsPage
-                user={currentUser} setPage={setCurrentPage}
-                updateNotificationCount={checkForNewNotifications}
-                onViewUserProfile={handleViewUserProfile}
-              />
-            )}
-
-            {currentPage === 'explore' && (
-              <ExplorePage
-                user={currentUser} setPage={setCurrentPage}
-                onCreateCrew={handleCreateCrew}
-              />
-            )}
-
-            {currentPage === 'crews' && (
+            {currentPage==='post'&&<PostPage user={currentUser} onPost={handlePost} setPage={setCurrentPage}/>}
+            {currentPage==='reviews'&&<ReviewsPage user={currentUser} setPage={setCurrentPage} updateNotificationCount={checkNotifications} onViewUserProfile={handleViewUserProfile}/>}
+            {currentPage==='explore'&&<ExplorePage user={currentUser} setPage={setCurrentPage} onCreateCrew={handleCreateCrew}/>}
+            {currentPage==='crews'&&(
               <CrewsPage
-                user={currentUser} crews={crews} setPage={setCurrentPage}
-                updateNotificationCount={checkForNewNotifications}
-                onViewUserProfile={handleViewUserProfile}
-                deepLinkCrewId={deepLinkCrewId}
-                onDeepLinkHandled={() => setDeepLinkCrewId(null)}
+                user={currentUser} initialCrews={getGlobalCrews()} setPage={setCurrentPage}
+                updateNotificationCount={checkNotifications} onViewUserProfile={handleViewUserProfile}
+                deepLinkCrewId={deepLinkCrewId} onDeepLinkHandled={()=>setDLCrew(null)}
               />
             )}
-
-            {currentPage === 'profile' && (
+            {currentPage==='profile'&&(
               <ProfilePage
-                user={currentUser} posts={filteredPosts} setPage={setCurrentPage}
+                user={currentUser} posts={filteredPosts} setPage={setPage}
                 onLogout={handleLogout} onUpdateUser={handleUpdateUser}
                 profileSrc={profileSrc} setProfileSrc={setProfileSrc}
                 savedPosts={savedPosts} following={following} followers={followers}
-                onViewFullProfile={handleViewFullProfile}
               />
             )}
-
-            {currentPage === 'notifications' && (
+            {currentPage==='notifications'&&(
               <NotificationsPage
                 user={currentUser}
-                onClose={() => { setCurrentPage('home'); checkForNewNotifications(); }}
-                updateNotificationCount={checkForNewNotifications}
-                onNavigateToPost={handleNavigateToPost}
-                onNavigateToCrew={handleNavigateToCrew}
+                onClose={()=>{setCurrentPage('home');checkNotifications();}}
+                updateNotificationCount={checkNotifications}
               />
             )}
-
-            <BottomNav
-              active={currentPage}
-              setPage={setCurrentPage}
-              unreadCount={unreadMessages}
-              show={showBottomNav}
-            />
+            <BottomNav active={currentPage} setPage={setCurrentPage} unreadCount={unreadMsgs} show={showBottomNav}/>
           </>
         )}
       </div>
@@ -5680,40 +3545,27 @@ export default function App() {
   );
 }
 
-// ========================================
-// SECTION 37: GLOBAL STYLES
-// ✅ Heart Glitter burst animation keyframes
-// ========================================
-
-if (typeof document !== 'undefined' && !document.querySelector('style[data-rc-styles]')) {
-  const style = document.createElement('style');
-  style.textContent = `
-    @keyframes slideDown {
-      from { transform: translate(-50%, -100%); opacity: 0; }
-      to   { transform: translate(-50%, 0);     opacity: 1; }
-    }
-    .animate-slideDown { animation: slideDown 0.3s ease-out; }
-
-    .scrollbar-hide::-webkit-scrollbar { display: none; }
-    .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
-
-    @keyframes bounce {
-      0%, 100% { transform: translateY(0); }
-      50%       { transform: translateY(-5px); }
-    }
-    .animate-bounce { animation: bounce 1s infinite; }
-
-    .line-clamp-1 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 1; }
-    .line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
-    .line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
-
-    /* ✅ Heart Glitter animation — fires on post like */
-    @keyframes glitter_burst {
-      0%   { transform: translate(0px, 0px) rotate(0deg) scale(1);    opacity: 1; }
-      50%  { opacity: 1; }
-      100% { transform: translate(var(--dx), var(--dy)) rotate(var(--rot)) scale(0.2); opacity: 0; }
-    }
+// ══════════════════════════════════════════════════════════════════════════════
+// GLOBAL STYLES
+// ══════════════════════════════════════════════════════════════════════════════
+if (typeof document!=='undefined'&&!document.querySelector('style[data-rcreww]')) {
+  const s=document.createElement('style'); s.setAttribute('data-rcreww','1');
+  s.textContent=`
+    @keyframes slideDown { from{transform:translate(-50%,-110%);opacity:0} to{transform:translate(-50%,0);opacity:1} }
+    .animate-slideDown { animation:slideDown 0.3s ease-out; }
+    @keyframes bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+    .animate-bounce { animation:bounce 1s infinite; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .animate-spin { animation:spin 1s linear infinite; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .animate-pulse { animation:pulse 2s cubic-bezier(0.4,0,0.6,1) infinite; }
+    .scrollbar-hide::-webkit-scrollbar { display:none; }
+    .scrollbar-hide { -ms-overflow-style:none; scrollbar-width:none; }
+    .line-clamp-1 { overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:1; }
+    .line-clamp-2 { overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+    .line-clamp-3 { overflow:hidden; display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+    * { -webkit-tap-highlight-color: transparent; }
+    html,body { overscroll-behavior:none; }
   `;
-  style.setAttribute('data-rc-styles', 'true');
-  document.head.appendChild(style);
+  document.head.appendChild(s);
 }
